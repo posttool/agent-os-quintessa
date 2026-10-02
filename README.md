@@ -7,7 +7,10 @@ This is phase 1 of the [spec](docs/spec.md): the Python backend, its data struct
 ## How it works
 
 ```
-input (text, speech, message, location, vision, process progress)
+request (user_id, input: text, speech, message, location, vision, process progress)
+   │
+   ▼
+AgentHost ──► that user's AgentRuntime (loaded from storage on first use)
    │
    ▼
 AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at once)
@@ -30,6 +33,11 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
   - `confirm_once` grants are kept in memory for later sessions.
 - **Long-running tool calls** create a `Subscription`. The ambient bus then emits progress events back into the loop and archives the subscription when the process completes.
 - **Resilience**: `ResilientLLM` retries transient errors and bad output with backoff, then falls back along the model chain. A session that runs out of models is marked failed, with the error in its trace, and the other loops keep running.
+- **Per-user state**: there is no global memory. Every `AgentHost` call takes a `user_id`, and each user has their own memory, device surface, pending questions, tools and process subscriptions. Only the model chain and the capability definitions are shared.
+- **Durability**: each user's state is saved shortly after anything changes, through a `StateBackend`. `FileStateBackend` writes one JSON file per user, atomically. After a restart, a user's state reloads on their next request:
+  - Process subscriptions that were still running resume.
+  - Sessions that were mid-flight are marked stopped, and their trace notes that a restart interrupted them.
+- **Download and restore**: `host.export_state(user_id)` returns the whole agent state as one versioned JSON document. `host.restore_state(user_id, data)` replaces a user's state with one. A restore is fully validated before anything is replaced, and a state can be restored under a different user id.
 - **Separation**: memory and reasoning know nothing about any design system. Surfaces subscribe to `MemoryStore.listen` and `DeviceSurface.listen`.
 
 ## Layout
@@ -41,6 +49,8 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 | `quintessa/capabilities/` | capability markdown and loader |
 | `quintessa/executors/` | code that applies each capability's output |
 | `quintessa/memory/` | `MemoryStore` and memory operations |
+| `quintessa/host.py` | `AgentHost`: per-user agents, saving, download and restore |
+| `quintessa/state/` | state backends (file, in-memory) and the snapshot format |
 | `quintessa/loop/` | `AgentReasoningLoop`, `AgentRuntime`, `UXBroker` |
 | `quintessa/tools/` | built-in `web` and `device` tools and the tool runner |
 | `quintessa/device/` | device surface state |
@@ -77,15 +87,21 @@ Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is 
 ### Try it
 
 ```bash
-python -m quintessa say "Jane wants to do dinner at Zuni on Tuesday"
+python -m quintessa --user maya say "Jane wants to do dinner at Zuni on Tuesday"
 python -m quintessa personas
-python -m quintessa persona <persona-id> --speed 600
+python -m quintessa --user maya persona <persona-id> --speed 600
+python -m quintessa --user maya export maya-agent.json     # download
+python -m quintessa --user maya restore maya-agent.json    # restore
+python -m quintessa --user maya clear
+python -m quintessa users
 ```
 
-Questions the agent asks are answered in the terminal. Memory is saved to `data/memory.json`; pass `--fresh` to start empty.
+Questions the agent asks are answered in the terminal. Agent state lives in `data/agents/`, one file per user.
 
 ## Not yet built
 
 - The phase 2 web app.
 - Executing `web_api`, `mcp` and `code` tools. They can be defined and stored, but calls report that they are not implemented yet.
 - Memory retrieval: the whole graph currently goes into each prompt.
+- Resuming a question that was open during a restart: the session is recorded as interrupted, and the next input starts fresh.
+- Authentication: the host trusts the `user_id` it is given, so the API layer must check identity.

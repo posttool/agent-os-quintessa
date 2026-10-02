@@ -18,14 +18,17 @@ from quintessa.tools.search import SearchBackend
 
 
 class AgentRuntime:
-    """Runs any number of reasoning loops at once over one shared memory.
-    Every input starts its own session; sessions waiting on the user do not
-    block the others."""
+    """One user's agent: their memory, device surface, pending questions and
+    process subscriptions. Runs any number of reasoning loops at once over
+    that user's memory; sessions waiting on the user do not block the others.
+
+    The platform holds one runtime per user through AgentHost."""
 
     def __init__(
         self,
         llm: ResilientLLM,
         *,
+        user_id: str = "default",
         store: MemoryStore | None = None,
         device: DeviceSurface | None = None,
         capabilities: dict[str, Capability] | None = None,
@@ -36,6 +39,7 @@ class AgentRuntime:
         process_interval: float = 5.0,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ):
+        self.user_id = user_id
         self.llm = llm
         self.store = store or MemoryStore()
         self.device = device or DeviceSurface()
@@ -47,9 +51,20 @@ class AgentRuntime:
         self.ux = UXBroker()
         self.ambient = AmbientBus(self, process_interval=process_interval, sleep=sleep)
         self._tasks: set[asyncio.Task] = set()
-        self._install_builtin_tools()
+        self.on_change: Callable[[], None] | None = None
+        self.store.listen(lambda *_: self._changed())
+        self.device.listen(lambda *_: self._changed())
+        self.install_builtin_tools()
 
-    def _install_builtin_tools(self) -> None:
+    def _changed(self) -> None:
+        if self.on_change is not None:
+            self.on_change()
+
+    @property
+    def busy(self) -> bool:
+        return bool(self._tasks)
+
+    def install_builtin_tools(self) -> None:
         for tool in BUILTIN_TOOLS:
             self.store.put_tool(copy.deepcopy(tool))
 
@@ -76,13 +91,16 @@ class AgentRuntime:
     def answer(self, response: UXResponse) -> bool:
         return self.ux.answer(response)
 
+    async def cancel_tasks(self) -> None:
+        for task in list(self._tasks):
+            task.cancel()
+        await asyncio.gather(*list(self._tasks), return_exceptions=True)
+
     async def clear(self) -> None:
         """Clear memory, traces, tools, subscriptions and the device."""
         self.ambient.stop_all()
         self.ux.cancel_all()
-        for task in list(self._tasks):
-            task.cancel()
-        await asyncio.gather(*list(self._tasks), return_exceptions=True)
+        await self.cancel_tasks()
         self.store.clear()
         self.device.reset()
-        self._install_builtin_tools()
+        self.install_builtin_tools()

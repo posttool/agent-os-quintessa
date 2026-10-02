@@ -63,6 +63,19 @@ def make_runtime(tmp_path) -> Callable[..., AgentRuntime]:
     return build
 
 
+@pytest.fixture
+def make_host(tmp_path) -> Callable[..., Any]:
+    from quintessa.host import AgentHost
+
+    def build(script: Script, backend: Any, **kwargs: Any) -> AgentHost:
+        llm = ResilientLLM([ModelRoute(ScriptedLLM(script), "test-model")], retries=0, sleep=no_sleep)
+        kwargs.setdefault("process_interval", 0)
+        kwargs.setdefault("save_delay", 0)
+        return AgentHost(llm, backend, data_dir=tmp_path, sleep=no_sleep, **kwargs)
+
+    return build
+
+
 async def until(predicate: Callable[[], bool], timeout: float = 2.0) -> None:
     async def poll() -> None:
         while not predicate():

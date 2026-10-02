@@ -144,8 +144,9 @@ class MemoryStore:
 
     # --- persistence ----------------------------------------------------------
 
-    def save(self, path: str | Path) -> None:
-        data = {
+    def to_data(self) -> dict[str, Any]:
+        """Everything in memory as plain JSON-ready data."""
+        return {
             "nodes": [to_dict(n) for n in self.nodes.values()],
             "edges": [to_dict(e) for e in self.edges.values()],
             "topics": [to_dict(t) for t in self.topics.values()],
@@ -156,10 +157,9 @@ class MemoryStore:
             "events": [to_dict(e) for e in self.events],
             "sessions": [to_dict(s) for s in self.sessions.values()],
         }
-        Path(path).write_text(json.dumps(data, indent=2))
 
-    def load(self, path: str | Path) -> None:
-        data = json.loads(Path(path).read_text())
+    def load_data(self, data: dict[str, Any]) -> None:
+        """Replace all of memory with `data` (from `to_data`)."""
         self.clear()
         for n in data["nodes"]:
             node = from_dict(MemoryNode, n)
@@ -185,3 +185,9 @@ class MemoryStore:
             session = from_dict(ReasoningSession, s)
             self.sessions[session.id] = session
         self._emit("loaded", {})
+
+    def save(self, path: str | Path) -> None:
+        Path(path).write_text(json.dumps(self.to_data(), indent=2))
+
+    def load(self, path: str | Path) -> None:
+        self.load_data(json.loads(Path(path).read_text()))
