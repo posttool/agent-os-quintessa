@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import anthropic
@@ -31,7 +32,8 @@ class ClaudeAdapter:
             if vertex_project:
                 client = anthropic.AsyncAnthropicVertex(project_id=vertex_project, region=vertex_region)
             else:
-                client = anthropic.AsyncAnthropic()
+                # QUINTESSA_ANTHROPIC_API_KEY wins; with neither set the SDK reads ANTHROPIC_API_KEY.
+                client = anthropic.AsyncAnthropic(api_key=os.environ.get("QUINTESSA_ANTHROPIC_API_KEY") or None)
         self.client = client
         self.effort = effort
         # The server-side fallback parameter is a Claude API feature; it is

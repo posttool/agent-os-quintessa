@@ -77,7 +77,7 @@ export QUINTESSA_MODEL_CHAIN="claude:claude-opus-5-5,claude:claude-opus-5,gemini
 ```
 
 - **Gemini on Vertex**: run `gcloud auth application-default login`, then set `GOOGLE_CLOUD_PROJECT` (and optionally `GOOGLE_CLOUD_LOCATION`, default `global`).
-- **Claude**: set `ANTHROPIC_API_KEY`. To route Claude through Vertex instead, set `QUINTESSA_CLAUDE_ON_VERTEX=1` with the Google variables above. On the Anthropic API, current models also get Anthropic's server-side refusal fallback.
+- **Claude**: set `QUINTESSA_ANTHROPIC_API_KEY`, or `ANTHROPIC_API_KEY` if that is not set. The Quintessa name is there because some hosts, such as Claude Code cloud sessions, keep `ANTHROPIC_API_KEY` for themselves. To route Claude through Vertex instead, set `QUINTESSA_CLAUDE_ON_VERTEX=1` with the Google variables above. On the Anthropic API, current models also get Anthropic's server-side refusal fallback.
 - `QUINTESSA_LLM_RETRIES` sets retries per model (default 2).
 
 Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is set.
