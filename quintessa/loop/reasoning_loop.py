@@ -45,6 +45,7 @@ class AgentReasoningLoop:
             ],
             **session_context(self.session),
             "memory": self.runtime.store.snapshot(),
+            "on_screen": self.runtime.on_screen(),
             "max_steps_left": self.runtime.max_steps - len(self.session.steps),
         }
         result = await self.runtime.llm.generate_json(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from quintessa.clock import now
 from quintessa.executors.common import call_capability
 from quintessa.executors.generative_ui_executor import CONFIRM_YES, record_permission
 from quintessa.executors.step_context import StepContext
@@ -105,8 +106,11 @@ class ToolUseExecutor:
 
     @staticmethod
     def _note_action(ctx: StepContext, call: dict, line: str) -> None:
+        if call["tool"] == "device":  # changing what the user sees is not progress on the section
+            return
         doc = ctx.runtime.store.documents.get(call["document_id"] or "")
         section = doc.section(call["section_id"]) if doc and call["section_id"] else None
         if section is not None:
             section.actions_taken.append(line)
+            section.updated_at = now()
             ctx.runtime.store.upsert_document(doc)

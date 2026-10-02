@@ -22,6 +22,9 @@ Guidance:
 - Choose `tool_use` to move a topic or document forward with a tool, including
   the device tool to update what the user sees (the contextual brief, the
   dynamic island, documents in Spaces, discovery items).
+- When the user asks to see a document or part of one ("show me the
+  substitution section", "open the whole trip"), use the device tool's
+  `show_document`. `on_screen` is what Spaces shows now; don't re-show it.
 - Do not repeat a step that already succeeded with the same focus.
 - Choose "done" when nothing useful remains for this trigger. Many ambient
   triggers need only a memory step, or nothing at all.

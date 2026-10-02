@@ -19,6 +19,8 @@ from pydantic import BaseModel
 from quintessa.ambient import ambient_templates, source_from_description, source_from_template
 from quintessa.api.model_settings import ModelSettings
 from quintessa.api.unconfigured import UnconfiguredLLM
+from quintessa.device import FOCUSED, FULL, DocumentFocus
+from quintessa.device.focus import is_stale
 from quintessa.host import AgentHost
 from quintessa.llm import LLMError, ModelRoute, ResilientLLM
 from quintessa.llm.factory import build_llm
@@ -56,6 +58,12 @@ class AnswerBody(BaseModel):
     values: dict[str, str] = {}
     dismissed: bool = False
     surface_context: str = ""
+
+
+class ViewBody(BaseModel):
+    document_id: str
+    section_ids: list[str] | None = None  # None: drop the user's choice and refocus
+    mode: str = FOCUSED
 
 
 class ParameterBody(BaseModel):
@@ -176,6 +184,7 @@ def create_app(
             "user_id": agent.user_id,
             "memory": agent.store.to_data(),
             "device": to_dict(agent.device.state),
+            "views": agent.document_views(),
             "pending_ux": [to_dict(r) for r in agent.ux.pending.values()],
             "ambient": {
                 "enabled": agent.ambient.enabled,
@@ -230,11 +239,37 @@ def create_app(
             raise HTTPException(404, "that question is no longer waiting for an answer")
         return {"ok": True}
 
+    @app.post("/api/view")
+    async def view(body: ViewBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        """The user opened a document, expanded sections or asked for all of
+        it. Their choice holds until another part of the document changes."""
+        doc = agent.store.documents.get(body.document_id)
+        if doc is None:
+            raise HTTPException(404, "no such document")
+        if body.mode not in (FOCUSED, FULL):
+            raise HTTPException(422, f"mode must be {FOCUSED!r} or {FULL!r}")
+        if body.section_ids is None:
+            agent.device.clear_focus(doc.id)
+            return agent.document_views()[doc.id]
+        unknown = [sid for sid in body.section_ids if doc.section(sid) is None]
+        if unknown:
+            raise HTTPException(422, f"no sections {unknown}")
+        agent.device.show_document(doc.id, body.section_ids, body.mode, set_by="user")
+        return agent.document_views()[doc.id]
+
     @app.post("/api/topics/{topic_id}/seen")
     async def topic_seen(topic_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
         topic = agent.store.topics.get(topic_id)
         if topic is None:
             raise HTTPException(404, "no such topic")
+        # Keep showing what the user just opened to, rather than refocusing
+        # the moment those sections stop counting as new.
+        doc = agent.store.documents.get(topic.document_id or "")
+        if doc is not None:
+            focus = agent.device.state.focus.get(doc.id)
+            if focus is None or is_stale(doc, focus):
+                shown = agent.document_views()[doc.id]
+                agent.device.pin_focus(DocumentFocus(doc.id, shown["section_ids"], shown["mode"], "", "rule"))
         topic.last_seen_at, topic.new_info = now(), ""
         agent.store.upsert_topic(topic)
         return {"ok": True}

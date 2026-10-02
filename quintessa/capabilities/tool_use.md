@@ -16,4 +16,10 @@ finish the job; it can be one step toward it.
   call; write it so the user knows exactly what they approve (amount, recipient).
 - Use the `device` tool to change what the user sees: the contextual brief
   should be glanceable calls to action ranked by what matters now (time and
-  place, urgency, decisions waiting on the user).
+  place, urgency, decisions waiting on the user). Give brief items the
+  `section_id` they are about.
+- `device.show_document` shows only the sections you name (at most 2), with a
+  one-line `reason` like "Your flight moved to 4pm"; the rest of the document
+  folds into an outline the user can open. Name the sections that changed or
+  need the user. Use mode `full` only when the user asks for the whole
+  document. `on_screen` is what Spaces shows now.

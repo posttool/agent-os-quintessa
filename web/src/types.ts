@@ -17,7 +17,7 @@ export interface Topic {
 }
 export interface DocumentSection {
   id: string; title: string; overview: string; status: string; details: string;
-  actions_taken: string[]; suggested_actions: string[]; process_ids: string[];
+  actions_taken: string[]; suggested_actions: string[]; process_ids: string[]; updated_at: string;
 }
 export interface KeyDate { when: string; label: string; tentative: boolean }
 export interface Doc {
@@ -61,14 +61,26 @@ export interface UXRequest {
   fields: UXField[]; document_id: string | null; section_id: string | null; tool: string | null; function: string | null;
   created_at: string;
 }
-export interface BriefItem { text: string; topic_id: string | null; document_id: string | null; ux_request_id: string | null; urgency: string }
+export interface BriefItem {
+  text: string; topic_id: string | null; document_id: string | null; section_id: string | null;
+  ux_request_id: string | null; urgency: string;
+}
+export type ViewMode = "focused" | "full";
+export interface DocumentFocus {
+  document_id: string; section_ids: string[]; mode: ViewMode; reason: string; set_by: string; updated_at: string;
+}
+/** Which parts of a document Spaces shows expanded (quintessa/device/focus.py). */
+export interface DocView {
+  document_id: string; section_ids: string[]; mode: ViewMode; reason: string;
+  set_by: "agent" | "user" | "rule"; changed_section_ids: string[];
+}
 export interface DeviceState {
   island: { active: boolean; words: string };
   brief: BriefItem[];
   open_ux_ids: string[];
   space_document_ids: string[];
   focused_document_id: string | null;
-  focused_section_id: string | null;
+  focus: Record<string, DocumentFocus>;
   discovery: { title: string; reason: string; topic_id: string | null }[];
   notifications: string[];
 }
@@ -88,6 +100,7 @@ export interface AgentState {
     permissions: Permission[]; subscriptions: Subscription[]; events: InputEvent[]; sessions: Session[];
   };
   device: DeviceState;
+  views: Record<string, DocView>;
   pending_ux: UXRequest[];
   ambient: { enabled: boolean; sources: AmbientSource[] };
   persona: { profile: PersonaProfile; date: string | null; running: boolean } | null;
