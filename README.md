@@ -65,8 +65,10 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 
 ```bash
 uv venv && uv pip install -e ".[dev]"
-pytest
+uv run pytest
 ```
+
+`uv run` uses the project's `.venv`, so nothing needs activating. Without uv, use `python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`, then drop the `uv run` prefix from the commands below. Running them with a Python outside that virtualenv gives errors such as `ModuleNotFoundError: No module named 'httpx'`.
 
 ### Models
 
@@ -101,13 +103,13 @@ Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is 
 ### Try it
 
 ```bash
-python -m quintessa --user maya say "Jane wants to do dinner at Zuni on Tuesday"
-python -m quintessa personas
-python -m quintessa --user maya persona <persona-id> --speed 600
-python -m quintessa --user maya export maya-agent.json     # download
-python -m quintessa --user maya restore maya-agent.json    # restore
-python -m quintessa --user maya clear
-python -m quintessa users
+uv run python -m quintessa --user maya say "Jane wants to do dinner at Zuni on Tuesday"
+uv run python -m quintessa personas
+uv run python -m quintessa --user maya persona <persona-id> --speed 600
+uv run python -m quintessa --user maya export maya-agent.json     # download
+uv run python -m quintessa --user maya restore maya-agent.json    # restore
+uv run python -m quintessa --user maya clear
+uv run python -m quintessa users
 ```
 
 Questions the agent asks are answered in the terminal. Agent state lives in `data/agents/`, one file per user.
@@ -116,10 +118,10 @@ Questions the agent asks are answered in the terminal. Agent state lives in `dat
 
 ```bash
 cd web && npm install && npm run build && cd ..
-python -m quintessa serve            # http://127.0.0.1:8000
+uv run python -m quintessa serve     # http://127.0.0.1:8000
 ```
 
-For UI work, run `python -m quintessa serve` and `cd web && npm run dev` side by side. Vite proxies `/api` to port 8000.
+For UI work, run `uv run python -m quintessa serve` and `cd web && npm run dev` side by side. Vite proxies `/api` to port 8000.
 
 - **User**: every API call names a user with `?user=` or the `X-Quintessa-User` header. The top bar sets it, so two browser tabs with different users have separate agents.
 - **Experience**: a phone with Lock, Discover, Home and Spaces screens, the dynamic island, the contextual brief and an input bar (text and speech). Open questions from the agent appear first in the brief. Spaces opens a document showing only the sections that matter now (chosen by the agent's `device.show_document`, or by a rule: sections with a waiting question, then sections changed since the user last looked, then the first open section with a next step). The rest fold into an outline the user can open one at a time, or all at once with "Show full document"; `POST /api/view` records the user's choice, which holds until another part of the document changes. The phone renders inside a shadow root with only its skin's stylesheet, so a skin is one CSS file in `web/src/experience/skins/` (`aurora` and `paper` so far).
