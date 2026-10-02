@@ -16,6 +16,7 @@ from quintessa.models.oversight_level import OversightLevel
 from quintessa.models.permission import Permission
 from quintessa.models.reasoning_session import ReasoningSession
 from quintessa.models.session_status import SessionStatus
+from quintessa.models.shadow_decision import ShadowDecision
 from quintessa.models.step_decision import StepDecision
 from quintessa.models.subscription import Subscription
 from quintessa.models.tool import Tool
@@ -49,6 +50,7 @@ __all__ = [
     "Permission",
     "ReasoningSession",
     "SessionStatus",
+    "ShadowDecision",
     "StepDecision",
     "Subscription",
     "Tool",

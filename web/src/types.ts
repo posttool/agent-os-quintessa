@@ -51,9 +51,14 @@ export interface TraceStep {
   index: number; capability: string; focus: string; rationale: string; output: Record<string, unknown>;
   summary: string; model: string; error: string; started_at: string; ended_at: string | null;
 }
+export interface ShadowDecision {
+  step_index: number; llm_choice: string; choice: string; probabilities: Record<string, number>;
+  confidence: number; model: string; latency_ms: number; error: string;
+}
 export interface Session {
   id: string; trigger: InputEvent; status: "running" | "waiting_for_user" | "complete" | "failed" | "stopped";
-  steps: TraceStep[]; permissions: Permission[]; pending_ux_id: string | null; started_at: string; ended_at: string | null;
+  steps: TraceStep[]; permissions: Permission[]; shadow_decisions?: ShadowDecision[];
+  pending_ux_id: string | null; started_at: string; ended_at: string | null;
 }
 export interface UXField { name: string; kind: string; label: string; options: string[] }
 export interface UXRequest {

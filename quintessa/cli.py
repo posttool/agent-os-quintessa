@@ -1,4 +1,4 @@
-"""Command line harness: `python -m quintessa --user ID say "..."`, `persona`, `export`, `restore`."""
+"""Command line harness: `python -m quintessa --user ID say "..."`, `persona`, `export`, `restore`, `decisions`."""
 
 from __future__ import annotations
 
@@ -9,10 +9,13 @@ import logging
 import os
 from pathlib import Path
 
+from quintessa.decide import shadow_decider_from_env
+from quintessa.decide.report import agreement_report
 from quintessa.llm import LLMError
 from quintessa.llm.factory import build_llm
 from quintessa.host import AgentHost
 from quintessa.loop import AgentRuntime
+from quintessa.memory import MemoryStore
 from quintessa.models import InputEvent, InputKind, UXFieldKind, UXRequest, UXResponse
 from quintessa.persona import AuraPersonaClient, PersonaSimulation
 from quintessa.serde import to_dict
@@ -67,12 +70,19 @@ async def main_async(args: argparse.Namespace) -> None:
     if args.command == "users":
         print("\n".join(await backend.list_users()))
         return
+    if args.command == "decisions":
+        saved = await backend.load(args.user)
+        store = MemoryStore()
+        if saved is not None:
+            store.load_data(saved["memory"])
+        print(agreement_report(store.sessions.values()))
+        return
 
     try:
         llm = build_llm(args.models)
     except LLMError as e:
         raise SystemExit(f"quintessa: {e}") from e
-    host = AgentHost(llm, backend, data_dir=args.data, search=_search_backend())
+    host = AgentHost(llm, backend, data_dir=args.data, search=_search_backend(), shadow=shadow_decider_from_env())
     agent = await host.agent(args.user)
     _answer_in_terminal(agent)
     before = set(agent.store.sessions)
@@ -125,6 +135,7 @@ def main() -> None:
     restore.add_argument("file")
     sub.add_parser("clear", help="clear the user's agent state")
     sub.add_parser("users", help="list users with saved agent state")
+    sub.add_parser("decisions", help="how often the Jev shadow agreed with the LLM's next-step choices")
     serve = sub.add_parser("serve", help="run the API and web app")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
