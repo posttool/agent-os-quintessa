@@ -27,6 +27,11 @@ class DeviceSurface:
         for listener in self._listeners:
             listener(kind, payload)
 
+    def load_state(self, state: DeviceState) -> None:
+        self.state = state
+        self._active_sessions.clear()
+        self._emit("loaded")
+
     def reset(self) -> None:
         self.state = DeviceState()
         self._active_sessions.clear()
