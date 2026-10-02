@@ -123,3 +123,68 @@ async def test_agreement_report(script, make_runtime):
     assert "3 decisions in shadow, 3 answered, 0 failed" in report
     assert "agreement with the LLM: 2/3 (67%)" in report
     assert "tool_use        0/1 (0%)         memory x1" in report
+
+
+# --- ambient filter ------------------------------------------------------------------
+
+from quintessa.decide import AmbientFilter, ambient_filter_from_env
+
+
+def jev_noul(p: float, requests: list | None = None, status: int = 200):
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if requests is not None:
+            requests.append(body)
+        if status != 200:
+            return httpx.Response(status, json={})
+        return httpx.Response(200, json={"model": "jev-test", "answers": {"matters": {"type": "noul", "noul": p}}})
+    return AmbientFilter(SystemOneClient("test-key", base_url="https://jev.test", transport=httpx.MockTransport(handler)))
+
+
+async def test_filter_skips_ambient_noise_without_any_llm_call(script, make_runtime):
+    requests = []
+    runtime = make_runtime(script, ambient_filter=jev_noul(0.1, requests))
+    session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off fall bowls", source="ambient:email", sender="Sweetgreen"))
+
+    assert session.status == SessionStatus.COMPLETE and session.steps == []
+    assert session.prefilter.skipped and session.prefilter.matters == 0.1 and session.prefilter.threshold == 0.3
+    assert "decide" not in script.prompts  # the LLM was never asked
+    state = requests[0]["state"]
+    assert state["event"] == {"kind": "message", "sender": "Sweetgreen", "content": "20% off fall bowls"}
+    assert {"tracking", "documents", "people"} <= set(state)
+    assert requests[0]["questions"]["matters"]["type"] == "noul"
+
+
+async def test_filter_keeps_events_that_matter(script, make_runtime):
+    script.on("decide", decide("memory"))
+    script.on("capability:memory", memory_answer())
+    runtime = make_runtime(script, ambient_filter=jev_noul(0.9))
+    session = await runtime.run(InputEvent(InputKind.MESSAGE, "Mom: flight delayed to 4:40", source="ambient:sms"))
+    assert not session.prefilter.skipped
+    assert [s.capability for s in session.steps] == ["memory"]
+
+
+async def test_filter_fails_open(script, make_runtime):
+    runtime = make_runtime(script, ambient_filter=jev_noul(0.0, status=500))
+    session = await runtime.run(InputEvent(InputKind.LOCATION, "Arrived at SFO", source="persona"))
+    assert session.prefilter.error.startswith("HTTP 500") and not session.prefilter.skipped
+    assert len(script.prompts["decide"]) == 1  # ran as usual
+
+
+async def test_filter_never_touches_what_the_user_says(script, make_runtime):
+    requests = []
+    runtime = make_runtime(script, ambient_filter=jev_noul(0.0, requests))
+    for source in ("user", "process:food_delivery", "persona:profile"):
+        session = await runtime.run(InputEvent(InputKind.TEXT, "hi", source=source))
+        assert session.prefilter is None
+    assert requests == []
+
+
+def test_filter_env_is_off_by_default(monkeypatch):
+    for name in ("QUINTESSA_AMBIENT_FILTER", "QUINTESSA_AMBIENT_THRESHOLD", "QUINTESSA_JEV_API_KEY", "TYPESAFE_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("QUINTESSA_JEV_API_KEY", "k")
+    assert ambient_filter_from_env() is None
+    monkeypatch.setenv("QUINTESSA_AMBIENT_FILTER", "1")
+    monkeypatch.setenv("QUINTESSA_AMBIENT_THRESHOLD", "0.5")
+    assert ambient_filter_from_env().threshold == 0.5

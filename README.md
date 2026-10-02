@@ -92,6 +92,8 @@ Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is 
 - Each capability's `choose_when` front matter is the criterion Jev reads for it.
 - `python -m quintessa --user ID decisions` prints how often Jev agreed with the LLM, per choice and by confidence.
 
+**Ambient filter.** With `QUINTESSA_AMBIENT_FILTER=1` (and a Jev key), each ambient event and persona replay is first put to Jev as one yes/no question, "does this matter?", along with an outline of what the agent is tracking. Below `QUINTESSA_AMBIENT_THRESHOLD` (default 0.3) the session ends with no LLM call and shows as skipped in Traces. What the user says, process progress and the persona profile always run, and a failed Jev call never skips anything. On 60 hand-labeled events (`/mnt/project-files/jev-eval/ambient_events.csv` in the project) it skipped half of them and missed none that mattered, at about 0.6 s a check against about 6 s for the controller's first decision.
+
 ### Aura personas
 
 `AuraPersonaClient` reads personas, days and observations from the [persona](https://github.com/posttool/persona) Cloud Functions, using the Firebase callable protocol. Set `AURA_PERSONA_BASE_URL` if the functions are not at `https://us-central1-aura-persona.cloudfunctions.net`. For the local emulator, use `http://localhost:5001/aura-persona/us-central1`.

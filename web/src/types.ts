@@ -55,9 +55,12 @@ export interface ShadowDecision {
   step_index: number; llm_choice: string; choice: string; probabilities: Record<string, number>;
   confidence: number; model: string; latency_ms: number; error: string;
 }
+export interface PrefilterDecision {
+  matters: number; threshold: number; skipped: boolean; model: string; latency_ms: number; error: string;
+}
 export interface Session {
   id: string; trigger: InputEvent; status: "running" | "waiting_for_user" | "complete" | "failed" | "stopped";
-  steps: TraceStep[]; permissions: Permission[]; shadow_decisions?: ShadowDecision[];
+  steps: TraceStep[]; permissions: Permission[]; shadow_decisions?: ShadowDecision[]; prefilter?: PrefilterDecision | null;
   pending_ux_id: string | null; started_at: string; ended_at: string | null;
 }
 export interface UXField { name: string; kind: string; label: string; options: string[] }

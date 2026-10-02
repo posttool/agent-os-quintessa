@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from quintessa.clock import now
+from quintessa.decide import is_ambient
 from quintessa.executors import EXECUTORS, StepContext
 from quintessa.executors.common import JSON_INSTRUCTION, session_context
 from quintessa.llm import LLMUnavailableError
@@ -70,6 +71,11 @@ class AgentReasoningLoop:
     async def run(self) -> ReasoningSession:
         runtime, session = self.runtime, self.session
         try:
+            if runtime.ambient_filter is not None and is_ambient(session.trigger):
+                session.prefilter = await runtime.ambient_filter.check(runtime, session.trigger)
+                if session.prefilter.skipped:  # nothing worth a step; no LLM call is made
+                    session.status = SessionStatus.COMPLETE
+                    return session
             for index in range(runtime.max_steps):
                 decision, words, model = await self.decide()
                 if not decision.capability:

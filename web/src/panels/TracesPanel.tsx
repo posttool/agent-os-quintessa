@@ -43,13 +43,16 @@ function SessionTrace({ session }: { session: Session }) {
             {t.content}
           </span>
           <span className="faint small">{session.steps.length} steps{duration && ` · ${duration}s`}</span>
-          <span className={`badge ${STATUS_TONE[session.status]}`}>{label(session.status)}</span>
+          {session.prefilter?.skipped
+            ? <span className="badge">skipped</span>
+            : <span className={`badge ${STATUS_TONE[session.status]}`}>{label(session.status)}</span>}
         </div>
       </summary>
       <div style={{ marginTop: 10 }}>
         <div className="faint small" style={{ marginBottom: 8 }}>
           trigger <code>{t.id}</code> from {t.source}{t.device && ` on ${t.device}`} · session <code>{session.id}</code>
         </div>
+        {session.prefilter && <Prefilter decision={session.prefilter} />}
         {session.steps.map((step) => (
           <div key={step.index} className={`step ${step.error ? "err" : ""}`}>
             <div className="row">
@@ -103,6 +106,17 @@ function Shadow({ decision: d }: { decision?: ShadowDecision }) {
       <span className="faint">
         {top.map(([k, p]) => `${label(k)} ${p.toFixed(2)}`).join(" · ")} · confidence {d.confidence.toFixed(2)} · {Math.round(d.latency_ms)} ms
       </span>
+    </div>
+  );
+}
+
+/** Whether the ambient filter thought this event mattered, before any LLM call. */
+function Prefilter({ decision: d }: { decision: NonNullable<Session["prefilter"]> }) {
+  if (d.error) return <div className="small" style={{ color: "var(--bad)", marginBottom: 6 }}>{d.model || "Jev"} filter failed, ran anyway: {d.error}</div>;
+  return (
+    <div className="small" style={{ marginBottom: 6 }}>
+      <span className={`badge ${d.skipped ? "" : "good"}`}>{d.model || "Jev"}: {d.skipped ? "does not matter, skipped" : "matters"}</span>{" "}
+      <span className="faint">p {d.matters.toFixed(2)} (threshold {d.threshold}) · {Math.round(d.latency_ms)} ms</span>
     </div>
   );
 }

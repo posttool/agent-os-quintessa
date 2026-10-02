@@ -6,6 +6,7 @@ from datetime import datetime
 from quintessa.clock import new_id, now
 from quintessa.models.input_event import InputEvent
 from quintessa.models.permission import Permission
+from quintessa.models.prefilter_decision import PrefilterDecision
 from quintessa.models.session_status import SessionStatus
 from quintessa.models.shadow_decision import ShadowDecision
 from quintessa.models.trace_step import TraceStep
@@ -21,6 +22,7 @@ class ReasoningSession:
     steps: list[TraceStep] = field(default_factory=list)
     permissions: list[Permission] = field(default_factory=list)
     shadow_decisions: list[ShadowDecision] = field(default_factory=list)
+    prefilter: PrefilterDecision | None = None
     pending_ux_id: str | None = None
     id: str = field(default_factory=lambda: new_id("ses"))
     started_at: datetime = field(default_factory=now)

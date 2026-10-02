@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from quintessa.api.app import create_app
 from quintessa.api.model_settings import ModelSettings
 from quintessa.api.unconfigured import UnconfiguredLLM
-from quintessa.decide import shadow_decider_from_env
+from quintessa.decide import ambient_filter_from_env, shadow_decider_from_env
 from quintessa.host import AgentHost
 from quintessa.llm import LLMError, ModelRoute, ResilientLLM
 from quintessa.llm.factory import DEFAULT_CHAIN, build_llm
@@ -36,7 +36,8 @@ def build_app(data_dir: str | Path = "data") -> FastAPI:
         search = GeminiGroundedSearch(project=os.environ["GOOGLE_CLOUD_PROJECT"],
                                       location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"))
     host = AgentHost(
-        llm, FileStateBackend(Path(data_dir) / "agents"), data_dir=data_dir, search=search, shadow=shadow_decider_from_env()
+        llm, FileStateBackend(Path(data_dir) / "agents"), data_dir=data_dir, search=search,
+        shadow=shadow_decider_from_env(), ambient_filter=ambient_filter_from_env(),
     )
     app = create_app(host, settings=settings, static_dir=os.environ.get("QUINTESSA_WEB_DIST", WEB_DIST))
 
