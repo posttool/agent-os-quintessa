@@ -64,8 +64,13 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 
 ```bash
 uv venv && uv pip install -e ".[dev]"
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pytest
 ```
+
+Without uv, use `python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`.
+
+Every `python -m quintessa` command below needs that virtualenv active (or run `.venv/bin/python -m quintessa ...`). Running them with another Python gives errors such as `ModuleNotFoundError: No module named 'httpx'`.
 
 ### Models
 
