@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AgentState, Session } from "../types";
+import type { AgentState, Session, ShadowDecision } from "../types";
 import { label, time } from "../format";
 
 const STATUS_TONE: Record<string, string> = {
@@ -29,6 +29,8 @@ export default function TracesPanel({ state }: { state: AgentState }) {
 
 function SessionTrace({ session }: { session: Session }) {
   const t = session.trigger;
+  const shadow = new Map((session.shadow_decisions ?? []).map((d) => [d.step_index, d]));
+  const finish = (session.shadow_decisions ?? []).find((d) => d.llm_choice === "done");
   const duration = session.ended_at ? ((new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 1000).toFixed(1) : null;
   return (
     <details className="card" open={session.status === "running" || session.status === "waiting_for_user"}>
@@ -41,13 +43,16 @@ function SessionTrace({ session }: { session: Session }) {
             {t.content}
           </span>
           <span className="faint small">{session.steps.length} steps{duration && ` · ${duration}s`}</span>
-          <span className={`badge ${STATUS_TONE[session.status]}`}>{label(session.status)}</span>
+          {session.prefilter?.skipped
+            ? <span className="badge">skipped</span>
+            : <span className={`badge ${STATUS_TONE[session.status]}`}>{label(session.status)}</span>}
         </div>
       </summary>
       <div style={{ marginTop: 10 }}>
         <div className="faint small" style={{ marginBottom: 8 }}>
           trigger <code>{t.id}</code> from {t.source}{t.device && ` on ${t.device}`} · session <code>{session.id}</code>
         </div>
+        {session.prefilter && <Prefilter decision={session.prefilter} />}
         {session.steps.map((step) => (
           <div key={step.index} className={`step ${step.error ? "err" : ""}`}>
             <div className="row">
@@ -57,6 +62,7 @@ function SessionTrace({ session }: { session: Session }) {
             </div>
             {step.focus && <div><span className="muted">focus:</span> {step.focus}</div>}
             {step.rationale && <div className="muted small">why: {step.rationale}</div>}
+            <Shadow decision={shadow.get(step.index)} />
             {step.summary && <div style={{ marginTop: 2 }}>→ {step.summary}</div>}
             {step.error && <div style={{ color: "var(--bad)" }}>{step.error}</div>}
             {Object.keys(step.output).length > 0 && (
@@ -67,6 +73,12 @@ function SessionTrace({ session }: { session: Session }) {
             )}
           </div>
         ))}
+        {finish && (
+          <div className="step">
+            <div className="row"><strong>{session.steps.length + 1}. Done</strong></div>
+            <Shadow decision={finish} />
+          </div>
+        )}
         {session.permissions.length > 0 && (
           <div className="row small" style={{ marginTop: 6 }}>
             {session.permissions.map((p, i) => (
@@ -78,5 +90,33 @@ function SessionTrace({ session }: { session: Session }) {
         )}
       </div>
     </details>
+  );
+}
+
+/** What the System One model (Jev, gev) would have picked at this decision. */
+function Shadow({ decision: d }: { decision?: ShadowDecision }) {
+  if (!d) return null;
+  if (d.error) return <div className="small" style={{ color: "var(--bad)" }}>{d.model || "Jev"}: {d.error}</div>;
+  const top = Object.entries(d.probabilities).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  return (
+    <div className="small">
+      <span className={`badge ${d.choice === d.llm_choice ? "good" : "warn"}`}>
+        {d.model || "Jev"}: {label(d.choice)}
+      </span>{" "}
+      <span className="faint">
+        {top.map(([k, p]) => `${label(k)} ${p.toFixed(2)}`).join(" · ")} · confidence {d.confidence.toFixed(2)} · {Math.round(d.latency_ms)} ms
+      </span>
+    </div>
+  );
+}
+
+/** Whether the ambient filter thought this event mattered, before any LLM call. */
+function Prefilter({ decision: d }: { decision: NonNullable<Session["prefilter"]> }) {
+  if (d.error) return <div className="small" style={{ color: "var(--bad)", marginBottom: 6 }}>{d.model || "Jev"} filter failed, ran anyway: {d.error}</div>;
+  return (
+    <div className="small" style={{ marginBottom: 6 }}>
+      <span className={`badge ${d.skipped ? "" : "good"}`}>{d.model || "Jev"}: {d.skipped ? "does not matter, skipped" : "matters"}</span>{" "}
+      <span className="faint">p {d.matters.toFixed(2)} (threshold {d.threshold}) · {Math.round(d.latency_ms)} ms</span>
+    </div>
   );
 }

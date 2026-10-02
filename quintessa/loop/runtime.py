@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Callable
 
 from quintessa.ambient.bus import AmbientBus
 from quintessa.capabilities.loader import load_capabilities, load_prompt
+from quintessa.decide import AmbientFilter, NextStepDecider
 from quintessa.device import DeviceSurface
 from quintessa.device.focus import resolve_view
 from quintessa.llm import ResilientLLM
@@ -39,6 +40,8 @@ class AgentRuntime:
         search: SearchBackend | None = None,
         process_interval: float = 5.0,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        shadow: NextStepDecider | None = None,
+        ambient_filter: AmbientFilter | None = None,
     ):
         self.user_id = user_id
         self.llm = llm
@@ -47,6 +50,8 @@ class AgentRuntime:
         self.capabilities = capabilities or load_capabilities(capability_dir)
         self.controller_prompt = load_prompt("controller", capability_dir)
         self.max_steps = max_steps
+        self.shadow = shadow  # a System One model asked beside the LLM at each decision; never steers
+        self.ambient_filter = ambient_filter  # skips ambient events a System One model says do not matter
         self.data_dir = Path(data_dir)
         self.search = search
         self.ux = UXBroker()

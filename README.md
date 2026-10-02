@@ -52,6 +52,7 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 | `quintessa/host.py` | `AgentHost`: per-user agents, saving, download and restore |
 | `quintessa/state/` | state backends (file, in-memory) and the snapshot format |
 | `quintessa/loop/` | `AgentReasoningLoop`, `AgentRuntime`, `UXBroker` |
+| `quintessa/decide/` | System One decision models (Jev, gev) asked beside the LLM, and the agreement report |
 | `quintessa/tools/` | built-in `web` and `device` tools and the tool runner |
 | `quintessa/device/` | device surface state |
 | `quintessa/ambient/` | ambient data bus and template-based generators |
@@ -81,6 +82,17 @@ export QUINTESSA_MODEL_CHAIN="claude:claude-opus-5-5,claude:claude-opus-5,gemini
 - `QUINTESSA_LLM_RETRIES` sets retries per model (default 2).
 
 Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is set.
+
+### Jev shadow mode
+
+[Jev](https://docs.typesafe.ai/) is a decision model: it answers typed questions with probabilities and writes no text. With a key set, every next-step decision is also put to Jev as a Choice over the capabilities and "done", at the same moment as the LLM. The LLM still decides; Jev's pick, probabilities, confidence and latency are kept on the session (`shadow_decisions`) and shown under each step in the Traces panel.
+
+- `QUINTESSA_JEV_API_KEY` turns it on (`TYPESAFE_API_KEY` also works). `QUINTESSA_DECIDER=llm` turns it off.
+- `QUINTESSA_JEV_URL` points it at another endpoint with the same `/v1/systemone` API, such as [gev](https://github.com/dglazkov/gev), the open-source one on Gemma. `QUINTESSA_JEV_MODEL` defaults to `jev-latest`.
+- Each capability's `choose_when` front matter is the criterion Jev reads for it.
+- `python -m quintessa --user ID decisions` prints how often Jev agreed with the LLM, per choice and by confidence.
+
+**Ambient filter.** With `QUINTESSA_AMBIENT_FILTER=1` (and a Jev key), each ambient event and persona replay is first put to Jev as one yes/no question, "does this matter?", along with an outline of what the agent is tracking. Below `QUINTESSA_AMBIENT_THRESHOLD` (default 0.3) the session ends with no LLM call and shows as skipped in Traces. What the user says, process progress and the persona profile always run, and a failed Jev call never skips anything. On 60 hand-labeled events (`/mnt/project-files/jev-eval/ambient_events.csv` in the project) it skipped half of them and missed none that mattered, at about 0.6 s a check against about 6 s for the controller's first decision.
 
 ### Aura personas
 

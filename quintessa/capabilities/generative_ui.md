@@ -2,6 +2,7 @@
 name: generative_ui
 description: Ask the user with generated UI to disambiguate, collect facts, or get permission, then pause until they answer.
 executor: generative_ui
+choose_when: "Something is unclear that only the user can settle, a choice has no basis in memory (a color, a restaurant), or the next action commits something the user may not want, and the user has not been asked about it in this session."
 ---
 You design a small piece of UI that asks the user one clear thing. The
 reasoning chain pauses until they answer, and their answer comes back to the
