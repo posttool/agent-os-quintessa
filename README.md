@@ -2,7 +2,7 @@
 
 A personal agent operating system. An LLM-driven reasoning loop works over a shared memory graph of the user's world, and a device surface shows what matters right now.
 
-This is phase 1 of the [spec](docs/spec.md): the Python backend, its data structures and tests. Phase 2 is the web app (an Experience panel plus Memory, Tools, Data and Traces panels).
+Built from the [spec](docs/spec.md) in two phases: the Python backend with its data structures and tests, and a web app with a phone Experience panel plus Memory, Tools, Data and Traces panels.
 
 ## How it works
 
@@ -57,6 +57,8 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 | `quintessa/ambient/` | ambient data bus and template-based generators |
 | `quintessa/persona/` | Aura persona client and day-in-the-life simulation |
 | `quintessa/samples/` | bootstrap data: tool suggestions, ambient templates |
+| `quintessa/api/` | FastAPI app: per-user HTTP API, live change stream, serves the web app |
+| `web/` | React web app (Vite, TypeScript) |
 
 ## Setup
 
@@ -98,10 +100,28 @@ python -m quintessa users
 
 Questions the agent asks are answered in the terminal. Agent state lives in `data/agents/`, one file per user.
 
+## Web app
+
+```bash
+cd web && npm install && npm run build && cd ..
+python -m quintessa serve            # http://127.0.0.1:8000
+```
+
+For UI work, run `python -m quintessa serve` and `cd web && npm run dev` side by side. Vite proxies `/api` to port 8000.
+
+- **User**: every API call names a user with `?user=` or the `X-Quintessa-User` header. The top bar sets it, so two browser tabs with different users have separate agents.
+- **Experience**: a phone with Lock, Discover, Home and Spaces screens, the dynamic island, the contextual brief and an input bar (text and speech). Open questions from the agent appear first in the brief. The phone renders inside a shadow root with only its skin's stylesheet, so a skin is one CSS file in `web/src/experience/skins/` (`aurora` and `paper` so far).
+- **Memory**: the graph, topics, documents, facts and permissions.
+- **Tools**: built-in and agent-made tools; create or delete your own.
+- **Data**: the global on/off switch (on, with no sources), sources from templates or described in plain words ("vibe coded"), and per-source speed.
+- **Traces**: every reasoning step, grouped by the input that started it.
+- **Top bar**: Aura persona picker (clears the user's state and plays a day), model chain with retries and fallbacks, download and restore of agent state, clear memory, dark and light mode.
+
+The app starts blank. With no model configured, inputs fail with a message saying so; set the chain in the top bar or with `QUINTESSA_MODEL_CHAIN`.
+
 ## Not yet built
 
-- The phase 2 web app.
 - Executing `web_api`, `mcp` and `code` tools. They can be defined and stored, but calls report that they are not implemented yet.
 - Memory retrieval: the whole graph currently goes into each prompt.
 - Resuming a question that was open during a restart: the session is recorded as interrupted, and the next input starts fresh.
-- Authentication: the host trusts the `user_id` it is given, so the API layer must check identity.
+- Authentication: the API trusts the user id it is given. It must check identity before it is exposed beyond localhost.

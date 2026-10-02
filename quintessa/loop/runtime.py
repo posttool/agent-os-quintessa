@@ -52,13 +52,19 @@ class AgentRuntime:
         self.ambient = AmbientBus(self, process_interval=process_interval, sleep=sleep)
         self._tasks: set[asyncio.Task] = set()
         self.on_change: Callable[[], None] | None = None
-        self.store.listen(lambda *_: self._changed())
-        self.device.listen(lambda *_: self._changed())
+        self.watchers: set[Callable[[], None]] = set()
+        self.store.listen(lambda *_: self.notify_changed())
+        self.device.listen(lambda *_: self.notify_changed())
+        self.ux.on_request(lambda _: self.notify_changed())
         self.install_builtin_tools()
 
-    def _changed(self) -> None:
+    def notify_changed(self) -> None:
+        """Something about this user's agent changed: persist it (on_change,
+        set by the host) and tell live views (watchers)."""
         if self.on_change is not None:
             self.on_change()
+        for watcher in list(self.watchers):
+            watcher()
 
     @property
     def busy(self) -> bool:

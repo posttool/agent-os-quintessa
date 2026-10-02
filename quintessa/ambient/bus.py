@@ -35,15 +35,26 @@ class AmbientBus:
     def add_source(self, source: AmbientSource) -> None:
         self.sources[source.id] = source
         self._tasks[source.id] = asyncio.create_task(self._run_source(source))
+        self.runtime.notify_changed()
 
     def remove_source(self, source_id: str) -> None:
         self.sources.pop(source_id, None)
         task = self._tasks.pop(source_id, None)
         if task:
             task.cancel()
+        self.runtime.notify_changed()
 
     def set_speed(self, source_id: str, speed: float) -> None:
         self.sources[source_id].speed = speed
+        self.runtime.notify_changed()
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.runtime.notify_changed()
+
+    def source_done(self, source_id: str) -> bool:
+        task = self._tasks.get(source_id)
+        return task is None or task.done()
 
     async def _run_source(self, source: AmbientSource) -> None:
         while True:
