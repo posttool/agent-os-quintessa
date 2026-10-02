@@ -58,6 +58,11 @@ class PersonaSimulation:
         self.max_gap = max_gap
         self._sleep = sleep
         self._task: asyncio.Task | None = None
+        self.date: str | None = None
+
+    @property
+    def running(self) -> bool:
+        return self._task is not None and not self._task.done()
 
     async def start(self, persona_id: str, date: str | None = None) -> PersonaProfile:
         await self.stop()
@@ -66,6 +71,7 @@ class PersonaSimulation:
         if date is None:
             days = await self.client.list_days(persona_id)
             date = days[0]["date"]
+        self.date = date
         observations = sorted(await self.client.list_observations(persona_id, date), key=lambda o: o.time)
         profile = {k: v for k, v in to_dict(persona).items() if k != "raw"}
         self.runtime.submit(

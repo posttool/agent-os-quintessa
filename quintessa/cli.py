@@ -54,6 +54,15 @@ async def main_async(args: argparse.Namespace) -> None:
             print(f"{p.id}  {p.name}, {p.age}, {p.occupation}, {p.city}")
         return
 
+    if args.command == "serve":
+        import uvicorn
+
+        from quintessa.api.server import build_app
+
+        config = uvicorn.Config(build_app(args.data), host=args.host, port=args.port, log_level="info")
+        await uvicorn.Server(config).serve()
+        return
+
     backend = FileStateBackend(Path(args.data) / "agents")
     if args.command == "users":
         print("\n".join(await backend.list_users()))
@@ -116,6 +125,9 @@ def main() -> None:
     restore.add_argument("file")
     sub.add_parser("clear", help="clear the user's agent state")
     sub.add_parser("users", help="list users with saved agent state")
+    serve = sub.add_parser("serve", help="run the API and web app")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
     asyncio.run(main_async(args))

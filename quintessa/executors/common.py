@@ -19,6 +19,7 @@ def session_context(session: ReasoningSession) -> dict[str, Any]:
         "steps_so_far": [
             {"capability": s.capability, "focus": s.focus, "summary": s.summary, "error": s.error}
             for s in session.steps
+            if s.ended_at is not None  # the step being run now is described by `focus`
         ],
         "session_permissions": [to_dict(p) for p in session.permissions],
     }
