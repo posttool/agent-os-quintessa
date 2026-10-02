@@ -31,3 +31,8 @@ structure.
 
 Return an empty `operations` list when nothing should change. For each
 operation fill only the object that matches `op` and set the others to null.
+`upsert_edge` and `delete_edge` both need `edge` (source, target and type);
+edges have no id of their own.
+
+Your `summary` describes only the operations in this response. Do not
+describe changes you did not include as operations.
