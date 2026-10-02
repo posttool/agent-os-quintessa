@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+import asyncio
+from typing import Callable
+
+from quintessa.models import UXRequest, UXResponse
+
+
+class UXBroker:
+    """Holds generated UI that reasoning loops are waiting on. A surface
+    answers with a UXResponse; the waiting loop resumes with it."""
+
+    def __init__(self) -> None:
+        self.pending: dict[str, UXRequest] = {}
+        self._futures: dict[str, asyncio.Future[UXResponse]] = {}
+        self._listeners: list[Callable[[UXRequest], None]] = []
+
+    def on_request(self, listener: Callable[[UXRequest], None]) -> None:
+        self._listeners.append(listener)
+
+    async def ask(self, request: UXRequest) -> UXResponse:
+        future: asyncio.Future[UXResponse] = asyncio.get_running_loop().create_future()
+        self.pending[request.id] = request
+        self._futures[request.id] = future
+        for listener in self._listeners:
+            listener(request)
+        try:
+            return await future
+        finally:
+            self.pending.pop(request.id, None)
+            self._futures.pop(request.id, None)
+
+    def answer(self, response: UXResponse) -> bool:
+        future = self._futures.get(response.request_id)
+        if future is None or future.done():
+            return False
+        future.set_result(response)
+        return True
+
+    def cancel_all(self) -> None:
+        for future in self._futures.values():
+            if not future.done():
+                future.cancel()

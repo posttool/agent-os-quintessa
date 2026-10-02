@@ -1,0 +1,12 @@
+[
+  {"name": "email", "kind": "message", "device": "phone", "interval_seconds": 20,
+   "description": "Incoming emails: work, family, newsletters, receipts and the occasional unknown sender."},
+  {"name": "sms", "kind": "message", "device": "phone", "interval_seconds": 15,
+   "description": "Text messages from friends and family who do not know where the user is right now."},
+  {"name": "home_security", "kind": "vision", "device": "home_camera", "interval_seconds": 30,
+   "description": "Front door camera events: packages, visitors, motion at night."},
+  {"name": "drive_to_office", "kind": "location", "device": "phone", "interval_seconds": 10,
+   "description": "Location updates on a drive from home to the office, with traffic and a coffee stop."},
+  {"name": "location_changes", "kind": "location", "device": "phone", "interval_seconds": 30,
+   "description": "Semantic location changes through the day: home, gym, school, grocery store, a friend's place."}
+]

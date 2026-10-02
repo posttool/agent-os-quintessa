@@ -1,0 +1,70 @@
+[
+  {
+    "name": "restaurant_reservations",
+    "description": "Find restaurants and book or cancel tables.",
+    "kind": "llm",
+    "functions": [
+      {"name": "search", "oversight": "auto_from_memory"},
+      {"name": "book", "oversight": "confirm_once", "long_running": true},
+      {"name": "cancel", "oversight": "always_ask"}
+    ]
+  },
+  {
+    "name": "food_delivery",
+    "description": "Order dinner from a delivery app and follow the order.",
+    "kind": "llm",
+    "functions": [
+      {"name": "browse_menu", "oversight": "auto_from_memory"},
+      {"name": "add_to_cart", "oversight": "auto"},
+      {"name": "checkout", "oversight": "always_ask", "long_running": true}
+    ]
+  },
+  {
+    "name": "ride_hailing",
+    "description": "Request, follow and cancel a ride.",
+    "kind": "llm",
+    "functions": [
+      {"name": "quote", "oversight": "auto_from_memory"},
+      {"name": "request_ride", "oversight": "always_ask", "long_running": true},
+      {"name": "cancel_ride", "oversight": "confirm_once"}
+    ]
+  },
+  {
+    "name": "messaging",
+    "description": "Send messages to the user's contacts on their behalf.",
+    "kind": "mcp",
+    "functions": [
+      {"name": "read_thread", "oversight": "auto"},
+      {"name": "send", "oversight": "always_ask"}
+    ]
+  },
+  {
+    "name": "calendar",
+    "description": "The agent's calendar: pencil in tentative dates, confirm them, find conflicts.",
+    "kind": "llm",
+    "functions": [
+      {"name": "list", "oversight": "auto"},
+      {"name": "pencil_in", "oversight": "auto"},
+      {"name": "confirm", "oversight": "confirm_once"}
+    ]
+  },
+  {
+    "name": "study_aids",
+    "description": "Generate flash cards, quizzes and short tutorials for a topic.",
+    "kind": "llm",
+    "functions": [
+      {"name": "flash_cards", "oversight": "auto"},
+      {"name": "quiz", "oversight": "auto"}
+    ]
+  },
+  {
+    "name": "shopping",
+    "description": "Compare prices, look for similar cheaper items, buy.",
+    "kind": "web_api",
+    "functions": [
+      {"name": "compare_prices", "oversight": "auto"},
+      {"name": "find_similar", "oversight": "auto"},
+      {"name": "purchase", "oversight": "always_ask", "long_running": true}
+    ]
+  }
+]

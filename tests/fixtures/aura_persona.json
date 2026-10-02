@@ -1,0 +1,20 @@
+{
+  "_note": "Synthetic data in the shape the Aura persona service returns (posttool/persona functions/index.js).",
+  "persona": {
+    "id": "p_maya",
+    "name": "Maya Okafor",
+    "occupation": "college sophomore, part-time barista",
+    "city": "Oakland, CA",
+    "age": 19,
+    "hobbies": ["climbing", "film photography"],
+    "goals_this_week": ["finish history essay", "plan Dara's birthday"],
+    "family": ["mom Ngozi", "brother Tunde"],
+    "apps": ["Gmail", "WhatsApp", "Instacart", "Uber"]
+  },
+  "days": [{"id": "d1", "date": "2026-05-26"}],
+  "observations": [
+    {"id": "o1", "date": "2026-05-26", "time": "07:45:12", "device": "phone", "type": "location", "data": "home"},
+    {"id": "o2", "date": "2026-05-26", "time": "07:52:40", "device": "phone", "type": "notification", "senderApp": "WhatsApp", "sender": "Jane", "data": "zuni on tuesday?"},
+    {"id": "o3", "date": "2026-05-26", "time": "12:10:05", "device": "watch", "type": "location", "data": "Safeway on Broadway"}
+  ]
+}

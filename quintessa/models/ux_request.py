@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+
+from quintessa.clock import new_id, now
+from quintessa.models.ux_field import UXField
+from quintessa.models.ux_purpose import UXPurpose
+
+
+@dataclass
+class UXRequest:
+    """Generated UI the reasoning loop waits on. It remembers the context that
+    produced it so the answer returns to that context (a document section,
+    a pending tool call)."""
+
+    session_id: str
+    purpose: UXPurpose
+    prompt: str
+    fields: list[UXField] = field(default_factory=list)
+    document_id: str | None = None
+    section_id: str | None = None
+    tool: str | None = None
+    function: str | None = None
+    id: str = field(default_factory=lambda: new_id("ux"))
+    created_at: datetime = field(default_factory=now)
