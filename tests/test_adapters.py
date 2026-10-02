@@ -136,3 +136,11 @@ async def test_gemini_failures(result, error):
     client, _ = gemini_client(result)
     with pytest.raises(error):
         await call(GeminiVertexAdapter(client), "gemini-3.8-flash")
+
+
+def test_claude_reads_quintessa_api_key_first(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "from-anthropic")
+    monkeypatch.setenv("QUINTESSA_ANTHROPIC_API_KEY", "from-quintessa")
+    assert ClaudeAdapter().client.api_key == "from-quintessa"
+    monkeypatch.delenv("QUINTESSA_ANTHROPIC_API_KEY")
+    assert ClaudeAdapter().client.api_key == "from-anthropic"

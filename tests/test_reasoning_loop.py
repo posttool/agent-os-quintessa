@@ -60,7 +60,8 @@ async def test_disambiguation_pauses_and_returns_to_the_document(script, make_ru
     assert "Wednesday" in session.steps[2].summary
     assert runtime.device.state.open_ux_ids == []
     assert runtime.device.state.focused_document_id == "doc-dinner"
-    assert runtime.device.state.focused_section_id == "sec-time"
+    assert runtime.on_screen()["section_ids"] == ["sec-time"]
+    assert runtime.on_screen()["set_by"] == "agent"
 
 
 async def test_loops_run_concurrently_over_shared_memory(script, make_runtime):

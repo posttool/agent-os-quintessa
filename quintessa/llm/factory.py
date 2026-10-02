@@ -20,7 +20,8 @@ def build_llm(chain: str | None = None) -> ResilientLLM:
       QUINTESSA_GCP_SA_JSON     a service account key's JSON, used when no credentials file is set
       GOOGLE_CLOUD_LOCATION     Vertex location (default "global")
       QUINTESSA_CLAUDE_ON_VERTEX=1   send Claude through Vertex instead of the Anthropic API
-      ANTHROPIC_API_KEY         Anthropic API credential when not on Vertex
+      QUINTESSA_ANTHROPIC_API_KEY   Anthropic API credential when not on Vertex
+      ANTHROPIC_API_KEY         used when QUINTESSA_ANTHROPIC_API_KEY is not set
     """
     load_service_account_env()
     spec = chain or os.environ.get("QUINTESSA_MODEL_CHAIN", DEFAULT_CHAIN)

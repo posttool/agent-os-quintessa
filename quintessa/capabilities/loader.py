@@ -17,7 +17,7 @@ def _read(path: Path) -> tuple[dict, str]:
 
 def load_capabilities(directory: str | Path | None = None, names: list[str] | None = None) -> dict[str, Capability]:
     """Load capability markdown files (front matter: name, description,
-    executor). Files starting with "_" are prompts, not capabilities.
+    executor, choose_when). Files starting with "_" are prompts, not capabilities.
     `names` restricts which capabilities are active."""
     folder = Path(directory) if directory else BUILTIN_DIR
     capabilities: dict[str, Capability] = {}
@@ -33,6 +33,7 @@ def load_capabilities(directory: str | Path | None = None, names: list[str] | No
             executor=meta.get("executor", meta["name"]),
             instructions=body,
             source_path=str(path),
+            choose_when=meta.get("choose_when", ""),
         )
     return capabilities
 

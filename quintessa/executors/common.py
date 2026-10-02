@@ -30,6 +30,7 @@ async def call_capability(ctx: StepContext, schema: dict[str, Any], extra: dict[
         "focus": ctx.decision.focus,
         **session_context(ctx.session),
         "memory": ctx.runtime.store.snapshot(),
+        "on_screen": ctx.runtime.on_screen(),
         **(extra or {}),
     }
     return await ctx.runtime.llm.generate_json(

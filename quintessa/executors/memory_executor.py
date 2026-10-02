@@ -86,8 +86,12 @@ class MemoryExecutor:
         store = ctx.runtime.store
         async with store.lock:
             applied = apply_operations(store, result.data["operations"], ctx.session.trigger.id)
+        summary = result.data["summary"]
+        skipped = [line for line in applied if line.startswith("skipped")]
+        if skipped:
+            summary += "\n\nNot applied: " + "; ".join(skipped)
         return StepOutcome(
             output={**result.data, "applied": applied},
-            summary=result.data["summary"],
+            summary=summary,
             model=result.model,
         )

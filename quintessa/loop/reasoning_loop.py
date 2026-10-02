@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING
 
 from quintessa.clock import now
+from quintessa.decide import is_ambient
 from quintessa.executors import EXECUTORS, StepContext
 from quintessa.executors.common import JSON_INSTRUCTION, session_context
 from quintessa.llm import LLMUnavailableError
@@ -45,14 +47,23 @@ class AgentReasoningLoop:
             ],
             **session_context(self.session),
             "memory": self.runtime.store.snapshot(),
+            "on_screen": self.runtime.on_screen(),
             "max_steps_left": self.runtime.max_steps - len(self.session.steps),
         }
-        result = await self.runtime.llm.generate_json(
+        llm_call = self.runtime.llm.generate_json(
             system=f"{self.runtime.controller_prompt}\n\n{JSON_INSTRUCTION}",
             prompt=json.dumps(ctx, indent=1, default=str),
             schema=self._decision_schema(),
             purpose="decide",
         )
+        shadow = self.runtime.shadow
+        if shadow is None:
+            result = await llm_call
+        else:
+            # asked alongside the LLM (it is usually much faster); recorded, never followed
+            result, record = await asyncio.gather(llm_call, shadow.shadow(self.runtime, self.session))
+            record.llm_choice = result.data["capability"]
+            self.session.shadow_decisions.append(record)
         d = result.data
         capability = "" if d["capability"] == DONE else d["capability"]
         return StepDecision(capability, d["focus"], d["rationale"]), d["status_words"], result.model
@@ -60,6 +71,11 @@ class AgentReasoningLoop:
     async def run(self) -> ReasoningSession:
         runtime, session = self.runtime, self.session
         try:
+            if runtime.ambient_filter is not None and is_ambient(session.trigger):
+                session.prefilter = await runtime.ambient_filter.check(runtime, session.trigger)
+                if session.prefilter.skipped:  # nothing worth a step; no LLM call is made
+                    session.status = SessionStatus.COMPLETE
+                    return session
             for index in range(runtime.max_steps):
                 decision, words, model = await self.decide()
                 if not decision.capability:

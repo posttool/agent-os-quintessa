@@ -1,4 +1,4 @@
-import type { AgentState, ModelSettings, PersonaProfile } from "./types";
+import type { AgentState, DocView, ModelSettings, PersonaProfile, ViewMode } from "./types";
 
 export class ApiError extends Error {}
 
@@ -30,6 +30,9 @@ export function makeApi(user: string) {
     input: (content: string, kind = "text") => call<{ session_id: string }>("POST", "/api/input", { content, kind }),
     answer: (id: string, values: Record<string, string>, dismissed = false) =>
       call("POST", `/api/ux/${encodeURIComponent(id)}`, { values, dismissed }),
+    /** section_ids null drops the user's choice so the agent's focus returns. */
+    view: (document_id: string, section_ids: string[] | null, mode: ViewMode = "focused") =>
+      call<DocView>("POST", "/api/view", { document_id, section_ids, mode }),
     seen: (topicId: string) => call("POST", `/api/topics/${encodeURIComponent(topicId)}/seen`),
     clear: () => call("POST", "/api/clear"),
     restore: (text: string) => call("POST", "/api/restore", text),

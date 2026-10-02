@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 
 import httpx
 
-from quintessa.device import BriefItem, DiscoveryItem
+from quintessa.device import FOCUSED, FULL, BriefItem, DiscoveryItem
 from quintessa.models import OversightLevel, Tool, ToolFunction, ToolKind, ToolParameter
 from quintessa.tools.tool_call_result import ToolCallResult
 
@@ -44,12 +44,19 @@ DEVICE_TOOL = Tool(
         ToolFunction(
             "set_brief",
             "Replace the contextual brief.",
-            [ToolParameter("items", "json array of {text, topic_id, document_id, urgency}")],
+            [ToolParameter("items", "json array of {text, topic_id, document_id, section_id, urgency}")],
         ),
         ToolFunction(
             "show_document",
-            "Bring a document (optionally a section) into Spaces.",
-            [ToolParameter("document_id", "string"), ToolParameter("section_id", "string", required=False)],
+            "Bring a document into Spaces showing only what matters now: the sections to expand "
+            "(at most 2; the rest fold into an outline) and a one-line reason. Use mode \"full\" when "
+            "the user asks for the whole document. Omit sections to let the device pick.",
+            [
+                ToolParameter("document_id", "string"),
+                ToolParameter("section_ids", "json array of section ids", required=False),
+                ToolParameter("mode", "\"focused\" or \"full\"", required=False),
+                ToolParameter("reason", "string", required=False),
+            ],
         ),
         ToolFunction(
             "add_discovery",
@@ -93,16 +100,34 @@ async def _download(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallRe
 async def _set_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
     items = json.loads(args["items"])
     runtime.device.set_brief(
-        [BriefItem(i["text"], i.get("topic_id"), i.get("document_id"), urgency=i.get("urgency", "normal")) for i in items]
+        [
+            BriefItem(i["text"], i.get("topic_id"), i.get("document_id"), i.get("section_id"), urgency=i.get("urgency", "normal"))
+            for i in items
+        ]
     )
     return ToolCallResult("done", f"brief shows {len(items)} items")
 
 
 async def _show_document(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
-    if args["document_id"] not in runtime.store.documents:
+    doc = runtime.store.documents.get(args["document_id"])
+    if doc is None:
         return ToolCallResult("failed", f"no document {args['document_id']}")
-    runtime.device.show_document(args["document_id"], args.get("section_id") or None)
-    return ToolCallResult("done", f"showing {args['document_id']}")
+    mode = args.get("mode") or FOCUSED
+    if mode not in (FOCUSED, FULL):
+        return ToolCallResult("failed", f"mode must be {FOCUSED!r} or {FULL!r}")
+    raw = args.get("section_ids") or "[]"
+    try:
+        section_ids = json.loads(raw)
+    except json.JSONDecodeError:
+        section_ids = [raw]
+    if isinstance(section_ids, str):
+        section_ids = [section_ids]
+    unknown = [sid for sid in section_ids if doc.section(sid) is None]
+    if unknown:
+        return ToolCallResult("failed", f"{doc.id} has no sections {unknown}; it has {[s.id for s in doc.sections]}")
+    runtime.device.show_document(doc.id, section_ids, mode, args.get("reason") or "")
+    shown = "the whole document" if mode == FULL else (", ".join(section_ids) or "what matters now")
+    return ToolCallResult("done", f"showing {doc.id}: {shown}")
 
 
 async def _add_discovery(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:

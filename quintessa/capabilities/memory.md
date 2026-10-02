@@ -2,6 +2,7 @@
 name: memory
 description: Read, write and organize the shared memory graph, the topic index and documents.
 executor: memory
+choose_when: "The trigger carries information worth keeping, updates a topic or document, or makes something stale, and no memory step in this session has recorded it yet; or what is already known needs organizing."
 ---
 You maintain the user's memory: a knowledge graph of facts, an index of topics
 ("cards") and documents that grow over the life of a topic.
@@ -31,3 +32,8 @@ structure.
 
 Return an empty `operations` list when nothing should change. For each
 operation fill only the object that matches `op` and set the others to null.
+`upsert_edge` and `delete_edge` both need `edge` (source, target and type);
+edges have no id of their own.
+
+Your `summary` describes only the operations in this response. Do not
+describe changes you did not include as operations.

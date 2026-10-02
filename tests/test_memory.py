@@ -107,3 +107,15 @@ def test_listeners_see_changes():
     apply_operations(store, [node_op("a", "A")], None)
     store.clear()
     assert seen == ["node", "cleared"]
+
+
+def test_operation_missing_its_object_is_skipped_not_fatal():
+    store = MemoryStore()
+    apply_operations(store, [node_op("a", "A"), node_op("b", "B"), edge_op("upsert_edge", "a", "b")], None)
+    bad_delete = {**edge_op("delete_edge", "a", "b"), "id": "edge-a-b", "edge": None}
+    bad_topic = {**topic_op("t1", "Party"), "topic": None}
+    applied = apply_operations(store, [bad_delete, bad_topic, node_op("c", "C")], None)
+    assert applied[0] == "skipped delete_edge edge-a-b: no edge given"
+    assert applied[1] == "skipped upsert_topic t1: no topic given"
+    assert applied[2] == "node c saved"
+    assert "c" in store.nodes and "t1" not in store.topics

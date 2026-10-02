@@ -52,6 +52,7 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 | `quintessa/host.py` | `AgentHost`: per-user agents, saving, download and restore |
 | `quintessa/state/` | state backends (file, in-memory) and the snapshot format |
 | `quintessa/loop/` | `AgentReasoningLoop`, `AgentRuntime`, `UXBroker` |
+| `quintessa/decide/` | System One decision models (Jev, gev) asked beside the LLM, and the agreement report |
 | `quintessa/tools/` | built-in `web` and `device` tools and the tool runner |
 | `quintessa/device/` | device surface state |
 | `quintessa/ambient/` | ambient data bus and template-based generators |
@@ -64,8 +65,10 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 
 ```bash
 uv venv && uv pip install -e ".[dev]"
-pytest
+uv run pytest
 ```
+
+`uv run` uses the project's `.venv`, so nothing needs activating. Without uv, use `python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`, then drop the `uv run` prefix from the commands below. Running them with a Python outside that virtualenv gives errors such as `ModuleNotFoundError: No module named 'httpx'`.
 
 ### Models
 
@@ -78,10 +81,21 @@ export QUINTESSA_MODEL_CHAIN="claude:claude-opus-5-5,claude:claude-opus-5,gemini
 
 - **Gemini on Vertex**: run `gcloud auth application-default login`, then set `GOOGLE_CLOUD_PROJECT` (and optionally `GOOGLE_CLOUD_LOCATION`, default `global`).
   - Where secrets can only be environment variables (such as a hosted environment), put a service account key's whole JSON in `QUINTESSA_GCP_SA_JSON` instead. The account needs the Vertex AI User role. `GOOGLE_CLOUD_PROJECT` then defaults to the key's project.
-- **Claude**: set `ANTHROPIC_API_KEY`. To route Claude through Vertex instead, set `QUINTESSA_CLAUDE_ON_VERTEX=1` with the Google variables above. On the Anthropic API, current models also get Anthropic's server-side refusal fallback.
+- **Claude**: set `QUINTESSA_ANTHROPIC_API_KEY`, or `ANTHROPIC_API_KEY` if that is not set. The Quintessa name is there because some hosts, such as Claude Code cloud sessions, keep `ANTHROPIC_API_KEY` for themselves. To route Claude through Vertex instead, set `QUINTESSA_CLAUDE_ON_VERTEX=1` with the Google variables above. On the Anthropic API, current models also get Anthropic's server-side refusal fallback.
 - `QUINTESSA_LLM_RETRIES` sets retries per model (default 2).
 
 Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is set.
+
+### Jev shadow mode
+
+[Jev](https://docs.typesafe.ai/) is a decision model: it answers typed questions with probabilities and writes no text. With a key set, every next-step decision is also put to Jev as a Choice over the capabilities and "done", at the same moment as the LLM. The LLM still decides; Jev's pick, probabilities, confidence and latency are kept on the session (`shadow_decisions`) and shown under each step in the Traces panel.
+
+- `QUINTESSA_JEV_API_KEY` turns it on (`TYPESAFE_API_KEY` also works). `QUINTESSA_DECIDER=llm` turns it off.
+- `QUINTESSA_JEV_URL` points it at another endpoint with the same `/v1/systemone` API, such as [gev](https://github.com/dglazkov/gev), the open-source one on Gemma. `QUINTESSA_JEV_MODEL` defaults to `jev-latest`.
+- Each capability's `choose_when` front matter is the criterion Jev reads for it.
+- `python -m quintessa --user ID decisions` prints how often Jev agreed with the LLM, per choice and by confidence.
+
+**Ambient filter.** With `QUINTESSA_AMBIENT_FILTER=1` (and a Jev key), each ambient event and persona replay is first put to Jev as one yes/no question, "does this matter?", along with an outline of what the agent is tracking. Below `QUINTESSA_AMBIENT_THRESHOLD` (default 0.3) the session ends with no LLM call and shows as skipped in Traces. What the user says, process progress and the persona profile always run, and a failed Jev call never skips anything. On 60 hand-labeled events (`/mnt/project-files/jev-eval/ambient_events.csv` in the project) it skipped half of them and missed none that mattered, at about 0.6 s a check against about 6 s for the controller's first decision.
 
 ### Aura personas
 
@@ -90,13 +104,13 @@ Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is 
 ### Try it
 
 ```bash
-python -m quintessa --user maya say "Jane wants to do dinner at Zuni on Tuesday"
-python -m quintessa personas
-python -m quintessa --user maya persona <persona-id> --speed 600
-python -m quintessa --user maya export maya-agent.json     # download
-python -m quintessa --user maya restore maya-agent.json    # restore
-python -m quintessa --user maya clear
-python -m quintessa users
+uv run python -m quintessa --user maya say "Jane wants to do dinner at Zuni on Tuesday"
+uv run python -m quintessa personas
+uv run python -m quintessa --user maya persona <persona-id> --speed 600
+uv run python -m quintessa --user maya export maya-agent.json     # download
+uv run python -m quintessa --user maya restore maya-agent.json    # restore
+uv run python -m quintessa --user maya clear
+uv run python -m quintessa users
 ```
 
 Questions the agent asks are answered in the terminal. Agent state lives in `data/agents/`, one file per user.
@@ -105,13 +119,13 @@ Questions the agent asks are answered in the terminal. Agent state lives in `dat
 
 ```bash
 cd web && npm install && npm run build && cd ..
-python -m quintessa serve            # http://127.0.0.1:8000
+uv run python -m quintessa serve     # http://127.0.0.1:8000
 ```
 
-For UI work, run `python -m quintessa serve` and `cd web && npm run dev` side by side. Vite proxies `/api` to port 8000.
+For UI work, run `uv run python -m quintessa serve` and `cd web && npm run dev` side by side. Vite proxies `/api` to port 8000.
 
 - **User**: every API call names a user with `?user=` or the `X-Quintessa-User` header. The top bar sets it, so two browser tabs with different users have separate agents.
-- **Experience**: a phone with Lock, Discover, Home and Spaces screens, the dynamic island, the contextual brief and an input bar (text and speech). Open questions from the agent appear first in the brief. The phone renders inside a shadow root with only its skin's stylesheet, so a skin is one CSS file in `web/src/experience/skins/` (`aurora` and `paper` so far).
+- **Experience**: a phone with Lock, Discover, Home and Spaces screens, the dynamic island, the contextual brief and an input bar (text and speech). Open questions from the agent appear first in the brief. Spaces opens a document showing only the sections that matter now (chosen by the agent's `device.show_document`, or by a rule: sections with a waiting question, then sections changed since the user last looked, then the first open section with a next step). The rest fold into an outline the user can open one at a time, or all at once with "Show full document"; `POST /api/view` records the user's choice, which holds until another part of the document changes. The phone renders inside a shadow root with only its skin's stylesheet, so a skin is one CSS file in `web/src/experience/skins/` (`aurora` and `paper` so far).
 - **Memory**: the graph, topics, documents, facts and permissions.
 - **Tools**: built-in and agent-made tools; create or delete your own.
 - **Data**: the global on/off switch (on, with no sources), sources from templates or described in plain words ("vibe coded"), and per-source speed.

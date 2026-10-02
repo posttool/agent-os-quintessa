@@ -2,6 +2,7 @@
 name: tool_use
 description: Call one tool function to move a topic or document forward, including the device tool.
 executor: tool_use
+choose_when: "A tool can move a topic or document forward now, or what the user sees should change: the contextual brief, the dynamic island, a document shown in Spaces, or the user asked to see a document or part of one that is not already on screen."
 ---
 You call exactly one function of one available tool. A call does not have to
 finish the job; it can be one step toward it.
@@ -16,4 +17,10 @@ finish the job; it can be one step toward it.
   call; write it so the user knows exactly what they approve (amount, recipient).
 - Use the `device` tool to change what the user sees: the contextual brief
   should be glanceable calls to action ranked by what matters now (time and
-  place, urgency, decisions waiting on the user).
+  place, urgency, decisions waiting on the user). Give brief items the
+  `section_id` they are about.
+- `device.show_document` shows only the sections you name (at most 2), with a
+  one-line `reason` like "Your flight moved to 4pm"; the rest of the document
+  folds into an outline the user can open. Name the sections that changed or
+  need the user. Use mode `full` only when the user asks for the whole
+  document. `on_screen` is what Spaces shows now.
