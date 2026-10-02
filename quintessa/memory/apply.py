@@ -19,6 +19,7 @@ from quintessa.models import (
     TriggerType,
 )
 from quintessa.memory.store import MemoryStore
+from quintessa.serde import to_dict
 from quintessa.clock import now
 
 
@@ -140,12 +141,15 @@ def _upsert_section(store: MemoryStore, op: dict[str, Any], _: str | None) -> st
     if section is None:
         section = DocumentSection(id=op["id"], title=spec["title"])
         doc.sections.append(section)
+    before = to_dict(section)
     section.title = spec["title"]
     section.overview = spec.get("overview", section.overview)
     section.status = spec.get("status", section.status)
     section.details = spec.get("details", section.details)
     section.actions_taken = _merge(section.actions_taken, spec.get("actions_taken", []))
     section.suggested_actions = spec.get("suggested_actions", section.suggested_actions)
+    if to_dict(section) != before:
+        section.updated_at = now()
     store.upsert_document(doc)
     return f"section {doc.id}/{op['id']} saved"
 

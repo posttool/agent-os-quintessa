@@ -5,6 +5,7 @@ from typing import Any, Callable
 from quintessa.device.brief_item import BriefItem
 from quintessa.device.device_state import DeviceState
 from quintessa.device.discovery_item import DiscoveryItem
+from quintessa.device.document_focus import FOCUSED, DocumentFocus
 from quintessa.serde import to_dict
 
 Listener = Callable[[str, dict[str, Any]], None]
@@ -60,14 +61,32 @@ class DeviceSurface:
         if ux_request_id in self.state.open_ux_ids:
             self.state.open_ux_ids.remove(ux_request_id)
         if document_id:
-            self.show_document(document_id, section_id)
+            self.show_document(document_id, [section_id] if section_id else [])
         self._emit("ux_closed")
 
-    def show_document(self, document_id: str, section_id: str | None = None) -> None:
+    def show_document(
+        self,
+        document_id: str,
+        section_ids: list[str] | None = None,
+        mode: str = FOCUSED,
+        reason: str = "",
+        set_by: str = "agent",
+    ) -> None:
+        """Open a document in Spaces with these sections expanded (none: let
+        the focus rule pick), or the whole document when mode is "full"."""
         if document_id not in self.state.space_document_ids:
             self.state.space_document_ids.append(document_id)
         self.state.focused_document_id = document_id
-        self.state.focused_section_id = section_id
+        self.state.focus[document_id] = DocumentFocus(document_id, list(section_ids or []), mode, reason, set_by)
+        self._emit("space")
+
+    def clear_focus(self, document_id: str) -> None:
+        self.state.focus.pop(document_id, None)
+        self._emit("space")
+
+    def pin_focus(self, focus: DocumentFocus) -> None:
+        """Keep a focus without changing which document is open."""
+        self.state.focus[focus.document_id] = focus
         self._emit("space")
 
     def add_discovery(self, item: DiscoveryItem) -> None:

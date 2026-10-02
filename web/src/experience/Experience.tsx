@@ -65,11 +65,13 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
     }
   }, [locked]);
 
-  function openDocument(id: string | null) {
+  function openDocument(id: string | null, sectionId: string | null = null) {
     if (id) {
       setOpenDoc(id);
       const topicId = state.memory.documents.find((d) => d.id === id)?.topic_id;
       if (topicId && topics.get(topicId)?.new_info) void act(() => api.seen(topicId));
+      // A brief item about one section opens the document focused on it.
+      if (sectionId) void act(() => api.view(id, [sectionId]));
     }
     setLocked(false);
     setTimeout(() => go(2), 0);
@@ -81,7 +83,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
 
   // Questions waiting on the user lead the brief, then the agent's own items.
   const needsYou: BriefItem[] = state.pending_ux.map((r) => ({
-    text: r.prompt, topic_id: null, document_id: r.document_id, ux_request_id: r.id, urgency: "needs-you",
+    text: r.prompt, topic_id: null, document_id: r.document_id, section_id: r.section_id, ux_request_id: r.id, urgency: "needs-you",
   }));
   const brief = [...needsYou, ...device.brief];
 
@@ -89,7 +91,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
     <div className="brief">
       {brief.length === 0 && <div className="brief-empty">Nothing needs you right now.</div>}
       {brief.map((b, i) => (
-        <button key={i} className={`brief-item ${b.urgency}`} onClick={() => openDocument(b.document_id ?? topics.get(b.topic_id ?? "")?.document_id ?? null)}>
+        <button key={i} className={`brief-item ${b.urgency}`} onClick={() => openDocument(b.document_id ?? topics.get(b.topic_id ?? "")?.document_id ?? null, b.section_id)}>
           <span className="mark" />
           <span className="text">{b.text}</span>
           <span className="cta">›</span>
@@ -184,9 +186,10 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
             {current ? (
               <DocumentView
                 doc={current}
-                focusedSection={current.id === device.focused_document_id ? device.focused_section_id : null}
+                view={state.views?.[current.id]}
                 questions={state.pending_ux.filter((r) => r.document_id === current.id)}
                 onAnswer={answer}
+                onView={(sectionIds, mode) => void act(() => api.view(current.id, sectionIds, mode))}
               />
             ) : (
               looseQuestions.length === 0 && <div className="empty">Projects you are working on will show up here as the agent learns about them.</div>
