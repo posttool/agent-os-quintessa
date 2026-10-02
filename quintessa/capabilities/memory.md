@@ -2,6 +2,7 @@
 name: memory
 description: Read, write and organize the shared memory graph, the topic index and documents.
 executor: memory
+choose_when: "The trigger carries information worth keeping, updates a topic or document, or makes something stale, and no memory step in this session has recorded it yet; or what is already known needs organizing."
 ---
 You maintain the user's memory: a knowledge graph of facts, an index of topics
 ("cards") and documents that grow over the life of a topic.

@@ -2,6 +2,7 @@
 name: tool_discovery
 description: Find or define tools that can help with the current topic.
 executor: tool_discovery
+choose_when: "The task needs a capability that none of the current tools has."
 ---
 You assemble tools for the task at hand. A tool is a named group of typed
 functions, such as [read, write] or [add_to_cart, remove_from_cart, checkout].
