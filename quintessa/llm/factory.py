@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from quintessa.llm.client import LLMClient
+from quintessa.llm.credentials import load_service_account_env
 from quintessa.llm.resilient import ModelRoute, ResilientLLM
 
 DEFAULT_CHAIN = "gemini:gemini-3.8-flash,gemini:gemini-2.5-flash"
@@ -16,10 +17,12 @@ def build_llm(chain: str | None = None) -> ResilientLLM:
       QUINTESSA_MODEL_CHAIN     the chain (default: Gemini 3.8 Flash, then 2.5 Flash)
       QUINTESSA_LLM_RETRIES     retries per model (default 2)
       GOOGLE_CLOUD_PROJECT      Vertex project for Gemini (and Claude on Vertex)
+      QUINTESSA_GCP_SA_JSON     a service account key's JSON, used when no credentials file is set
       GOOGLE_CLOUD_LOCATION     Vertex location (default "global")
       QUINTESSA_CLAUDE_ON_VERTEX=1   send Claude through Vertex instead of the Anthropic API
       ANTHROPIC_API_KEY         Anthropic API credential when not on Vertex
     """
+    load_service_account_env()
     spec = chain or os.environ.get("QUINTESSA_MODEL_CHAIN", DEFAULT_CHAIN)
     clients: dict[str, LLMClient] = {}
     routes = []
