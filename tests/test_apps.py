@@ -253,3 +253,39 @@ async def test_tool_history_is_capped_and_saved(script, make_runtime):
     assert len(script.prompts["tool:opentable.search"][-1]["earlier_calls"]) == runner.HISTORY_SHOWN
     restored = runtime.store.to_data()["tools"]
     assert next(t for t in restored if t["name"] == "opentable")["history"][-1]["arguments"] == {"query": str(runner.HISTORY_KEPT + 4)}
+
+
+async def test_simulated_calls_fail_about_one_in_five(script, make_runtime, monkeypatch):
+    """The outcome is drawn in code, and the model is only allowed the
+    statuses for that outcome, so the rate holds whatever the model prefers."""
+    monkeypatch.delenv("QUINTESSA_SIM_FAILURE_RATE")
+    monkeypatch.setattr(runner, "_rng", __import__("random").Random(7))
+    seen = []
+
+    def answer(payload):
+        failing = "realistic problem" in payload["instruction"]
+        seen.append(failing)
+        assert "oversight" not in payload["function"]  # the agent already handled approval
+        return {"status": "failed" if failing else "done", "result": "ok", "progress_stages": []}
+
+    script.on("app_manifest:com.opentable", manifest())
+    runtime = make_runtime(script)
+    tool = await install_app(runtime, (await runtime.apps.search("opentable"))[0])
+    for _ in range(500):
+        script.on("tool:opentable.book", answer)
+        await runner.run_tool(runtime, tool, tool.function("book"), {"time": ""})
+    assert 0.15 < sum(seen) / len(seen) < 0.25
+
+
+async def test_a_succeeding_call_cannot_report_failure(script, make_runtime):
+    """With the outcome drawn as success, the schema only allows done or
+    in_progress, so a refusal is rejected as invalid output."""
+    import pytest
+    from quintessa.llm import LLMError
+
+    script.on("app_manifest:com.opentable", manifest())
+    script.on("tool:opentable.book", {"status": "failed", "result": "missing time", "progress_stages": []})
+    runtime = make_runtime(script)
+    tool = await install_app(runtime, (await runtime.apps.search("opentable"))[0])
+    with pytest.raises(LLMError):
+        await runner.run_tool(runtime, tool, tool.function("book"), {"time": ""})

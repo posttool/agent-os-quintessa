@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import random
 from typing import TYPE_CHECKING
 
 import httpx
@@ -41,11 +43,41 @@ SIMULATED_KINDS = (ToolKind.LLM, ToolKind.MCP, ToolKind.CODE)
 HISTORY_KEPT = 30
 HISTORY_SHOWN = 12
 HISTORY_RESULT_LIMIT = 3000
-SIMULATE_INSTRUCTION = (
-    "Carry out this call and report. Stay consistent with earlier_calls: the same places, items, ids, prices, "
-    "times and order states. When the arguments name something an earlier result described, use exactly that "
-    "record, and if it does not exist in your earlier results, say so instead of inventing a different one."
+CONSISTENCY = (
+    "Stay consistent with earlier_calls: the same places, items, ids, prices, times and order states."
 )
+SUCCEED_INSTRUCTION = (
+    "This call succeeds. " + CONSISTENCY + " You are a simulation, so be forgiving about inputs: when an "
+    "argument is empty, loose or a name instead of an id, resolve it to the matching record from earlier_calls "
+    "or pick a sensible value, and say what you picked. When the call refers to something that does not exist "
+    "yet (a cart, an order, a trip), create it consistently with earlier_calls. The user is signed in with a "
+    "saved address and payment method, and the agent has already got any approval this call needs, so never "
+    "ask for sign-in or approval."
+)
+FAIL_INSTRUCTION = (
+    "This call runs into one realistic problem that a real app has now and then, such as an item selling out, "
+    "no table or driver available, a declined payment, a closed store or the service being busy. Report it "
+    "specifically, as `failed`, or as `needs_user` when the user has to choose something. Don't blame the "
+    "arguments. " + CONSISTENCY
+)
+
+
+def failure_rate() -> float:
+    """How often a simulated call runs into a problem, from
+    QUINTESSA_SIM_FAILURE_RATE (default 0.2: about one call in five)."""
+    try:
+        return min(max(float(os.environ.get("QUINTESSA_SIM_FAILURE_RATE", "0.2")), 0.0), 1.0)
+    except ValueError:
+        return 0.2
+
+
+def _schema(statuses: list[str]) -> dict:
+    return s.obj({**LLM_TOOL_SCHEMA["properties"], "status": s.enum_of(statuses)})
+
+
+SUCCEED_SCHEMA = _schema(["done", "in_progress"])
+FAIL_SCHEMA = _schema(["failed", "needs_user"])
+_rng = random.Random()
 
 
 async def run_tool(
@@ -91,14 +123,19 @@ async def _simulate(
         {"function": r.function, "arguments": r.arguments, "status": r.status, "result": r.result}
         for r in tool.history[-HISTORY_SHOWN:]
     ]
+    # The outcome is drawn here rather than left to the model, which on its
+    # own refused most calls (strict argument checks, asking for approval the
+    # agent had already got). The oversight level is left out for the same reason.
+    fails = _rng.random() < failure_rate()
+    described = {k: v for k, v in to_dict(function).items() if k != "oversight"}
     result = await runtime.llm.generate_json(
         system=tool.grounding or f"You act as the service '{tool.name}': {tool.description}",
         prompt=json.dumps(
-            {"function": to_dict(function), "arguments": args, "why_the_agent_is_calling": purpose,
-             "earlier_calls": earlier, "instruction": SIMULATE_INSTRUCTION},
+            {"function": described, "arguments": args, "why_the_agent_is_calling": purpose,
+             "earlier_calls": earlier, "instruction": FAIL_INSTRUCTION if fails else SUCCEED_INSTRUCTION},
             indent=2,
         ),
-        schema=LLM_TOOL_SCHEMA,
+        schema=FAIL_SCHEMA if fails else SUCCEED_SCHEMA,
         purpose=f"tool:{tool.name}.{function.name}",
     )
     data = result.data

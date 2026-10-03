@@ -48,6 +48,13 @@ class Script:
         return answer(payload) if isinstance(answer, Callable) else answer
 
 
+@pytest.fixture(autouse=True)
+def simulated_calls_succeed(monkeypatch) -> None:
+    """Simulated tools fail one call in five by default; tests that need a
+    failure set QUINTESSA_SIM_FAILURE_RATE themselves."""
+    monkeypatch.setenv("QUINTESSA_SIM_FAILURE_RATE", "0")
+
+
 @pytest.fixture
 def script() -> Script:
     return Script()
