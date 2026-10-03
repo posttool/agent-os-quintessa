@@ -120,6 +120,17 @@ code, .mono { font-family: var(--mono); font-size: 12px; }
 }
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .grow { flex: 1; min-width: 0; }
+.fn-list { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto; column-gap: 12px; }
+.fn-row {
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; row-gap: 4px;
+  align-items: start; padding: 3px 0; border-top: 1px solid var(--border);
+}
+.fn-param { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+.fn-badges { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .fn-list { grid-template-columns: minmax(0, 1fr) auto; }
+  .fn-desc { grid-column: 1 / -1; grid-row: 2; }
+}
 .muted { color: var(--muted); }
 .faint { color: var(--faint); }
 .small { font-size: 11px; }
