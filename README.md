@@ -88,7 +88,7 @@ Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is 
 
 ### Jev shadow mode
 
-[Jev](https://docs.typesafe.ai/) is a decision model: it answers typed questions with probabilities and writes no text. With a key set, every next-step decision is also put to Jev as a Choice over the capabilities and "done", at the same moment as the LLM. The LLM still decides; Jev's pick, probabilities, confidence and latency are kept on the session (`shadow_decisions`) and shown under each step in the Traces panel.
+[Jev](https://docs.typesafe.ai/) is a decision model: it answers typed questions with probabilities and writes no text. With a key set, every next-step decision is also put to Jev as a Choice over the capabilities and "done", at the same moment as the LLM. The LLM still decides; Jev's pick, probabilities, confidence and latency are kept on the session (`shadow_decisions`) and shown under each step in the Traces panel. Each step's header carries a `Jev p` badge: the probability Jev gave the step the LLM chose, green when Jev's own top pick agrees.
 
 - `QUINTESSA_JEV_API_KEY` turns it on (`TYPESAFE_API_KEY` also works). `QUINTESSA_DECIDER=llm` turns it off.
 - `QUINTESSA_JEV_URL` points it at another endpoint with the same `/v1/systemone` API, such as [gev](https://github.com/dglazkov/gev), the open-source one on Gemma. `QUINTESSA_JEV_MODEL` defaults to `jev-latest`.
@@ -96,6 +96,8 @@ Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is 
 - `python -m quintessa --user ID decisions` prints how often Jev agreed with the LLM, per choice and by confidence.
 
 **Ambient filter.** With `QUINTESSA_AMBIENT_FILTER=1` (and a Jev key), each ambient event and persona replay is first put to Jev as one yes/no question, "does this matter?", along with an outline of what the agent is tracking. Below `QUINTESSA_AMBIENT_THRESHOLD` (default 0.3) the session ends with no LLM call and shows as skipped in Traces. What the user says, process progress and the persona profile always run, and a failed Jev call never skips anything. On 60 hand-labeled events (`/mnt/project-files/jev-eval/ambient_events.csv` in the project) it skipped half of them and missed none that mattered, at about 0.6 s a check against about 6 s for the controller's first decision.
+
+**Turning Jev on and off.** Each user can switch Jev off entirely, or just the shadow or the filter, from the Jev checkbox and its ▾ menu in the top bar (`PUT /api/preferences`). The choice is saved with the user's state and survives Clear memory. With a key set, both are available to every user; `QUINTESSA_DECIDER=llm` and `QUINTESSA_AMBIENT_FILTER=1` only set what users start with, and Reset returns to those defaults.
 
 ### Aura personas
 
@@ -130,7 +132,7 @@ For UI work, run `uv run python -m quintessa serve` and `cd web && npm run dev` 
 - **Tools**: built-in and agent-made tools; create or delete your own.
 - **Data**: the global on/off switch (on, with no sources), sources from templates or described in plain words ("vibe coded"), and per-source speed.
 - **Traces**: every reasoning step, grouped by the input that started it.
-- **Top bar**: Aura persona picker (clears the user's state and plays a day), model chain with retries and fallbacks, download and restore of agent state, clear memory, dark and light mode.
+- **Top bar**: Aura persona picker (clears the user's state and plays a day), Jev on/off, model chain (pulldowns of Claude and Gemini models, or any `provider:model`) with retries and fallbacks, download and restore of agent state, clear memory, dark and light mode.
 
 The app starts blank. With no model configured, inputs fail with a message saying so; set the chain in the top bar or with `QUINTESSA_MODEL_CHAIN`.
 

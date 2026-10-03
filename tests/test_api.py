@@ -178,3 +178,25 @@ async def test_static_app_is_served(script, make_host, tmp_path):
     assert (await client.get("/memory")).text == "<html>quintessa</html>"
     assert (await client.get("/assets/app.js")).text == "console.log(1)"
     assert (await client.get("/../../etc/passwd")).text == "<html>quintessa</html>"
+
+
+async def test_jev_preference_is_per_user_and_saved(api):
+    r = await api.put("/api/preferences?user=maya", json={"jev": False})
+    assert r.json()["jev"] is False and r.json()["available"] is False  # no Jev configured in tests
+    assert (await api.get("/api/state?user=maya")).json()["jev"]["jev"] is False
+    assert (await api.get("/api/state?user=tunde")).json()["jev"]["jev"] is True
+
+    await api.host.save("maya")
+    saved = await api.host.backend.load("maya")
+    assert saved["preferences"] == {"jev": False, "jev_shadow": None, "jev_filter": None}
+    await api.post("/api/clear?user=maya")  # clearing memory keeps settings
+    assert (await api.get("/api/state?user=maya")).json()["jev"]["jev"] is False
+    r = await api.put("/api/preferences?user=maya", json={"jev": None})  # back to the platform default
+    assert r.json()["jev"] is True
+
+
+async def test_model_catalog_groups_claude_and_gemini(api):
+    catalog = (await api.get("/api/models")).json()
+    assert [p["provider"] for p in catalog] == ["claude", "gemini"]
+    ids = [m["id"] for p in catalog for m in p["models"]]
+    assert "claude:claude-opus-5-5" in ids and "gemini:gemini-3.8-flash" in ids

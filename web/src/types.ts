@@ -97,6 +97,12 @@ export interface AmbientSource {
   enabled: boolean; loop: boolean; device: string; sender: string; done: boolean;
 }
 export interface ModelSettings { chain: string[]; retries: number; base_delay: number; status: string }
+export interface JevStatus {
+  available: boolean; model: string; threshold: number | null; jev: boolean; jev_shadow: boolean; jev_filter: boolean;
+}
+export interface ModelProvider {
+  provider: string; label: string; setup: string; models: { id: string; label: string }[];
+}
 export interface PersonaProfile {
   id: string; name: string; occupation: string; city: string; age: unknown; hobbies: unknown;
   goals_this_week: unknown; family: unknown; apps: unknown; image: string;
@@ -113,5 +119,6 @@ export interface AgentState {
   ambient: { enabled: boolean; sources: AmbientSource[] };
   persona: { profile: PersonaProfile; date: string | null; running: boolean } | null;
   settings: ModelSettings;
+  jev: JevStatus;
   server_time: string;
 }

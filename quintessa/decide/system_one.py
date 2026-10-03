@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import httpx
@@ -55,6 +56,24 @@ class SystemOneClient:
             raise SystemOneError(f"HTTP {response.status_code}: {response.text[:200]}")
         data = response.json()
         return data.get("answers", {}), data.get("model", self.model)
+
+
+def client_from_env() -> SystemOneClient | None:
+    """The configured System One client, or None without a key.
+
+    Environment:
+      QUINTESSA_JEV_API_KEY   key for the System One endpoint (TYPESAFE_API_KEY also works)
+      QUINTESSA_JEV_URL       endpoint base URL (default TypeSafe's; a gev URL works too)
+      QUINTESSA_JEV_MODEL     model name (default jev-latest)
+    """
+    key = os.environ.get("QUINTESSA_JEV_API_KEY") or os.environ.get("TYPESAFE_API_KEY")
+    if not key:
+        return None
+    return SystemOneClient(
+        key,
+        base_url=os.environ.get("QUINTESSA_JEV_URL", DEFAULT_URL),
+        model=os.environ.get("QUINTESSA_JEV_MODEL", DEFAULT_MODEL),
+    )
 
 
 def choice(instructions: str, criteria: dict[str, str | None]) -> dict[str, Any]:

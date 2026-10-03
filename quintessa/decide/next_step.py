@@ -4,7 +4,7 @@ import os
 import time
 from typing import TYPE_CHECKING, Any
 
-from quintessa.decide.system_one import DEFAULT_MODEL, DEFAULT_URL, SystemOneClient, SystemOneError, choice
+from quintessa.decide.system_one import SystemOneClient, SystemOneError, choice, client_from_env
 from quintessa.models import ReasoningSession, ShadowDecision
 from quintessa.serde import to_dict
 
@@ -90,24 +90,9 @@ def _on_screen(runtime: "AgentRuntime") -> dict[str, Any] | None:
 
 
 def shadow_decider_from_env() -> NextStepDecider | None:
-    """Shadow mode is on when a Jev key is configured, unless
-    QUINTESSA_DECIDER=llm turns it off.
-
-    Environment:
-      QUINTESSA_JEV_API_KEY   key for the System One endpoint (TYPESAFE_API_KEY also works)
-      QUINTESSA_JEV_URL       endpoint base URL (default TypeSafe's; a gev URL works too)
-      QUINTESSA_JEV_MODEL     model name (default jev-latest)
-      QUINTESSA_DECIDER       "llm" to turn shadow mode off
-    """
+    """Shadow mode is on when a Jev key is configured (see client_from_env),
+    unless QUINTESSA_DECIDER=llm turns it off."""
     if os.environ.get("QUINTESSA_DECIDER", "shadow") == "llm":
         return None
-    key = os.environ.get("QUINTESSA_JEV_API_KEY") or os.environ.get("TYPESAFE_API_KEY")
-    if not key:
-        return None
-    return NextStepDecider(
-        SystemOneClient(
-            key,
-            base_url=os.environ.get("QUINTESSA_JEV_URL", DEFAULT_URL),
-            model=os.environ.get("QUINTESSA_JEV_MODEL", DEFAULT_MODEL),
-        )
-    )
+    client = client_from_env()
+    return None if client is None else NextStepDecider(client)
