@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from quintessa.clock import now
 from quintessa.decide import is_ambient
 from quintessa.executors import EXECUTORS, StepContext
-from quintessa.executors.common import JSON_INSTRUCTION, session_context
+from quintessa.executors.common import JSON_INSTRUCTION, controller_context
 from quintessa.llm import LLMUnavailableError
 from quintessa.llm import schema as s
 from quintessa.models import ReasoningSession, SessionStatus, StepDecision, TraceStep
@@ -68,15 +68,7 @@ class AgentReasoningLoop:
         return StepDecision(capability, d["focus"], d["rationale"]), d["status_words"], result.model
 
     async def _ask_llm(self):
-        ctx = {
-            "capabilities": [
-                {"name": c.name, "description": c.description} for c in self.runtime.capabilities.values()
-            ],
-            **session_context(self.session),
-            "memory": self.runtime.store.snapshot(),
-            "on_screen": self.runtime.on_screen(),
-            "max_steps_left": self.runtime.max_steps - len(self.session.steps),
-        }
+        ctx = controller_context(self.runtime, self.session)
         llm_call = self.runtime.llm.generate_json(
             system=f"{self.runtime.controller_prompt}\n\n{JSON_INSTRUCTION}",
             prompt=json.dumps(ctx, indent=1, default=str),
