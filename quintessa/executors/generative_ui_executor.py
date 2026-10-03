@@ -6,6 +6,7 @@ from quintessa.executors.common import call_capability
 from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
 from quintessa.llm import schema as s
+from quintessa.models.ux_response import WITHDRAWN
 from quintessa.models import (
     OversightLevel,
     Permission,
@@ -110,6 +111,8 @@ class GenerativeUIExecutor:
             permission = record_permission(ctx, request, response)
             answer = "dismissed" if response.dismissed else response.values
             summary = f"Asked '{request.prompt}'; user answered {answer}"
+            if response.surface_context.startswith(WITHDRAWN):
+                summary = f"Asked '{request.prompt}', then withdrew it before the user answered ({response.surface_context[len(WITHDRAWN):]})"
             if permission:
                 summary += f"; {request.tool}.{request.function} {'granted' if permission.granted else 'declined'}"
             return StepOutcome(

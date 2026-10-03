@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { BriefItem, Topic, UXRequest } from "../types";
 import UXForm from "./UXForm";
+import { ago } from "../format";
 
 /** A brief card that has no document to open: what it is about, its open
  * questions and the one thing it proposes, over whatever screen is showing. */
@@ -27,6 +28,7 @@ export default function CardSheet({ item, topic, questions, onAnswer, onAction, 
         {!asksOnly && (
           <>
             <div className="sheet-title">{item.text}</div>
+            {item.updated_at && <div className="sheet-age">Updated {ago(item.updated_at)}</div>}
             {item.detail && <p className="sheet-detail">{item.detail}</p>}
             {topic && (
               <div className="sheet-topic">

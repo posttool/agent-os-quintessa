@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass, field
+from datetime import datetime
 
-from quintessa.clock import new_id
+from quintessa.clock import new_id, now
+
+# The event behind the reasoning session now writing cards. Each session runs
+# in its own task, so cards it writes remember what caused them.
+BRIEF_SOURCE: ContextVar[str | None] = ContextVar("brief_source", default=None)
 
 
 @dataclass
@@ -22,7 +28,11 @@ class BriefItem:
     """One glanceable call to action in the contextual brief. Tapping it opens
     the topic's document (or pending question) in Spaces, focused on the
     section it is about. A card with no document opens a sheet with its
-    detail, its topic, its open questions and its action."""
+    detail, its topic, its open questions and its action.
+
+    A card is a snapshot of what was true when it was written, so it keeps
+    when that was and what caused it. It is stale once its topic changes
+    after `updated_at`, and the device drops it at `expires_at`."""
 
     text: str
     topic_id: str | None = None
@@ -32,4 +42,11 @@ class BriefItem:
     urgency: str = "normal"
     detail: str = ""
     action: BriefAction | None = None
+    expires_at: datetime | None = None
+    source_event_id: str | None = field(default_factory=BRIEF_SOURCE.get)
+    created_at: datetime = field(default_factory=now)
+    updated_at: datetime = field(default_factory=now)
     id: str = field(default_factory=lambda: new_id("brf"))
+
+    def expired(self, at: datetime) -> bool:
+        return self.expires_at is not None and self.expires_at <= at

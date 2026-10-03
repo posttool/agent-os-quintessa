@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING
 
 from quintessa.clock import now
 from quintessa.decide import is_ambient
+from quintessa.device import BRIEF_SOURCE
 from quintessa.executors import EXECUTORS, StepContext
 from quintessa.executors.common import JSON_INSTRUCTION, controller_context
 from quintessa.llm import LLMUnavailableError
 from quintessa.llm import schema as s
+from quintessa.loop.brief_refresh import refresh_brief
 from quintessa.models import ReasoningSession, SessionStatus, StepDecision, TraceStep
 
 if TYPE_CHECKING:
@@ -86,6 +88,7 @@ class AgentReasoningLoop:
 
     async def run(self) -> ReasoningSession:
         runtime, session = self.runtime, self.session
+        BRIEF_SOURCE.set(session.trigger.id)  # cards written in this session remember their cause
         try:
             if runtime.ambient_filter is not None and is_ambient(session.trigger):
                 session.prefilter = await runtime.ambient_filter.check(runtime, session.trigger)
@@ -108,6 +111,7 @@ class AgentReasoningLoop:
                 step.ended_at = now()
             else:
                 log.info("session %s reached max steps", session.id)
+            await refresh_brief(runtime, session)
             session.status = SessionStatus.COMPLETE
         except LLMUnavailableError as e:
             self._fail(f"LLM unavailable: {e}")

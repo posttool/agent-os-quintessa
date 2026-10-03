@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Awaitable, Callable
 
@@ -31,6 +32,13 @@ WEB_TOOL = Tool(
     ],
 )
 
+BRIEF_CARD = (
+    "A card is {text, topic_id, document_id, section_id, urgency, detail, action, expires_at}; detail is "
+    "one or two sentences shown when the card has no document; action is optional "
+    "{tool, function, arguments: {name: value}, label} for a card the user can just say yes to; "
+    "expires_at is an ISO time after which the card no longer applies (\"leave by 3pm\"), or omit it"
+)
+
 DEVICE_TOOL = Tool(
     name="device",
     description=(
@@ -43,13 +51,18 @@ DEVICE_TOOL = Tool(
     functions=[
         ToolFunction(
             "set_brief",
-            "Replace the contextual brief.",
-            [ToolParameter(
-                "items",
-                "json array of {text, topic_id, document_id, section_id, urgency, detail, action}; detail is "
-                "one or two sentences shown when the card has no document; action is optional "
-                "{tool, function, arguments: {name: value}, label} for a card the user can just say yes to",
-            )],
+            "Replace the whole contextual brief. To change a few cards, use update_brief.",
+            [ToolParameter("items", "json array of cards. " + BRIEF_CARD)],
+        ),
+        ToolFunction(
+            "update_brief",
+            "Change cards in the contextual brief without rewriting it: put adds a card, or replaces "
+            "the card with its id or its topic_id (a topic has one card); remove takes cards away "
+            "that no longer hold. Use it when something new changes what a card says.",
+            [
+                ToolParameter("put", "json array of cards, each optionally with the id it replaces. " + BRIEF_CARD, required=False),
+                ToolParameter("remove", "json array of card ids to take away", required=False),
+            ],
         ),
         ToolFunction(
             "show_document",
@@ -104,13 +117,20 @@ async def _download(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallRe
     return ToolCallResult("done", f"saved {len(response.content)} bytes to {target}")
 
 
-async def _set_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+def _json_list(args: dict[str, str], name: str) -> tuple[list, str]:
+    raw = args.get(name) or "[]"
     try:
-        raw = json.loads(args["items"])
+        value = json.loads(raw)
     except json.JSONDecodeError as e:
-        return ToolCallResult("failed", f"items is not JSON: {e}")
-    if not isinstance(raw, list):
-        return ToolCallResult("failed", "items must be a JSON array")
+        return [], f"{name} is not JSON: {e}"
+    if not isinstance(value, list):
+        return [], f"{name} must be a JSON array"
+    return value, ""
+
+
+def _brief_cards(raw: list, runtime: "AgentRuntime") -> tuple[list[BriefItem], list[str]]:
+    """Cards from the agent's entries, one per topic: a later card for the
+    same topic replaces the earlier one."""
     items: list[BriefItem] = []
     notes: list[str] = []
     for n, entry in enumerate(raw, 1):
@@ -118,10 +138,40 @@ async def _set_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallR
             notes.append(f"item {n}: skipped, it has no text")
             continue
         item, fixes = brief_item(entry, runtime)
-        items.append(item)
         notes += [f"item {n}: {fix}" for fix in fixes]
+        twin = next((i for i, b in enumerate(items) if item.topic_id and b.topic_id == item.topic_id), None)
+        if twin is not None:
+            notes.append(f"item {n}: replaces item {twin + 1}, a topic has one card")
+            items.pop(twin)
+        items.append(item)
+    return items, notes
+
+
+async def _set_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+    raw, problem = _json_list(args, "items")
+    if problem:
+        return ToolCallResult("failed", problem)
+    items, notes = _brief_cards(raw, runtime)
     runtime.device.set_brief(items)
     return ToolCallResult("done", "; ".join([f"brief shows {len(items)} items", *notes]))
+
+
+async def _update_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+    put, problem = _json_list(args, "put")
+    remove, problem2 = _json_list(args, "remove")
+    if problem or problem2:
+        return ToolCallResult("failed", problem or problem2)
+    items, notes = _brief_cards(put, runtime)
+    lines: list[str] = []
+    gone = runtime.device.remove_brief([str(i) for i in remove])
+    lines += [f"removed {b.id} ({b.text})" for b in gone]
+    known = {b.id for b in gone}
+    lines += [f"no card {i} to remove" for i in remove if str(i) not in known]
+    for item in items:
+        replaced = runtime.device.put_brief(item)
+        lines.append(f"replaced {item.id} ({replaced.text} -> {item.text})" if replaced else f"added {item.id} ({item.text})")
+    lines.append(f"brief shows {len(runtime.device.state.brief)} items")
+    return ToolCallResult("done", "; ".join([*lines, *notes]))
 
 
 def brief_item(entry: dict, runtime: "AgentRuntime") -> tuple[BriefItem, list[str]]:
@@ -149,6 +199,9 @@ def brief_item(entry: dict, runtime: "AgentRuntime") -> tuple[BriefItem, list[st
     action, problem = brief_action(entry.get("action"), runtime)
     if problem:
         fixes.append(f"action dropped: {problem}")
+    expires_at, problem = parse_time(entry.get("expires_at"))
+    if problem:
+        fixes.append(f"expires_at dropped: {problem}")
     item = BriefItem(
         str(entry["text"]),
         topic_id,
@@ -157,8 +210,22 @@ def brief_item(entry: dict, runtime: "AgentRuntime") -> tuple[BriefItem, list[st
         urgency=entry.get("urgency") or "normal",
         detail=str(entry.get("detail") or ""),
         action=action,
+        expires_at=expires_at,
     )
+    if entry.get("id"):
+        item.id = str(entry["id"])
     return item, fixes
+
+
+def parse_time(raw: object) -> tuple[datetime | None, str]:
+    """An ISO time; one without a zone is taken as UTC."""
+    if not raw:
+        return None, ""
+    try:
+        at = datetime.fromisoformat(str(raw))
+    except ValueError:
+        return None, f"{raw!r} is not an ISO time"
+    return (at if at.tzinfo else at.replace(tzinfo=timezone.utc)), ""
 
 
 def brief_action(raw: object, runtime: "AgentRuntime") -> tuple[BriefAction | None, str]:
@@ -224,6 +291,7 @@ BUILTIN_IMPLEMENTATIONS: dict[tuple[str, str], Impl] = {
     ("web", "fetch"): _fetch,
     ("web", "download"): _download,
     ("device", "set_brief"): _set_brief,
+    ("device", "update_brief"): _update_brief,
     ("device", "show_document"): _show_document,
     ("device", "add_discovery"): _add_discovery,
     ("device", "notify"): _notify,

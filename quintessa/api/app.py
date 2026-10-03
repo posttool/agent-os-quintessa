@@ -202,6 +202,7 @@ def create_app(
     @app.get("/api/state")
     async def state(agent: AgentRuntime = Agent) -> dict[str, Any]:
         entry = personas.get(agent.user_id)
+        agent.device.prune_brief(now())
         return {
             "user_id": agent.user_id,
             "memory": agent.store.to_data(),
@@ -303,7 +304,7 @@ def create_app(
                 shown = agent.document_views()[doc.id]
                 agent.device.pin_focus(DocumentFocus(doc.id, shown["section_ids"], shown["mode"], "", "rule"))
         topic.last_seen_at, topic.new_info = now(), ""
-        agent.store.upsert_topic(topic)
+        agent.store.upsert_topic(topic, touch=False)
         return {"ok": True}
 
     @app.post("/api/clear")

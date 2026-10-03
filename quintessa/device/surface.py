@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Callable
 
 from quintessa.device.brief_item import BriefItem
@@ -50,8 +51,43 @@ class DeviceSurface:
         self._emit("island")
 
     def set_brief(self, items: list[BriefItem]) -> None:
+        """Replace the brief. A card for a topic already in the brief takes
+        over that card's id, so a sheet open on it follows the new text."""
+        old = self.state.brief
+        for item in items:
+            match = _match(old, item)
+            if match is not None:
+                item.id, item.created_at = match.id, match.created_at
         self.state.brief = items
         self._emit("brief")
+
+    def put_brief(self, item: BriefItem) -> BriefItem | None:
+        """Add a card, or replace the one with its id or its topic: a topic has
+        one card, never a stack. Returns the card it replaced."""
+        replaced = self._put(item)
+        self._emit("brief")
+        return replaced
+
+    def _put(self, item: BriefItem) -> BriefItem | None:
+        brief = self.state.brief
+        old = _match(brief, item)
+        if old is None:
+            brief.append(item)
+            return None
+        item.id, item.created_at = old.id, old.created_at
+        brief[brief.index(old)] = item
+        return old
+
+    def remove_brief(self, item_ids: list[str]) -> list[BriefItem]:
+        removed = [b for b in self.state.brief if b.id in item_ids]
+        if removed:
+            self.state.brief = [b for b in self.state.brief if b.id not in item_ids]
+            self._emit("brief")
+        return removed
+
+    def prune_brief(self, at: datetime) -> list[BriefItem]:
+        """Drop cards whose time has passed ("Leave by 3pm" at 3:05)."""
+        return self.remove_brief([b.id for b in self.state.brief if b.expired(at)])
 
     def show_ux(self, ux_request_id: str) -> None:
         self.state.open_ux_ids.append(ux_request_id)
@@ -96,3 +132,11 @@ class DeviceSurface:
     def notify(self, text: str) -> None:
         self.state.notifications.append(text)
         self._emit("notification")
+
+
+def _match(brief: list[BriefItem], item: BriefItem) -> BriefItem | None:
+    """The card `item` replaces: the one with its id, else the one for its topic."""
+    same_id = next((b for b in brief if b.id == item.id), None)
+    if same_id is not None or not item.topic_id:
+        return same_id
+    return next((b for b in brief if b.topic_id == item.topic_id), None)

@@ -83,6 +83,8 @@ export interface BriefAction {
 export interface BriefItem {
   id: string; text: string; topic_id: string | null; document_id: string | null; section_id: string | null;
   ux_request_id: string | null; urgency: string; detail: string; action: BriefAction | null;
+  /** when the card stops applying; when it was written; the event behind it (agent cards only) */
+  expires_at?: string | null; created_at?: string; updated_at?: string; source_event_id?: string | null;
 }
 export type ViewMode = "focused" | "full";
 export interface DocumentFocus {

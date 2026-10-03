@@ -4,6 +4,7 @@ import asyncio
 from typing import Callable
 
 from quintessa.models import UXRequest, UXResponse
+from quintessa.models.ux_response import WITHDRAWN
 
 
 class UXBroker:
@@ -36,6 +37,11 @@ class UXBroker:
             return False
         future.set_result(response)
         return True
+
+    def withdraw(self, request_id: str, reason: str) -> bool:
+        """Take back a question that new information answered or made moot.
+        The waiting loop resumes as if it were dismissed, told why."""
+        return self.answer(UXResponse(request_id, dismissed=True, surface_context=f"{WITHDRAWN}{reason}"))
 
     def cancel_all(self) -> None:
         for future in self._futures.values():
