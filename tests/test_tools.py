@@ -115,10 +115,11 @@ async def test_confirm_once_is_remembered_across_sessions(script, make_runtime):
     assert len(script.prompts["tool:food_delivery.checkout"]) == 2
 
 
-async def test_tool_discovery_registers_typed_tools(script, make_runtime):
+async def test_tool_discovery_defines_a_tool_when_no_app_fits(script, make_runtime):
     script.on("decide", decide("tool_discovery", "find a way to book dinner"))
-    script.on("capability:tool_discovery", {
-        "reuse": ["web"], "notes": "",
+    script.on("capability:tool_discovery", {"reuse": ["web"], "app_queries": ["zzz nothing"], "uninstall": [], "notes": ""})
+    script.on("capability:tool_discovery:choose", {
+        "install": [], "notes": "",
         "tools": [{
             "name": "restaurant_reservations", "description": "Book tables", "kind": "llm",
             "grounding": "You are OpenTable.", "endpoint": "", "code": "",
@@ -137,7 +138,7 @@ async def test_tool_discovery_registers_typed_tools(script, make_runtime):
     assert tool.function("book").parameters[0].name == "party_size"
     assert runtime.store.tools["device"].kind == ToolKind.BUILTIN
     assert session.steps[0].output["added"] == ["restaurant_reservations"]
-    assert script.prompts["capability:tool_discovery"][0]["sample_tool_suggestions"]
+    assert script.prompts["capability:tool_discovery:choose"][0]["sample_tool_suggestions"]
 
 
 async def test_device_tool_updates_the_brief_and_spaces(script, make_runtime):

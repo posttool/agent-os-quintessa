@@ -1,4 +1,4 @@
-import type { AgentState, DocView, JevStatus, ModelProvider, ModelSettings, PersonaProfile, ViewMode } from "./types";
+import type { AgentState, AppListing, AppSearchResult, DocView, JevStatus, ModelProvider, ModelSettings, PersonaProfile, ViewMode } from "./types";
 
 export class ApiError extends Error {}
 
@@ -52,7 +52,10 @@ export function makeApi(user: string) {
     putSettings: (s: Omit<ModelSettings, "status">) => call<ModelSettings>("PUT", "/api/settings", s),
     models: () => call<ModelProvider[]>("GET", "/api/models"),
     /** null returns a setting to the platform default. */
-    putPreferences: (p: Partial<Record<"jev" | "jev_shadow" | "jev_filter" | "jev_drive", boolean | null>>) =>
+    searchApps: (q: string) => call<AppSearchResult[]>("GET", `/api/apps/search?q=${encodeURIComponent(q)}`),
+    installApp: (listing: AppListing) => call("POST", "/api/apps/install", listing),
+    uninstallApp: (appId: string) => call("DELETE", `/api/apps/${encodeURIComponent(appId)}`),
+    putPreferences: (p: Partial<Record<"jev" | "jev_shadow" | "jev_filter" | "jev_drive" | "ask_before_install", boolean | null>>) =>
       call<JevStatus>("PUT", "/api/preferences", p),
   };
 }

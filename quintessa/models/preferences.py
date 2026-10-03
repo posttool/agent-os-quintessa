@@ -12,9 +12,11 @@ class Preferences:
     jev:        the master switch for every System One (Jev, gev) call
     jev_shadow: ask Jev for the next step beside the LLM (recorded, never followed)
     jev_filter: skip ambient events Jev says do not matter
-    jev_drive:  let Jev pick the next step instead of the LLM (falls back to the LLM when Jev fails)"""
+    jev_drive:  let Jev pick the next step instead of the LLM (falls back to the LLM when Jev fails)
+    ask_before_install: ask the user before the agent installs an app"""
 
     jev: bool | None = None
     jev_shadow: bool | None = None
     jev_filter: bool | None = None
     jev_drive: bool | None = None
+    ask_before_install: bool | None = None

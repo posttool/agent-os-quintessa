@@ -31,9 +31,16 @@ export interface ToolFunction {
   name: string; description: string; parameters: ToolParameter[]; returns: string;
   oversight: "auto" | "auto_from_memory" | "confirm_once" | "always_ask"; long_running: boolean;
 }
+export interface AppListing {
+  app_id: string; title: string; store: string; developer: string; icon_url: string; category: string;
+  rating: number | null; store_url: string; summary: string;
+}
+export interface AppSearchResult extends AppListing { installed_as: string | null }
 export interface Tool {
-  name: string; description: string; kind: "builtin" | "llm" | "web_api" | "mcp" | "code";
+  name: string; description: string; kind: "builtin" | "llm" | "web_api" | "mcp" | "code" | "app";
   functions: ToolFunction[]; grounding: string; endpoint: string; code: string; created_by: string; created_at: string;
+  listing: AppListing | null; binding: "simulated" | "mcp" | "web_api" | "android";
+  auth: { kind: "none" | "oauth" | "api_key"; state: "simulated" | "needed" | "connected" };
 }
 export interface Permission {
   tool: string; function: string; granted: boolean; scope: string; detail: string;
@@ -120,5 +127,6 @@ export interface AgentState {
   persona: { profile: PersonaProfile; date: string | null; running: boolean } | null;
   settings: ModelSettings;
   jev: JevStatus;
+  apps: { store: string; ask_before_install: boolean };
   server_time: string;
 }

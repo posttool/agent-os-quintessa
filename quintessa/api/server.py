@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from quintessa.api.app import create_app
+from quintessa.apps import app_store_from_env
 from quintessa.api.model_settings import ModelSettings
 from quintessa.api.unconfigured import UnconfiguredLLM
 from quintessa.decide import jev_options_from_env
@@ -32,7 +33,7 @@ def build_app(data_dir: str | Path = "data") -> FastAPI:
 
     search = search_backend_from_env()
     host = AgentHost(
-        llm, FileStateBackend(Path(data_dir) / "agents"), data_dir=data_dir, search=search,
+        llm, FileStateBackend(Path(data_dir) / "agents"), data_dir=data_dir, search=search, apps=app_store_from_env(search, llm),
         **jev_options_from_env(),
     )
     app = create_app(host, settings=settings, static_dir=os.environ.get("QUINTESSA_WEB_DIST", WEB_DIST))

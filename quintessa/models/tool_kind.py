@@ -7,3 +7,4 @@ class ToolKind(str, Enum):
     WEB_API = "web_api"
     MCP = "mcp"
     CODE = "code"
+    APP = "app"
