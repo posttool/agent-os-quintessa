@@ -93,7 +93,7 @@ Tools the agent discovers run by kind: `web_api` tools make a real HTTP request 
 
 When the user wants something done that people do in a phone app (book a table, order food, get a ride), `tool_discovery` searches an app store, picks an app (one the user is known to use first) and installs it. A model writes the app's functions and oversight levels from its store listing. An installed app is a `Tool` of kind `app` in that user's memory, so it is saved, exported and restored like everything else, and only installed tools can be called.
 
-Each app records its store `listing` (id, title, developer, icon), its `binding` (how calls run) and its `auth` (what sign-in it would need). Every app is `simulated` for now: a model grounded in the listing plays the app, and sign-in is skipped. The binding values `mcp`, `web_api` and `android` are reserved for real backends, and the runner already returns "sign in first" for an app whose auth state is `needed`.
+Each app records its store `listing` (id, title, developer, icon), its `binding` (how calls run) and its `auth` (what sign-in it would need). Every app is `simulated` for now: a model grounded in the listing plays the app, and sign-in is skipped. Each simulated call runs into a realistic problem (sold out, no driver, payment declined) about one time in five; the outcome is drawn in code and `QUINTESSA_SIM_FAILURE_RATE` changes it (default `0.2`). The binding values `mcp`, `web_api` and `android` are reserved for real backends, and the runner already returns "sign in first" for an app whose auth state is `needed`.
 
 `QUINTESSA_APP_STORE` picks the store:
 
