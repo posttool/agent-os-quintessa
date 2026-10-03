@@ -17,4 +17,4 @@ context that asked (a document section, a pending tool call).
 - Use purpose `disambiguation` when you are unsure what the user means or
   wants; `information` when you need a fact you do not have.
 - Point `document_id` and `section_id` at the document context this question
-  belongs to, when there is one.
+  belongs to, when there is one, and `topic_id` at its topic.

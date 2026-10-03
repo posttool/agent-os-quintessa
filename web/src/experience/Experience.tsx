@@ -7,6 +7,7 @@ import ShadowHost from "./ShadowHost";
 import { DEFAULT_SKIN, SKINS } from "./skins";
 import UXForm from "./UXForm";
 import DocumentView from "./DocumentView";
+import CardSheet from "./CardSheet";
 
 type Act = (fn: () => Promise<unknown>) => Promise<void>;
 const PAGES = ["Discover", "Home", "Spaces"] as const;
@@ -42,6 +43,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
   const [locked, setLocked] = useState(true);
   const [page, setPage] = useState(1);
   const [openDoc, setOpenDoc] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<BriefItem | null>(null);
   const pages = useRef<HTMLDivElement>(null);
   const now = useClock();
   const device = state.device;
@@ -84,15 +86,54 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
 
   // Questions waiting on the user lead the brief, then the agent's own items.
   const needsYou: BriefItem[] = state.pending_ux.map((r) => ({
-    text: r.prompt, topic_id: null, document_id: r.document_id, section_id: r.section_id, ux_request_id: r.id, urgency: "needs-you",
+    id: r.id, text: r.prompt, topic_id: r.topic_id, document_id: r.document_id, section_id: r.section_id, ux_request_id: r.id,
+    urgency: "needs-you", detail: "", action: null,
   }));
   const brief = [...needsYou, ...device.brief];
+
+  // A question card's sheet closes once its question is answered.
+  const sheetQuestionGone = sheet?.ux_request_id && !state.pending_ux.some((r) => r.id === sheet.ux_request_id);
+  useEffect(() => {
+    if (sheetQuestionGone) setSheet(null);
+  }, [sheetQuestionGone]);
+
+  function liveDocument(b: BriefItem): string | null {
+    // a question belongs to the document it names, not to its topic's
+    const id = b.ux_request_id ? b.document_id : b.document_id ?? topics.get(b.topic_id ?? "")?.document_id ?? null;
+    return id && docs.some((d) => d.id === id) ? id : null;
+  }
+
+  /** Cards with a document open it in Spaces; the rest, and any card with an
+   * action to start, open a sheet over the current screen. */
+  function tapCard(b: BriefItem) {
+    const docId = liveDocument(b);
+    if (docId && !b.action) return openDocument(docId, b.section_id);
+    if (b.topic_id && topics.get(b.topic_id)?.new_info) void act(() => api.seen(b.topic_id!));
+    setSheet(b);
+  }
+
+  const sheetQuestions = !sheet ? [] : sheet.ux_request_id
+    ? state.pending_ux.filter((r) => r.id === sheet.ux_request_id)
+    : state.pending_ux.filter((r) => sheet.topic_id !== null && r.topic_id === sheet.topic_id);
+  const sheetDoc = sheet ? liveDocument(sheet) : null;
+  const sheetView = sheet && (
+    <CardSheet
+      item={sheet}
+      topic={topics.get(sheet.topic_id ?? "")}
+      questions={sheetQuestions}
+      onAnswer={(r, values, dismissed) => answer(r, values, dismissed)}
+      onAction={() => void act(() => api.briefAct(sheet.id))}
+      onAsk={() => { void act(() => api.input(`Tell me more about: ${sheet.text}`)); setSheet(null); }}
+      onOpen={sheetDoc ? () => { setSheet(null); openDocument(sheetDoc, sheet.section_id); } : undefined}
+      onClose={() => setSheet(null)}
+    />
+  );
 
   const briefList = (
     <div className="brief">
       {brief.length === 0 && <div className="brief-empty">Nothing needs you right now.</div>}
       {brief.map((b, i) => (
-        <button key={i} className={`brief-item ${b.urgency}`} onClick={() => openDocument(b.document_id ?? topics.get(b.topic_id ?? "")?.document_id ?? null, b.section_id)}>
+        <button key={b.ux_request_id ?? b.id ?? i} className={`brief-item ${b.urgency}`} onClick={() => tapCard(b)}>
           <span className="mark" />
           <span className="text">{b.text}</span>
           <span className="cta">›</span>
@@ -125,6 +166,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
           )}
           <button className="unlock" onClick={() => setLocked(false)}>Swipe up to unlock</button>
         </div>
+        {sheetView}
       </div>
     );
   }
@@ -204,6 +246,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
         ))}
       </div>
       <InputBar onSend={(text, kind) => act(() => api.input(text, kind))} />
+      {sheetView}
     </div>
   );
 }

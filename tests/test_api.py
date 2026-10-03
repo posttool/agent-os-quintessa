@@ -54,7 +54,7 @@ async def test_answering_a_question(api, script):
     script.on("capability:generative_ui", {
         "prompt": "Which night?", "purpose": "disambiguation",
         "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"]}],
-        "document_id": None, "section_id": None, "tool": None, "function": None})
+        "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None})
     await api.post("/api/input?user=maya", json={"content": "dinner"})
     agent = await api.host.agent("maya")
     await until(lambda: bool(agent.ux.pending))
@@ -204,3 +204,23 @@ async def test_model_catalog_groups_claude_and_gemini(api):
     assert [p["provider"] for p in catalog] == ["claude", "gemini"]
     ids = [m["id"] for p in catalog for m in p["models"]]
     assert "claude:claude-opus-5-5" in ids and "gemini:gemini-3.8-flash" in ids
+
+
+async def test_tapping_a_brief_action_starts_a_session(api, script):
+    from quintessa.device import BriefAction, BriefItem
+
+    script.on("decide", decide("tool_use"))
+    script.on("capability:tool_use", {
+        "tool": "device", "function": "notify", "arguments": [{"name": "text", "value": "hi"}], "rationale": "",
+        "document_id": None, "section_id": None, "topic_id": None, "track_progress": False, "progress_stages": [],
+        "permission_prompt": ""})
+    agent = await api.host.agent("maya")
+    agent.device.set_brief([BriefItem("Say hi", action=BriefAction("device", "notify", "Say hi", {"text": "hi"}))])
+    card = agent.device.state.brief[0]
+
+    r = await api.post(f"/api/brief/{card.id}/act?user=maya")
+    await agent.wait_idle()
+    session = agent.store.sessions[r.json()["session_id"]]
+    assert session.permissions[0].function == "notify"
+    assert agent.device.state.notifications == ["hi"]
+    assert (await api.post("/api/brief/brf-gone/act?user=maya")).status_code == 404

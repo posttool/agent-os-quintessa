@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from quintessa.clock import now
 from quintessa.executors.common import call_capability
-from quintessa.executors.generative_ui_executor import CONFIRM_YES, record_permission
+from quintessa.executors.generative_ui_executor import CONFIRM_YES, question_topic, record_permission
 from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
 from quintessa.llm import schema as s
@@ -30,6 +30,7 @@ def schema_for(tool_names: list[str]) -> dict:
             "rationale": s.string(),
             "document_id": s.nullable(s.string()),
             "section_id": s.nullable(s.string()),
+            "topic_id": s.nullable(s.string("Topic this call moves forward, when there is one.")),
             "track_progress": s.boolean(),
             "progress_stages": s.array(s.string()),
             "permission_prompt": s.string("Question to ask if this call needs the user's approval."),
@@ -94,6 +95,7 @@ class ToolUseExecutor:
             section_id=call["section_id"],
             tool=tool.name,
             function=function.name,
+            topic_id=question_topic(store, call.get("topic_id"), call["document_id"]),
         )
 
         async def on_answer(response: UXResponse) -> StepOutcome:

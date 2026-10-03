@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 
 import httpx
 
-from quintessa.device import FOCUSED, FULL, BriefItem, DiscoveryItem
+from quintessa.device import FOCUSED, FULL, BriefAction, BriefItem, DiscoveryItem
 from quintessa.models import OversightLevel, Tool, ToolFunction, ToolKind, ToolParameter
 from quintessa.tools.tool_call_result import ToolCallResult
 
@@ -44,7 +44,12 @@ DEVICE_TOOL = Tool(
         ToolFunction(
             "set_brief",
             "Replace the contextual brief.",
-            [ToolParameter("items", "json array of {text, topic_id, document_id, section_id, urgency}")],
+            [ToolParameter(
+                "items",
+                "json array of {text, topic_id, document_id, section_id, urgency, detail, action}; detail is "
+                "one or two sentences shown when the card has no document; action is optional "
+                "{tool, function, arguments: {name: value}, label} for a card the user can just say yes to",
+            )],
         ),
         ToolFunction(
             "show_document",
@@ -100,14 +105,86 @@ async def _download(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallRe
 
 
 async def _set_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
-    items = json.loads(args["items"])
-    runtime.device.set_brief(
-        [
-            BriefItem(i["text"], i.get("topic_id"), i.get("document_id"), i.get("section_id"), urgency=i.get("urgency", "normal"))
-            for i in items
-        ]
+    try:
+        raw = json.loads(args["items"])
+    except json.JSONDecodeError as e:
+        return ToolCallResult("failed", f"items is not JSON: {e}")
+    if not isinstance(raw, list):
+        return ToolCallResult("failed", "items must be a JSON array")
+    items: list[BriefItem] = []
+    notes: list[str] = []
+    for n, entry in enumerate(raw, 1):
+        if not isinstance(entry, dict) or not entry.get("text"):
+            notes.append(f"item {n}: skipped, it has no text")
+            continue
+        item, fixes = brief_item(entry, runtime)
+        items.append(item)
+        notes += [f"item {n}: {fix}" for fix in fixes]
+    runtime.device.set_brief(items)
+    return ToolCallResult("done", "; ".join([f"brief shows {len(items)} items", *notes]))
+
+
+def brief_item(entry: dict, runtime: "AgentRuntime") -> tuple[BriefItem, list[str]]:
+    """Build a brief card, keeping only links that lead somewhere: a topic and
+    document that exist, a section of that document, an installed tool. What
+    was dropped is reported back so the agent can learn from it."""
+    store = runtime.store
+    fixes: list[str] = []
+    topic_id = entry.get("topic_id") or None
+    topic = store.topics.get(topic_id) if topic_id else None
+    if topic_id and topic is None:
+        fixes.append(f"no topic {topic_id}, dropped the link")
+        topic_id = None
+    document_id = entry.get("document_id") or None
+    if document_id is None and topic is not None and topic.document_id:
+        document_id = topic.document_id
+    doc = store.documents.get(document_id) if document_id else None
+    if document_id and (doc is None or doc.status.value == "archived"):
+        fixes.append(f"no open document {document_id}, kept as a card")
+        document_id, doc = None, None
+    section_id = entry.get("section_id") or None
+    if section_id and (doc is None or doc.section(section_id) is None):
+        fixes.append(f"no section {section_id} in {document_id or 'a document'}, dropped it")
+        section_id = None
+    action, problem = brief_action(entry.get("action"), runtime)
+    if problem:
+        fixes.append(f"action dropped: {problem}")
+    item = BriefItem(
+        str(entry["text"]),
+        topic_id,
+        document_id,
+        section_id,
+        urgency=entry.get("urgency") or "normal",
+        detail=str(entry.get("detail") or ""),
+        action=action,
     )
-    return ToolCallResult("done", f"brief shows {len(items)} items")
+    return item, fixes
+
+
+def brief_action(raw: object, runtime: "AgentRuntime") -> tuple[BriefAction | None, str]:
+    if not raw:
+        return None, ""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return None, "it is not an object"
+    if not isinstance(raw, dict):
+        return None, "it is not an object"
+    tool = runtime.store.tools.get(str(raw.get("tool") or ""))
+    if tool is None:
+        return None, f"{raw.get('tool')!r} is not installed"
+    function = tool.function(str(raw.get("function") or ""))
+    if function is None:
+        return None, f"{tool.name} has no function {raw.get('function')!r}"
+    arguments = raw.get("arguments") or {}
+    if isinstance(arguments, list):  # [{name, value}], the tool_use shape
+        arguments = {a.get("name"): a.get("value") for a in arguments if isinstance(a, dict)}
+    if not isinstance(arguments, dict):
+        return None, "arguments must be an object"
+    arguments = {str(k): v if isinstance(v, str) else json.dumps(v) for k, v in arguments.items() if k}
+    label = str(raw.get("label") or function.name.replace("_", " ").capitalize())
+    return BriefAction(tool.name, function.name, label, arguments), ""
 
 
 async def _show_document(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
