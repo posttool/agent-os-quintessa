@@ -1,5 +1,7 @@
-import { useMemo, useRef, useState } from "react";
-import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, type SimulationNodeDatum } from "d3-force";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type SimulationNodeDatum } from "d3-force";
+import { select } from "d3-selection";
+import { drag } from "d3-drag";
 import type { AgentState } from "../types";
 import { label } from "../format";
 
@@ -30,9 +32,15 @@ interface GLink {
 const W = 760;
 const H = 420;
 
-/** Facts, topics and documents as one force-directed graph. Positions are
- * kept between updates so the picture stays stable as memory grows. */
+const radius = (kind: string) => (kind === "topic" ? 8 : kind === "document" ? 7 : 5);
+const short = (t: string) => (t.length > 26 ? `${t.slice(0, 25)}…` : t);
+
+/** Facts, topics and documents as a live force-directed graph, after d3's
+ * "disjoint force-directed graph" example: forceX/forceY instead of a centering
+ * force, so disconnected clusters stay on screen, and nodes can be dragged.
+ * Positions are kept between updates so the picture stays stable as memory grows. */
 export default function MemoryGraph({ state }: { state: AgentState }) {
+  const svgRef = useRef<SVGSVGElement>(null);
   const positions = useRef(new Map<string, { x: number; y: number }>());
   const [selected, setSelected] = useState<GNode | null>(null);
 
@@ -52,46 +60,106 @@ export default function MemoryGraph({ state }: { state: AgentState }) {
       ...m.topics.filter((t) => t.parent_id).map((t) => ({ source: t.id, target: t.parent_id!, type: "subtopic of" })),
       ...m.documents.filter((d) => d.topic_id).map((d) => ({ source: d.id, target: d.topic_id!, type: "documents" })),
     ].filter((l) => ids.has(l.source as string) && ids.has(l.target as string));
-
-    for (const n of nodes) {
-      const p = positions.current.get(n.id);
-      if (p) Object.assign(n, p);
-    }
-    const sim = forceSimulation(nodes)
-      .force("link", forceLink<GNode, GLink>(links).id((d) => d.id).distance(90))
-      .force("charge", forceManyBody().strength(-320))
-      .force("center", forceCenter(W / 2, H / 2))
-      .force("collide", forceCollide(18))
-      .stop();
-    sim.tick(positions.current.size ? 80 : 300);
-    for (const n of nodes) {
-      n.x = Math.max(20, Math.min(W - 20, n.x ?? 0));
-      n.y = Math.max(20, Math.min(H - 20, n.y ?? 0));
-      positions.current.set(n.id, { x: n.x, y: n.y });
-    }
     return { nodes, links };
   }, [state.memory]);
+
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl || !nodes.length) return;
+    const known = positions.current;
+    let fresh = 0;
+    for (const n of nodes) {
+      const p = known.get(n.id);
+      if (p) Object.assign(n, p);
+      else fresh++;
+    }
+
+    const simulation = forceSimulation(nodes)
+      .force("link", forceLink<GNode, GLink>(links).id((d) => d.id).distance(70))
+      .force("charge", forceManyBody().strength(-380))
+      .force("x", forceX().strength(0.05))
+      .force("y", forceY().strength(0.09))
+      .force("collide", forceCollide(16))
+      // Gentle reheat when only a few nodes are new, so the rest barely move.
+      .alpha(known.size && fresh < nodes.length ? Math.min(1, 0.15 + fresh / nodes.length) : 1);
+
+    const svg = select(svgEl);
+    svg.selectAll("*").remove();
+
+    const link = svg
+      .append("g")
+      .attr("class", "links")
+      .selectAll("line")
+      .data(links)
+      .join("line");
+    link.append("title").text((d) => label(d.type));
+
+    const node = svg
+      .append("g")
+      .attr("class", "nodes")
+      .selectAll<SVGGElement, GNode>("g")
+      .data(nodes)
+      .join("g")
+      .attr("data-id", (d) => d.id)
+      .on("click", (_e, d) => setSelected(d));
+    node
+      .append("circle")
+      .attr("r", (d) => radius(d.kind))
+      .attr("fill", (d) => TYPE_COLORS[d.kind] ?? "#888")
+      .append("title")
+      .text((d) => d.title);
+    node
+      .append("text")
+      .attr("x", (d) => radius(d.kind) + 3)
+      .attr("y", 3)
+      .text((d) => short(d.title));
+
+    node.call(
+      drag<SVGGElement, GNode>()
+        .on("start", (event) => {
+          if (!event.active) simulation.alphaTarget(0.3).restart();
+          event.subject.fx = event.subject.x;
+          event.subject.fy = event.subject.y;
+        })
+        .on("drag", (event) => {
+          event.subject.fx = event.x;
+          event.subject.fy = event.y;
+        })
+        .on("end", (event) => {
+          if (!event.active) simulation.alphaTarget(0);
+          event.subject.fx = null;
+          event.subject.fy = null;
+        }),
+    );
+
+    simulation.on("tick", () => {
+      link
+        .attr("x1", (d) => (d.source as GNode).x!)
+        .attr("y1", (d) => (d.source as GNode).y!)
+        .attr("x2", (d) => (d.target as GNode).x!)
+        .attr("y2", (d) => (d.target as GNode).y!);
+      node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+      for (const n of nodes) known.set(n.id, { x: n.x!, y: n.y! });
+    });
+
+    return () => {
+      simulation.stop();
+    };
+  }, [nodes, links]);
+
+  useEffect(() => {
+    if (!svgRef.current) return;
+    select(svgRef.current)
+      .selectAll<SVGGElement, GNode>(".nodes g")
+      .classed("selected", (d) => d.id === selected?.id);
+  }, [selected, nodes]);
 
   if (!nodes.length) return <div className="empty">Memory is empty. Send the agent something.</div>;
   const kinds = [...new Set(nodes.map((n) => n.kind))];
 
   return (
     <div>
-      <svg className="graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Memory graph">
-        {links.map((l, i) => {
-          const s = l.source as GNode;
-          const t = l.target as GNode;
-          return <line key={i} x1={s.x} y1={s.y} x2={t.x} y2={t.y}><title>{label(l.type)}</title></line>;
-        })}
-        {nodes.map((n) => (
-          <g key={n.id} transform={`translate(${n.x},${n.y})`} onClick={() => setSelected(n)}>
-            <circle r={n.kind === "topic" ? 9 : n.kind === "document" ? 8 : 6} fill={TYPE_COLORS[n.kind] ?? "#888"}>
-              <title>{n.title}</title>
-            </circle>
-            <text x={11} y={4}>{n.title.length > 26 ? `${n.title.slice(0, 25)}…` : n.title}</text>
-          </g>
-        ))}
-      </svg>
+      <svg ref={svgRef} className="graph" viewBox={`${-W / 2} ${-H / 2} ${W} ${H}`} role="img" aria-label="Memory graph" />
       <div className="legend">
         {kinds.map((k) => (
           <span key={k}>

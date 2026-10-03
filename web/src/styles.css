@@ -158,9 +158,11 @@ details > summary::-webkit-details-marker { display: none; }
 .field > span { color: var(--muted); font-size: 11.5px; }
 
 .graph { width: 100%; height: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
-.graph text { fill: var(--text); font-size: 10px; pointer-events: none; }
-.graph line { stroke: var(--border); }
-.graph circle { cursor: pointer; stroke: var(--surface); stroke-width: 1.5; }
+.graph text { fill: var(--text); font-size: 10px; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.graph line { stroke: var(--faint); stroke-opacity: 0.6; stroke-width: 1; }
+.graph circle { cursor: grab; stroke: var(--surface); stroke-width: 1.5; }
+.graph .nodes g:active circle { cursor: grabbing; }
+.graph .nodes g.selected circle { stroke: var(--text); stroke-width: 2.5; }
 .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; color: var(--muted); font-size: 11px; }
 .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 
