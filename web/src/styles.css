@@ -152,7 +152,8 @@ details > summary::-webkit-details-marker { display: none; }
   box-shadow: 0 12px 40px rgba(0,0,0,0.12);
 }
 .field { display: grid; gap: 4px; margin-bottom: 10px; }
-.popover label.check { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; color: var(--text); }
+.popover label.check { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 8px; margin-bottom: 10px; color: var(--text); }
+.popover label.check span { flex: 1; min-width: 0; }
 .popover label.check input { margin-top: 3px; }
 .field > span { color: var(--muted); font-size: 11.5px; }
 

@@ -54,7 +54,7 @@ class AgentRuntime:
         self.max_steps = max_steps
         self.jev_shadow = shadow  # a System One model asked beside the LLM at each decision; never steers
         self.jev_filter = ambient_filter  # skips ambient events a System One model says do not matter
-        self.jev_defaults = Preferences(True, jev_shadow_default, jev_filter_default)
+        self.jev_defaults = Preferences(True, jev_shadow_default, jev_filter_default, False)
         self.preferences = Preferences()
         self.data_dir = Path(data_dir)
         self.search = search
@@ -92,6 +92,11 @@ class AgentRuntime:
         return self.jev_shadow if self.preference("jev") and self.preference("jev_shadow") else None
 
     @property
+    def driver(self) -> NextStepDecider | None:
+        """Jev, when this user lets it pick the next step instead of the LLM."""
+        return self.jev_shadow if self.preference("jev") and self.preference("jev_drive") else None
+
+    @property
     def ambient_filter(self) -> AmbientFilter | None:
         """The Jev ambient filter, when configured and this user has it on."""
         return self.jev_filter if self.preference("jev") and self.preference("jev_filter") else None
@@ -102,7 +107,7 @@ class AgentRuntime:
             "available": decider is not None,
             "model": decider.client.label if decider else "",
             "threshold": self.jev_filter.threshold if self.jev_filter else None,
-            **{name: self.preference(name) for name in ("jev", "jev_shadow", "jev_filter")},
+            **{name: self.preference(name) for name in ("jev", "jev_shadow", "jev_filter", "jev_drive")},
         }
 
     @property

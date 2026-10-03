@@ -17,5 +17,6 @@ class TraceStep:
     summary: str = ""
     model: str = ""
     error: str = ""
+    decided_by: str = ""  # "jev" when Jev picked this step; empty when the LLM did
     started_at: datetime = field(default_factory=now)
     ended_at: datetime | None = None

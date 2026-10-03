@@ -30,7 +30,7 @@ export default function TracesPanel({ state }: { state: AgentState }) {
 function SessionTrace({ session }: { session: Session }) {
   const t = session.trigger;
   const shadow = new Map((session.shadow_decisions ?? []).map((d) => [d.step_index, d]));
-  const finish = (session.shadow_decisions ?? []).find((d) => d.llm_choice === "done");
+  const finish = (session.shadow_decisions ?? []).find((d) => (d.drove ? d.choice : d.llm_choice) === "done");
   const duration = session.ended_at ? ((new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 1000).toFixed(1) : null;
   return (
     <details className="card" open={session.status === "running" || session.status === "waiting_for_user"}>
@@ -102,6 +102,10 @@ function SessionTrace({ session }: { session: Session }) {
 /** How likely Jev thought the step the LLM chose was, beside the LLM's own pick. */
 function JevBadge({ decision: d }: { decision?: ShadowDecision }) {
   if (!d || d.error) return null;
+  if (d.drove) {
+    const p = d.probabilities[d.choice] ?? 0;
+    return <span className="badge accent" title={`${d.model || "Jev"} chose this step; the LLM was not asked`}>chosen by Jev · p {p.toFixed(2)}</span>;
+  }
   const p = d.probabilities[d.llm_choice] ?? 0;
   const agrees = d.choice === d.llm_choice;
   return (
@@ -121,7 +125,7 @@ function Shadow({ decision: d }: { decision?: ShadowDecision }) {
   const top = Object.entries(d.probabilities).sort((a, b) => b[1] - a[1]).slice(0, 3);
   return (
     <div className="small">
-      <span className={`badge ${d.choice === d.llm_choice ? "good" : "warn"}`}>
+      <span className={`badge ${d.drove ? "accent" : d.choice === d.llm_choice ? "good" : "warn"}`}>
         {d.model || "Jev"}: {label(d.choice)}
       </span>{" "}
       <span className="faint">
