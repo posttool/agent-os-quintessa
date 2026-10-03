@@ -33,6 +33,8 @@ export function makeApi(user: string) {
     /** section_ids null drops the user's choice so the agent's focus returns. */
     view: (document_id: string, section_ids: string[] | null, mode: ViewMode = "focused") =>
       call<DocView>("POST", "/api/view", { document_id, section_ids, mode }),
+    /** The user tapped a brief card's action; the tap approves that call. */
+    briefAct: (itemId: string) => call<{ session_id: string }>("POST", `/api/brief/${encodeURIComponent(itemId)}/act`),
     seen: (topicId: string) => call("POST", `/api/topics/${encodeURIComponent(topicId)}/seen`),
     clear: () => call("POST", "/api/clear"),
     restore: (text: string) => call("POST", "/api/restore", text),

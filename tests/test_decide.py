@@ -117,7 +117,7 @@ async def test_agreement_report(script, make_runtime):
     script.on("capability:memory", memory_answer())
     script.on("capability:tool_use", {
         "tool": "device", "function": "set_island", "arguments": [], "rationale": "", "document_id": None,
-        "section_id": None, "track_progress": False, "progress_stages": [], "permission_prompt": "",
+        "section_id": None, "topic_id": None, "track_progress": False, "progress_stages": [], "permission_prompt": "",
     })
     runtime = make_runtime(script, shadow=decider(FakeJev("memory", "memory", "done")))
     session = await runtime.run(InputEvent(InputKind.TEXT, "hello"))

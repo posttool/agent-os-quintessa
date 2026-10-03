@@ -33,7 +33,7 @@ def call(tool, function, args=None, *, prompt="", track=False, stages=(), docume
     return {
         "tool": tool, "function": function, "rationale": "test",
         "arguments": [{"name": k, "value": v} for k, v in (args or {}).items()],
-        "document_id": document_id, "section_id": section_id,
+        "document_id": document_id, "section_id": section_id, "topic_id": None,
         "track_progress": track, "progress_stages": list(stages), "permission_prompt": prompt,
     }
 
@@ -41,7 +41,7 @@ def call(tool, function, args=None, *, prompt="", track=False, stages=(), docume
 def permission_ui(tool, function):
     return {"prompt": "Spend $32 on pad thai?", "purpose": "permission",
             "fields": [{"name": "ok", "kind": "confirm", "label": "Approve", "options": ["yes", "no"]}],
-            "document_id": None, "section_id": None, "tool": tool, "function": function}
+            "document_id": None, "section_id": None, "topic_id": None, "tool": tool, "function": function}
 
 
 async def test_grant_from_earlier_disambiguation_carries_forward(script, make_runtime):

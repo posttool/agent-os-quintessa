@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import json
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -15,7 +16,7 @@ from quintessa.llm import ResilientLLM
 from quintessa.loop.reasoning_loop import AgentReasoningLoop
 from quintessa.loop.ux_broker import UXBroker
 from quintessa.memory import MemoryStore
-from quintessa.models import Capability, InputEvent, Preferences, ReasoningSession, UXResponse
+from quintessa.models import Capability, InputEvent, InputKind, Permission, Preferences, ReasoningSession, UXResponse
 from quintessa.tools import BUILTIN_TOOLS
 from quintessa.tools.search import SearchBackend
 
@@ -122,15 +123,40 @@ class AgentRuntime:
         for tool in BUILTIN_TOOLS:
             self.store.put_tool(copy.deepcopy(tool))
 
-    def submit(self, event: InputEvent) -> ReasoningSession:
-        """Start a reasoning session for this input and return it right away."""
+    def submit(self, event: InputEvent, grants: list[Permission] | None = None) -> ReasoningSession:
+        """Start a reasoning session for this input and return it right away.
+        Grants are approvals the user already gave with the input (a tapped
+        brief action); they carry through the session like answered prompts."""
         session = ReasoningSession(trigger=event)
+        for grant in grants or []:
+            grant.session_id = session.id
+            session.permissions.append(grant)
         self.store.record_event(event)
         self.store.put_session(session)
         task = asyncio.create_task(AgentReasoningLoop(self, session).run())
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return session
+
+    def start_brief_action(self, item_id: str) -> ReasoningSession | None:
+        """The user tapped a brief card's action. A reasoning session carries
+        it out, holding the tap as approval for that one tool function so it
+        is not asked about again; any other tool still asks as usual."""
+        item = next((b for b in self.device.state.brief if b.id == item_id), None)
+        if item is None or item.action is None:
+            return None
+        action = item.action
+        about = ", ".join(f"{k}: {v}" for k, v in (("topic_id", item.topic_id), ("document_id", item.document_id),
+                                                   ("section_id", item.section_id)) if v)
+        content = (
+            f'The user tapped "{action.label}" on the brief card "{item.text}"'
+            + (f" ({about})" if about else "")
+            + f". Do it now with {action.tool}.{action.function}"
+            + (f" using {json.dumps(action.arguments)}" if action.arguments else "")
+            + ". The tap approves that call."
+        )
+        grant = Permission(action.tool, action.function, True, "session", f'tapped "{action.label}" in the brief')
+        return self.submit(InputEvent(InputKind.TEXT, content, source="user", device="phone"), grants=[grant])
 
     async def run(self, event: InputEvent) -> ReasoningSession:
         """Start a session and wait for it (and anything it spawned) to finish."""
