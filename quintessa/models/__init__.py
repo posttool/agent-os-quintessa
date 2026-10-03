@@ -14,6 +14,7 @@ from quintessa.models.memory_node import MemoryNode
 from quintessa.models.node_type import NodeType
 from quintessa.models.oversight_level import OversightLevel
 from quintessa.models.permission import Permission
+from quintessa.models.preferences import Preferences
 from quintessa.models.prefilter_decision import PrefilterDecision
 from quintessa.models.reasoning_session import ReasoningSession
 from quintessa.models.session_status import SessionStatus
@@ -49,6 +50,7 @@ __all__ = [
     "NodeType",
     "OversightLevel",
     "Permission",
+    "Preferences",
     "PrefilterDecision",
     "ReasoningSession",
     "SessionStatus",

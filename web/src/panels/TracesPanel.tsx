@@ -43,6 +43,11 @@ function SessionTrace({ session }: { session: Session }) {
             {t.content}
           </span>
           <span className="faint small">{session.steps.length} steps{duration && ` · ${duration}s`}</span>
+          {session.prefilter && !session.prefilter.error && (
+            <span className="badge" title={`${session.prefilter.model || "Jev"}: P(this matters), threshold ${session.prefilter.threshold}`}>
+              Jev p {session.prefilter.matters.toFixed(2)}
+            </span>
+          )}
           {session.prefilter?.skipped
             ? <span className="badge">skipped</span>
             : <span className={`badge ${STATUS_TONE[session.status]}`}>{label(session.status)}</span>}
@@ -58,6 +63,7 @@ function SessionTrace({ session }: { session: Session }) {
             <div className="row">
               <strong>{step.index + 1}. {step.capability ? label(step.capability) : "—"}</strong>
               {step.model && <span className="badge">{step.model}</span>}
+              <JevBadge decision={shadow.get(step.index)} />
               <span className="faint small">{time(step.started_at)}</span>
             </div>
             {step.focus && <div><span className="muted">focus:</span> {step.focus}</div>}
@@ -75,7 +81,7 @@ function SessionTrace({ session }: { session: Session }) {
         ))}
         {finish && (
           <div className="step">
-            <div className="row"><strong>{session.steps.length + 1}. Done</strong></div>
+            <div className="row"><strong>{session.steps.length + 1}. Done</strong><JevBadge decision={finish} /></div>
             <Shadow decision={finish} />
           </div>
         )}
@@ -90,6 +96,21 @@ function SessionTrace({ session }: { session: Session }) {
         )}
       </div>
     </details>
+  );
+}
+
+/** How likely Jev thought the step the LLM chose was, beside the LLM's own pick. */
+function JevBadge({ decision: d }: { decision?: ShadowDecision }) {
+  if (!d || d.error) return null;
+  const p = d.probabilities[d.llm_choice] ?? 0;
+  const agrees = d.choice === d.llm_choice;
+  return (
+    <span
+      className={`badge ${agrees ? "good" : "warn"}`}
+      title={`${d.model || "Jev"} gave ${label(d.llm_choice)} p ${p.toFixed(2)}; its own pick was ${label(d.choice)} (${(d.probabilities[d.choice] ?? 0).toFixed(2)})`}
+    >
+      Jev p {p.toFixed(2)}
+    </span>
   );
 }
 

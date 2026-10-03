@@ -14,7 +14,7 @@ from quintessa.llm import ResilientLLM
 from quintessa.loop.reasoning_loop import AgentReasoningLoop
 from quintessa.loop.ux_broker import UXBroker
 from quintessa.memory import MemoryStore
-from quintessa.models import Capability, InputEvent, ReasoningSession, UXResponse
+from quintessa.models import Capability, InputEvent, Preferences, ReasoningSession, UXResponse
 from quintessa.tools import BUILTIN_TOOLS
 from quintessa.tools.search import SearchBackend
 
@@ -42,6 +42,8 @@ class AgentRuntime:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         shadow: NextStepDecider | None = None,
         ambient_filter: AmbientFilter | None = None,
+        jev_shadow_default: bool = True,
+        jev_filter_default: bool = True,
     ):
         self.user_id = user_id
         self.llm = llm
@@ -50,8 +52,10 @@ class AgentRuntime:
         self.capabilities = capabilities or load_capabilities(capability_dir)
         self.controller_prompt = load_prompt("controller", capability_dir)
         self.max_steps = max_steps
-        self.shadow = shadow  # a System One model asked beside the LLM at each decision; never steers
-        self.ambient_filter = ambient_filter  # skips ambient events a System One model says do not matter
+        self.jev_shadow = shadow  # a System One model asked beside the LLM at each decision; never steers
+        self.jev_filter = ambient_filter  # skips ambient events a System One model says do not matter
+        self.jev_defaults = Preferences(True, jev_shadow_default, jev_filter_default)
+        self.preferences = Preferences()
         self.data_dir = Path(data_dir)
         self.search = search
         self.ux = UXBroker()
@@ -71,6 +75,35 @@ class AgentRuntime:
             self.on_change()
         for watcher in list(self.watchers):
             watcher()
+
+    def preference(self, name: str) -> bool:
+        """The user's setting, or the platform default when they never chose."""
+        value = getattr(self.preferences, name)
+        return getattr(self.jev_defaults, name) if value is None else value
+
+    def set_preferences(self, **changes: bool | None) -> None:
+        for name, value in changes.items():
+            setattr(self.preferences, name, value)
+        self.notify_changed()
+
+    @property
+    def shadow(self) -> NextStepDecider | None:
+        """The Jev next-step shadow, when configured and this user has it on."""
+        return self.jev_shadow if self.preference("jev") and self.preference("jev_shadow") else None
+
+    @property
+    def ambient_filter(self) -> AmbientFilter | None:
+        """The Jev ambient filter, when configured and this user has it on."""
+        return self.jev_filter if self.preference("jev") and self.preference("jev_filter") else None
+
+    def jev_status(self) -> dict[str, Any]:
+        decider = self.jev_shadow or self.jev_filter
+        return {
+            "available": decider is not None,
+            "model": decider.client.label if decider else "",
+            "threshold": self.jev_filter.threshold if self.jev_filter else None,
+            **{name: self.preference(name) for name in ("jev", "jev_shadow", "jev_filter")},
+        }
 
     @property
     def busy(self) -> bool:

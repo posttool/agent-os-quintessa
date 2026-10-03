@@ -23,6 +23,7 @@ from quintessa.device import FOCUSED, FULL, DocumentFocus
 from quintessa.device.focus import is_stale
 from quintessa.host import AgentHost
 from quintessa.llm import LLMError, ModelRoute, ResilientLLM
+from quintessa.llm.catalog import model_catalog
 from quintessa.llm.factory import build_llm
 from quintessa.loop.runtime import AgentRuntime
 from quintessa.models import (
@@ -127,6 +128,14 @@ class PersonaStartBody(BaseModel):
     speed: float = 600.0
 
 
+class PreferencesBody(BaseModel):
+    """Only the fields sent change; null returns a setting to the platform default."""
+
+    jev: bool | None = None
+    jev_shadow: bool | None = None
+    jev_filter: bool | None = None
+
+
 class SettingsBody(BaseModel):
     chain: list[str]
     retries: int = 2
@@ -198,6 +207,7 @@ def create_app(
                 "running": entry[0].running,
             },
             "settings": to_dict(settings),
+            "jev": agent.jev_status(),
             "server_time": now().isoformat(),
         }
 
@@ -432,7 +442,18 @@ def create_app(
             agent.notify_changed()
         return {"ok": True}
 
+    # --- preferences -------------------------------------------------------------
+
+    @app.put("/api/preferences")
+    async def put_preferences(body: PreferencesBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        agent.set_preferences(**body.model_dump(exclude_unset=True))
+        return agent.jev_status()
+
     # --- model settings ----------------------------------------------------------
+
+    @app.get("/api/models")
+    async def models() -> list[dict[str, Any]]:
+        return model_catalog()
 
     @app.get("/api/settings")
     async def get_settings() -> dict[str, Any]:

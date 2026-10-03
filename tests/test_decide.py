@@ -188,3 +188,37 @@ def test_filter_env_is_off_by_default(monkeypatch):
     monkeypatch.setenv("QUINTESSA_AMBIENT_FILTER", "1")
     monkeypatch.setenv("QUINTESSA_AMBIENT_THRESHOLD", "0.5")
     assert ambient_filter_from_env().threshold == 0.5
+
+
+async def test_jev_preference_switches_both_deciders_off_and_on(script, make_runtime):
+    script.on("decide", decide("memory"))
+    script.on("capability:memory", memory_answer())
+    fake, requests = FakeJev(), []
+    runtime = make_runtime(script, shadow=decider(fake), ambient_filter=jev_noul(0.0, requests))
+
+    runtime.set_preferences(jev=False)
+    session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off", source="ambient:email"))
+    assert session.prefilter is None and session.shadow_decisions == [] and [s.capability for s in session.steps] == ["memory"]
+    assert fake.requests == [] and requests == []
+
+    runtime.set_preferences(jev=True, jev_shadow=False)
+    session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off", source="ambient:email"))
+    assert session.prefilter.skipped and fake.requests == []
+    assert runtime.jev_status() == {"available": True, "model": "jev-latest@jev.test", "threshold": 0.3,
+                                    "jev": True, "jev_shadow": False, "jev_filter": True}
+
+
+def test_jev_options_from_env(monkeypatch):
+    from quintessa.decide import jev_options_from_env
+
+    for name in ("QUINTESSA_AMBIENT_FILTER", "QUINTESSA_DECIDER", "QUINTESSA_JEV_API_KEY", "TYPESAFE_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    assert jev_options_from_env() == {}
+    monkeypatch.setenv("QUINTESSA_JEV_API_KEY", "k")
+    options = jev_options_from_env()
+    assert options["shadow"] and options["ambient_filter"]  # both exist so users can switch them on
+    assert (options["jev_shadow_default"], options["jev_filter_default"]) == (True, False)
+    monkeypatch.setenv("QUINTESSA_DECIDER", "llm")
+    monkeypatch.setenv("QUINTESSA_AMBIENT_FILTER", "1")
+    options = jev_options_from_env()
+    assert (options["jev_shadow_default"], options["jev_filter_default"]) == (False, True)

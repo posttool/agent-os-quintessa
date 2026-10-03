@@ -1,6 +1,6 @@
 """The portable form of one user's agent state: memory (graph, topics,
-documents, tools, permissions, processes, events, traces) plus what the
-device was showing. The same format is used for durable storage and for
+documents, tools, permissions, processes, events, traces), what the
+device was showing and the user's preferences. The same format is used for durable storage and for
 user download / restore."""
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from quintessa.clock import now
 from quintessa.device import DeviceState
 from quintessa.memory import MemoryStore
-from quintessa.models import SessionStatus, TraceStep
+from quintessa.models import Preferences, SessionStatus, TraceStep
 from quintessa.serde import from_dict, to_dict
 
 if TYPE_CHECKING:
@@ -33,6 +33,7 @@ def take_snapshot(runtime: "AgentRuntime") -> dict[str, Any]:
         "saved_at": now().isoformat(),
         "memory": runtime.store.to_data(),
         "device": to_dict(runtime.device.state),
+        "preferences": to_dict(runtime.preferences),
     }
 
 
@@ -53,6 +54,7 @@ def validate_snapshot(data: Any) -> None:
     try:
         MemoryStore().load_data(data["memory"])
         from_dict(DeviceState, data["device"])
+        from_dict(Preferences, data.get("preferences") or {})
     except (KeyError, TypeError, ValueError, AttributeError) as e:
         raise StateFormatError(f"agent state is damaged: {e}") from e
 
@@ -67,6 +69,8 @@ def apply_snapshot(runtime: "AgentRuntime", data: dict[str, Any]) -> None:
     device.open_ux_ids = []
     device.island.active, device.island.words = False, ""
     runtime.device.load_state(device)
+    if data.get("preferences"):  # states saved before preferences existed keep the current ones
+        runtime.preferences = from_dict(Preferences, data["preferences"])
     runtime.install_builtin_tools()
     for session in runtime.store.sessions.values():
         if session.status in (SessionStatus.RUNNING, SessionStatus.WAITING_FOR_USER):

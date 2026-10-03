@@ -4,7 +4,8 @@ import os
 import time
 from typing import TYPE_CHECKING, Any
 
-from quintessa.decide.system_one import DEFAULT_MODEL, DEFAULT_URL, SystemOneClient, SystemOneError
+from quintessa.decide.next_step import NextStepDecider
+from quintessa.decide.system_one import SystemOneClient, SystemOneError, client_from_env
 from quintessa.models import InputEvent, PrefilterDecision
 
 if TYPE_CHECKING:
@@ -81,12 +82,24 @@ def ambient_filter_from_env() -> AmbientFilter | None:
     """
     if os.environ.get("QUINTESSA_AMBIENT_FILTER") != "1":
         return None
-    key = os.environ.get("QUINTESSA_JEV_API_KEY") or os.environ.get("TYPESAFE_API_KEY")
-    if not key:
-        return None
-    client = SystemOneClient(
-        key,
-        base_url=os.environ.get("QUINTESSA_JEV_URL", DEFAULT_URL),
-        model=os.environ.get("QUINTESSA_JEV_MODEL", DEFAULT_MODEL),
-    )
-    return AmbientFilter(client, float(os.environ.get("QUINTESSA_AMBIENT_THRESHOLD", DEFAULT_THRESHOLD)))
+    client = client_from_env()
+    return None if client is None else AmbientFilter(client, _threshold())
+
+
+def jev_options_from_env() -> dict[str, Any]:
+    """AgentRuntime options for Jev that each user can switch on or off.
+    Both deciders exist whenever a key is configured; QUINTESSA_DECIDER=llm
+    and QUINTESSA_AMBIENT_FILTER=1 only set what users start with."""
+    client = client_from_env()
+    if client is None:
+        return {}
+    return {
+        "shadow": NextStepDecider(client),
+        "ambient_filter": AmbientFilter(client, _threshold()),
+        "jev_shadow_default": os.environ.get("QUINTESSA_DECIDER", "shadow") != "llm",
+        "jev_filter_default": os.environ.get("QUINTESSA_AMBIENT_FILTER") == "1",
+    }
+
+
+def _threshold() -> float:
+    return float(os.environ.get("QUINTESSA_AMBIENT_THRESHOLD", DEFAULT_THRESHOLD))
