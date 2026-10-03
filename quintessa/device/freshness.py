@@ -30,7 +30,8 @@ def staleness(runtime: "AgentRuntime", card: BriefItem) -> str:
 
 def brief_context(runtime: "AgentRuntime") -> dict[str, Any]:
     """What the brief shows now and which questions wait on the user, for the
-    agent to read before it adds anything (expired cards are dropped first)."""
+    agent to read before it adds anything, highest salience first (expired
+    cards are dropped first)."""
     runtime.device.prune_brief(now())
     cards = [
         {
@@ -43,6 +44,8 @@ def brief_context(runtime: "AgentRuntime") -> dict[str, Any]:
             "detail": b.detail,
             "action": b.action.label if b.action else None,
             "expires_at": b.expires_at,
+            "due_at": b.due_at,
+            "salience": b.salience,
             "updated_at": b.updated_at,
             "stale": staleness(runtime, b),
         }

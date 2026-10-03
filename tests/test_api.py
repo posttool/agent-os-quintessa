@@ -192,7 +192,7 @@ async def test_jev_preference_is_per_user_and_saved(api):
 
     await api.host.save("maya")
     saved = await api.host.backend.load("maya")
-    assert saved["preferences"] == {"jev": False, "jev_shadow": None, "jev_filter": None, "jev_drive": None, "ask_before_install": None}
+    assert saved["preferences"] == {"jev": False, "jev_shadow": None, "jev_filter": None, "jev_drive": None, "ask_before_install": None, "jev_rank": None}
     await api.post("/api/clear?user=maya")  # clearing memory keeps settings
     assert (await api.get("/api/state?user=maya")).json()["jev"]["jev"] is False
     r = await api.put("/api/preferences?user=maya", json={"jev": None})  # back to the platform default
@@ -224,3 +224,21 @@ async def test_tapping_a_brief_action_starts_a_session(api, script):
     assert session.permissions[0].function == "notify"
     assert agent.device.state.notifications == ["hi"]
     assert (await api.post("/api/brief/brf-gone/act?user=maya")).status_code == 404
+
+
+async def test_cards_can_be_opened_snoozed_and_dismissed(api):
+    from quintessa.device import BriefItem
+
+    agent = await api.host.agent("maya")
+    agent.device.set_brief([BriefItem("Call the bank"), BriefItem("Renew passport")])
+    bank, passport = agent.device.state.brief
+
+    assert (await api.post(f"/api/brief/{bank.id}/open?user=maya")).json() == {"ok": True}
+    assert bank.opened_at is not None
+    r = await api.post(f"/api/brief/{bank.id}/snooze?user=maya&minutes=30")
+    assert r.status_code == 200 and r.json()["until"]
+    assert (await api.post(f"/api/brief/{passport.id}/dismiss?user=maya")).status_code == 200
+    state = (await api.get("/api/state?user=maya")).json()["device"]
+    assert state["brief"] == [] and [c["text"] for c in state["snoozed"]] == ["Call the bank"]
+    assert [s["kind"] for s in state["suppressions"]] == ["snoozed", "dismissed"]
+    assert (await api.post(f"/api/brief/{passport.id}/dismiss?user=maya")).status_code == 404

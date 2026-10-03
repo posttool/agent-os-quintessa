@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -138,6 +139,7 @@ class PreferencesBody(BaseModel):
     jev_filter: bool | None = None
     jev_drive: bool | None = None
     ask_before_install: bool | None = None
+    jev_rank: bool | None = None
 
 
 class AppListingBody(BaseModel):
@@ -263,6 +265,27 @@ def create_app(
         if not agent.answer(response):
             raise HTTPException(404, "that question is no longer waiting for an answer")
         return {"ok": True}
+
+    @app.post("/api/brief/{item_id}/open")
+    async def brief_open(item_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        """The user opened a card, so it is not being ignored."""
+        return {"ok": agent.device.open_brief(item_id)}
+
+    @app.post("/api/brief/{item_id}/dismiss")
+    async def brief_dismiss(item_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        """Swiped away: gone, and its topic ranks lower for a while."""
+        if agent.device.dismiss_brief(item_id) is None:
+            raise HTTPException(404, "that card is no longer in the brief")
+        return {"ok": True}
+
+    @app.post("/api/brief/{item_id}/snooze")
+    async def brief_snooze(item_id: str, minutes: int = Query(60, ge=1, le=7 * 24 * 60),
+                           agent: AgentRuntime = Agent) -> dict[str, Any]:
+        """"Not now": back in the brief after `minutes`, ranked a little lower."""
+        card = agent.device.snooze_brief(item_id, now() + timedelta(minutes=minutes))
+        if card is None:
+            raise HTTPException(404, "that card is no longer in the brief")
+        return {"ok": True, "until": card.snoozed_until}
 
     @app.post("/api/brief/{item_id}/act")
     async def brief_act(item_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:

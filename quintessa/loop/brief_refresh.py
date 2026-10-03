@@ -13,9 +13,10 @@ from typing import TYPE_CHECKING, Any
 from quintessa.clock import now
 from quintessa.device import BriefItem
 from quintessa.device.freshness import staleness
+from quintessa.device.salience import Salience, clamp
 from quintessa.executors.common import JSON_INSTRUCTION
 from quintessa.llm import schema as s
-from quintessa.models import ReasoningSession, TraceStep, UXRequest
+from quintessa.models import InputKind, ReasoningSession, TraceStep, UXRequest
 from quintessa.tools.builtin import parse_time
 
 if TYPE_CHECKING:
@@ -24,13 +25,15 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 PURPOSE = "brief_refresh"
+RANK = "brief_rank"
 
 INSTRUCTIONS = """You keep a personal agent's contextual brief true. Each card \
 in `cards` was written before something changed in its topic (`changed` says \
 what is known now). For each card decide:
 - "keep" when it still says the right thing,
 - "rewrite" when it should say something else now (give the new text, detail, \
-urgency and expires_at; set drop_action when its one-tap action no longer fits),
+urgency, expires_at and salience scores; set drop_action when its one-tap \
+action no longer fits),
 - "remove" when it no longer applies (done, answered, cancelled, past).
 Each question in `questions` is still waiting on the user, but its topic \
 changed after it was asked. Withdraw it only when what is now known answers \
@@ -49,6 +52,11 @@ SCHEMA = s.obj(
                     "urgency": s.string(),
                     "expires_at": s.nullable(s.string("ISO time the card stops applying, or null.")),
                     "drop_action": s.boolean(),
+                    "salience": s.nullable(s.obj({
+                        "urgency": s.number("Personal risk if the user does not act, 0 to 1."),
+                        "relevance": s.number("How well it fits the user's context now, 0 to 1."),
+                        "affinity": s.number("How much the person or business involved matters, 0 to 1."),
+                    })),
                     "reason": s.string(),
                 }
             )
@@ -134,6 +142,9 @@ def _apply_cards(runtime: "AgentRuntime", verdicts: list[dict[str, Any]], seen: 
             card.expires_at, _ = parse_time(v.get("expires_at"))
             if v.get("drop_action"):
                 card.action = None
+            if v.get("salience"):
+                card.salience = Salience(clamp(v["salience"].get("urgency"), 0.4), clamp(v["salience"].get("relevance"), 0.5),
+                                         clamp(v["salience"].get("affinity"), 0.5))
             lines.append(f"rewrote {card.id} ({old} -> {card.text}): {v['reason']}")
         else:
             lines.append(f"kept {card.id} ({card.text})")
@@ -168,3 +179,23 @@ def _topic(topic) -> dict[str, Any] | None:
         return None
     return {"title": topic.title, "summary": topic.summary, "new_info": topic.new_info, "due": topic.due,
             "progress_note": topic.progress_note, "updated_at": topic.updated_at}
+
+
+async def score_brief(runtime: "AgentRuntime", session: ReasoningSession) -> TraceStep | None:
+    """Have Jev score the cards it has not scored since they were written,
+    or every card when the user's location changed (what fits now moved)."""
+    ranker = runtime.brief_ranker
+    if ranker is None:
+        return None
+    moved = session.trigger.kind == InputKind.LOCATION
+    cards = [b for b in runtime.device.state.brief if moved or b.salience.scored_at != b.updated_at]
+    if not cards:
+        return None
+    step = TraceStep(len(session.steps), RANK, "Score the brief: urgency, fits now, person",
+                     "the user moved" if moved else "cards changed since they were scored", model=ranker.client.label)
+    session.steps.append(step)
+    step.summary = "; ".join(await ranker.score(runtime, cards))
+    runtime.device.rerank()
+    step.output = {"order": [{"text": b.text, "score": b.salience.score} for b in runtime.device.state.brief]}
+    step.ended_at = now()
+    return step

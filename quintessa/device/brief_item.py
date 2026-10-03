@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from quintessa.clock import new_id, now
+from quintessa.device.salience import Salience
 
 # The event behind the reasoning session now writing cards. Each session runs
 # in its own task, so cards it writes remember what caused them.
@@ -32,7 +33,9 @@ class BriefItem:
 
     A card is a snapshot of what was true when it was written, so it keeps
     when that was and what caused it. It is stale once its topic changes
-    after `updated_at`, and the device drops it at `expires_at`."""
+    after `updated_at`, and the device drops it at `expires_at`. The brief is
+    ordered by `salience` (see salience.py); `due_at` is when the thing the
+    card is about happens, which drives its time proximity."""
 
     text: str
     topic_id: str | None = None
@@ -43,6 +46,10 @@ class BriefItem:
     detail: str = ""
     action: BriefAction | None = None
     expires_at: datetime | None = None
+    due_at: datetime | None = None
+    salience: Salience = field(default_factory=Salience)
+    opened_at: datetime | None = None  # the user last opened the card
+    snoozed_until: datetime | None = None
     source_event_id: str | None = field(default_factory=BRIEF_SOURCE.get)
     created_at: datetime = field(default_factory=now)
     updated_at: datetime = field(default_factory=now)

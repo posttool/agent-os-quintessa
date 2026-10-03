@@ -134,7 +134,7 @@ from test_memory import topic_op  # noqa: E402
 
 def refresh(*cards, questions=()):
     return {"cards": [{"id": i, "verdict": v, "text": text, "detail": "", "urgency": "", "expires_at": None,
-                       "drop_action": False, "reason": "test"} for i, v, text in cards],
+                       "drop_action": False, "salience": None, "reason": "test"} for i, v, text in cards],
             "questions": [{"id": i, "withdraw": True, "reason": "Mom texted"} for i in questions]}
 
 

@@ -6,6 +6,7 @@ from quintessa.device.brief_item import BriefItem
 from quintessa.device.discovery_item import DiscoveryItem
 from quintessa.device.document_focus import DocumentFocus
 from quintessa.device.island_state import IslandState
+from quintessa.device.salience import Suppression
 
 
 @dataclass
@@ -14,7 +15,9 @@ class DeviceState:
     into memory directly."""
 
     island: IslandState = field(default_factory=IslandState)
-    brief: list[BriefItem] = field(default_factory=list)
+    brief: list[BriefItem] = field(default_factory=list)  # highest salience first
+    snoozed: list[BriefItem] = field(default_factory=list)  # back in the brief at their snoozed_until
+    suppressions: list[Suppression] = field(default_factory=list)
     open_ux_ids: list[str] = field(default_factory=list)
     space_document_ids: list[str] = field(default_factory=list)
     focused_document_id: str | None = None

@@ -113,6 +113,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
    * action to start, open a sheet over the current screen. */
   function tapCard(b: BriefItem) {
     const docId = liveDocument(b);
+    if (!b.ux_request_id) void act(() => api.briefOpen(b.id));
     if (docId && !b.action) return openDocument(docId, b.section_id);
     if (b.topic_id && topics.get(b.topic_id)?.new_info) void act(() => api.seen(b.topic_id!));
     setSheet(b);
@@ -131,6 +132,8 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
       onAction={() => void act(() => api.briefAct(openCard.id))}
       onAsk={() => { void act(() => api.input(`Tell me more about: ${openCard.text}`)); setSheet(null); }}
       onOpen={sheetDoc ? () => { setSheet(null); openDocument(sheetDoc, openCard.section_id); } : undefined}
+      onSnooze={openCard.ux_request_id ? undefined : () => { void act(() => api.briefSnooze(openCard.id)); setSheet(null); }}
+      onDismiss={openCard.ux_request_id ? undefined : () => { void act(() => api.briefDismiss(openCard.id)); setSheet(null); }}
       onClose={() => setSheet(null)}
     />
   );

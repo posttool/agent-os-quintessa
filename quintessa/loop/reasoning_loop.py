@@ -12,7 +12,7 @@ from quintessa.executors import EXECUTORS, StepContext
 from quintessa.executors.common import JSON_INSTRUCTION, controller_context
 from quintessa.llm import LLMUnavailableError
 from quintessa.llm import schema as s
-from quintessa.loop.brief_refresh import refresh_brief
+from quintessa.loop.brief_refresh import refresh_brief, score_brief
 from quintessa.models import ReasoningSession, SessionStatus, StepDecision, TraceStep
 
 if TYPE_CHECKING:
@@ -112,6 +112,7 @@ class AgentReasoningLoop:
             else:
                 log.info("session %s reached max steps", session.id)
             await refresh_brief(runtime, session)
+            await score_brief(runtime, session)
             session.status = SessionStatus.COMPLETE
         except LLMUnavailableError as e:
             self._fail(f"LLM unavailable: {e}")
