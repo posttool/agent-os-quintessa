@@ -134,7 +134,7 @@ function JevToggle({ api, state, act }: Pick<Props, "api" | "act"> & { state: Ag
   const jev = state.jev;
   const set = (p: Parameters<typeof api.putPreferences>[0]) => act(() => api.putPreferences(p));
   const title = jev.available
-    ? `${jev.model}: next-step shadow ${jev.jev_shadow ? "on" : "off"}, ambient filter ${jev.jev_filter ? "on" : "off"}`
+    ? `${jev.model}: next step ${jev.jev_drive ? "chosen by Jev" : `shadow ${jev.jev_shadow ? "on" : "off"}`}, ambient filter ${jev.jev_filter ? "on" : "off"}`
     : "Jev is not configured on the server (set QUINTESSA_JEV_API_KEY)";
   return (
     <div style={{ position: "relative" }} className="row">
@@ -151,15 +151,19 @@ function JevToggle({ api, state, act }: Pick<Props, "api" | "act"> & { state: Ag
             <span><strong>Use Jev</strong> {jev.model && <span className="faint">({jev.model})</span>}</span>
           </label>
           <label className="check">
-            <input type="checkbox" checked={jev.jev_shadow} disabled={!jev.available || !jev.jev} onChange={(e) => set({ jev_shadow: e.target.checked })} />
+            <input type="checkbox" checked={jev.jev_shadow} disabled={!jev.available || !jev.jev || jev.jev_drive} onChange={(e) => set({ jev_shadow: e.target.checked })} />
             <span>Shadow next steps: ask Jev beside the LLM and show its probability in Traces (never followed)</span>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={jev.jev_drive} disabled={!jev.available || !jev.jev} onChange={(e) => set({ jev_drive: e.target.checked })} />
+            <span>Let Jev choose the next step instead of the LLM (the LLM takes over when Jev fails)</span>
           </label>
           <label className="check">
             <input type="checkbox" checked={jev.jev_filter} disabled={!jev.available || !jev.jev} onChange={(e) => set({ jev_filter: e.target.checked })} />
             <span>Skip ambient events Jev says do not matter{jev.threshold != null && ` (p < ${jev.threshold})`}</span>
           </label>
           <div className="row" style={{ justifyContent: "flex-end" }}>
-            <button onClick={() => set({ jev: null, jev_shadow: null, jev_filter: null })} title="Use the server's defaults">Reset</button>
+            <button onClick={() => set({ jev: null, jev_shadow: null, jev_filter: null, jev_drive: null })} title="Use the server's defaults">Reset</button>
             <button onClick={() => setOpen(false)}>Close</button>
           </div>
         </div>

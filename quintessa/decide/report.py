@@ -12,7 +12,7 @@ BUCKETS = [(0.9, 1.01), (0.8, 0.9), (0.6, 0.8), (0.0, 0.6)]
 def agreement_report(sessions: Iterable[ReasoningSession]) -> str:
     """How often the System One model picked the step the LLM picked:
     overall, per LLM choice, by the model's confidence, and how fast."""
-    decisions = [d for s in sessions for d in s.shadow_decisions]
+    decisions = [d for s in sessions for d in s.shadow_decisions if not d.drove]
     answered = [d for d in decisions if not d.error]
     if not decisions:
         return "No shadow decisions recorded yet. Set QUINTESSA_JEV_API_KEY and run some sessions."

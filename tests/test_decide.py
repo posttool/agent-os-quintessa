@@ -205,7 +205,7 @@ async def test_jev_preference_switches_both_deciders_off_and_on(script, make_run
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off", source="ambient:email"))
     assert session.prefilter.skipped and fake.requests == []
     assert runtime.jev_status() == {"available": True, "model": "jev-latest@jev.test", "threshold": 0.3,
-                                    "jev": True, "jev_shadow": False, "jev_filter": True}
+                                    "jev": True, "jev_shadow": False, "jev_filter": True, "jev_drive": False}
 
 
 def test_jev_options_from_env(monkeypatch):
@@ -222,3 +222,30 @@ def test_jev_options_from_env(monkeypatch):
     monkeypatch.setenv("QUINTESSA_AMBIENT_FILTER", "1")
     options = jev_options_from_env()
     assert (options["jev_shadow_default"], options["jev_filter_default"]) == (False, True)
+
+
+async def test_jev_can_drive_the_next_step(script, make_runtime):
+    script.on("capability:memory", memory_answer(topic_op("topic-dinner", "Dinner Plans")))
+    fake = FakeJev("memory", "done")
+    runtime = make_runtime(script, shadow=decider(fake))
+    runtime.set_preferences(jev_drive=True)
+
+    session = await runtime.run(InputEvent(InputKind.MESSAGE, "Jane: zuni on tuesday?", sender="Jane"))
+
+    assert "decide" not in script.prompts  # the LLM never picked a step
+    assert [(s.capability, s.decided_by, s.rationale) for s in session.steps] == [("memory", "jev", "Jev p 0.90")]
+    assert [(d.choice, d.drove, d.llm_choice) for d in session.shadow_decisions] == [("memory", True, ""), ("done", True, "")]
+    assert "No shadow decisions" in agreement_report([session])  # driven choices are not agreement data
+
+
+async def test_the_llm_takes_over_when_jev_fails_to_drive(script, make_runtime):
+    script.on("decide", decide("memory"))
+    script.on("capability:memory", memory_answer())
+    runtime = make_runtime(script, shadow=decider(FakeJev(status=500)))
+    runtime.set_preferences(jev_drive=True)
+
+    session = await runtime.run(InputEvent(InputKind.TEXT, "hello"))
+
+    assert [(s.capability, s.decided_by) for s in session.steps] == [("memory", "")]
+    assert len(script.prompts["decide"]) == 2
+    assert [(d.drove, d.llm_choice, d.error[:8]) for d in session.shadow_decisions] == [(False, "memory", "HTTP 500"), (False, "done", "HTTP 500")]

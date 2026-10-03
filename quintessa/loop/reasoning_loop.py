@@ -40,7 +40,34 @@ class AgentReasoningLoop:
             }
         )
 
-    async def decide(self) -> tuple[StepDecision, str, str]:
+    async def decide(self) -> tuple[StepDecision, str, str, str]:
+        """The next step, the island's status words, the model that chose
+        and who decided ("jev" or "" for the LLM)."""
+        driver = self.runtime.driver
+        if driver is not None:
+            record = await driver.shadow(self.runtime, self.session)
+            if not record.error and record.choice in (*self.runtime.capabilities, DONE):
+                record.drove = True
+                self.session.shadow_decisions.append(record)
+                capability = "" if record.choice == DONE else record.choice
+                p = record.probabilities.get(record.choice, 0.0)
+                focus = "Chosen by Jev with no instructions: decide what this capability should do for the trigger, given the steps so far."
+                words = capability.replace("_", " ").title()
+                return StepDecision(capability, focus, f"Jev p {p:.2f}"), words, record.model, "jev"
+            # Jev failed: the LLM decides this step, and the failure stays on the record
+            result = await self._ask_llm()
+            record.llm_choice = result.data["capability"]
+            self.session.shadow_decisions.append(record)
+            return (*self._from_llm(result), "")
+        result = await self._ask_llm()
+        return (*self._from_llm(result), "")
+
+    def _from_llm(self, result) -> tuple[StepDecision, str, str]:
+        d = result.data
+        capability = "" if d["capability"] == DONE else d["capability"]
+        return StepDecision(capability, d["focus"], d["rationale"]), d["status_words"], result.model
+
+    async def _ask_llm(self):
         ctx = {
             "capabilities": [
                 {"name": c.name, "description": c.description} for c in self.runtime.capabilities.values()
@@ -57,16 +84,13 @@ class AgentReasoningLoop:
             purpose="decide",
         )
         shadow = self.runtime.shadow
-        if shadow is None:
-            result = await llm_call
-        else:
-            # asked alongside the LLM (it is usually much faster); recorded, never followed
-            result, record = await asyncio.gather(llm_call, shadow.shadow(self.runtime, self.session))
-            record.llm_choice = result.data["capability"]
-            self.session.shadow_decisions.append(record)
-        d = result.data
-        capability = "" if d["capability"] == DONE else d["capability"]
-        return StepDecision(capability, d["focus"], d["rationale"]), d["status_words"], result.model
+        if shadow is None or self.runtime.driver is not None:
+            return await llm_call
+        # asked alongside the LLM (it is usually much faster); recorded, never followed
+        result, record = await asyncio.gather(llm_call, shadow.shadow(self.runtime, self.session))
+        record.llm_choice = result.data["capability"]
+        self.session.shadow_decisions.append(record)
+        return result
 
     async def run(self) -> ReasoningSession:
         runtime, session = self.runtime, self.session
@@ -77,11 +101,11 @@ class AgentReasoningLoop:
                     session.status = SessionStatus.COMPLETE
                     return session
             for index in range(runtime.max_steps):
-                decision, words, model = await self.decide()
+                decision, words, model, decided_by = await self.decide()
                 if not decision.capability:
                     break
                 runtime.device.session_activity(session.id, words)
-                step = TraceStep(index, decision.capability, decision.focus, decision.rationale, model=model)
+                step = TraceStep(index, decision.capability, decision.focus, decision.rationale, model=model, decided_by=decided_by)
                 session.steps.append(step)
                 capability = runtime.capabilities[decision.capability]
                 outcome = await EXECUTORS[capability.executor].run(StepContext(runtime, session, capability, decision))

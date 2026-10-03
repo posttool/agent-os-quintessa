@@ -188,7 +188,7 @@ async def test_jev_preference_is_per_user_and_saved(api):
 
     await api.host.save("maya")
     saved = await api.host.backend.load("maya")
-    assert saved["preferences"] == {"jev": False, "jev_shadow": None, "jev_filter": None}
+    assert saved["preferences"] == {"jev": False, "jev_shadow": None, "jev_filter": None, "jev_drive": None}
     await api.post("/api/clear?user=maya")  # clearing memory keeps settings
     assert (await api.get("/api/state?user=maya")).json()["jev"]["jev"] is False
     r = await api.put("/api/preferences?user=maya", json={"jev": None})  # back to the platform default

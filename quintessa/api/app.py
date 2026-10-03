@@ -134,6 +134,7 @@ class PreferencesBody(BaseModel):
     jev: bool | None = None
     jev_shadow: bool | None = None
     jev_filter: bool | None = None
+    jev_drive: bool | None = None
 
 
 class SettingsBody(BaseModel):

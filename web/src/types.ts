@@ -49,11 +49,11 @@ export interface InputEvent {
 }
 export interface TraceStep {
   index: number; capability: string; focus: string; rationale: string; output: Record<string, unknown>;
-  summary: string; model: string; error: string; started_at: string; ended_at: string | null;
+  summary: string; model: string; error: string; started_at: string; ended_at: string | null; decided_by?: string;
 }
 export interface ShadowDecision {
   step_index: number; llm_choice: string; choice: string; probabilities: Record<string, number>;
-  confidence: number; model: string; latency_ms: number; error: string;
+  confidence: number; model: string; latency_ms: number; error: string; drove?: boolean;
 }
 export interface PrefilterDecision {
   matters: number; threshold: number; skipped: boolean; model: string; latency_ms: number; error: string;
@@ -98,7 +98,7 @@ export interface AmbientSource {
 }
 export interface ModelSettings { chain: string[]; retries: number; base_delay: number; status: string }
 export interface JevStatus {
-  available: boolean; model: string; threshold: number | null; jev: boolean; jev_shadow: boolean; jev_filter: boolean;
+  available: boolean; model: string; threshold: number | null; jev: boolean; jev_shadow: boolean; jev_filter: boolean; jev_drive: boolean;
 }
 export interface ModelProvider {
   provider: string; label: string; setup: string; models: { id: string; label: string }[];

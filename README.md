@@ -99,6 +99,8 @@ Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is 
 
 **Turning Jev on and off.** Each user can switch Jev off entirely, or just the shadow or the filter, from the Jev checkbox and its ▾ menu in the top bar (`PUT /api/preferences`). The choice is saved with the user's state and survives Clear memory. With a key set, both are available to every user; `QUINTESSA_DECIDER=llm` and `QUINTESSA_AMBIENT_FILTER=1` only set what users start with, and Reset returns to those defaults.
 
+**Letting Jev drive.** The third box in that menu, off by default, lets Jev pick each next step instead of the LLM: the controller's decide call is skipped and the step shows "chosen by Jev" with its probability in Traces. The capability still runs on the LLM, with no focus from the controller. If Jev fails, the LLM decides that step as usual. In the shadow studies Jev agreed with Claude on only 34-53% of next steps, so expect different behavior. Driven choices are left out of the agreement report.
+
 ### Aura personas
 
 `AuraPersonaClient` reads personas, days and observations from the [persona](https://github.com/posttool/persona) Cloud Functions, using the Firebase callable protocol. Set `AURA_PERSONA_BASE_URL` if the functions are not at `https://us-central1-aura-persona.cloudfunctions.net`. For the local emulator, use `http://localhost:5001/aura-persona/us-central1`.

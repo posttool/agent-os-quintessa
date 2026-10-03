@@ -52,7 +52,7 @@ export function makeApi(user: string) {
     putSettings: (s: Omit<ModelSettings, "status">) => call<ModelSettings>("PUT", "/api/settings", s),
     models: () => call<ModelProvider[]>("GET", "/api/models"),
     /** null returns a setting to the platform default. */
-    putPreferences: (p: Partial<Record<"jev" | "jev_shadow" | "jev_filter", boolean | null>>) =>
+    putPreferences: (p: Partial<Record<"jev" | "jev_shadow" | "jev_filter" | "jev_drive", boolean | null>>) =>
       call<JevStatus>("PUT", "/api/preferences", p),
   };
 }
