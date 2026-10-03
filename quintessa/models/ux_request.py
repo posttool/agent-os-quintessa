@@ -12,7 +12,7 @@ from quintessa.models.ux_purpose import UXPurpose
 class UXRequest:
     """Generated UI the reasoning loop waits on. It remembers the context that
     produced it so the answer returns to that context (a document section,
-    a pending tool call)."""
+    a pending tool call) and so a brief card for its topic can show it."""
 
     session_id: str
     purpose: UXPurpose
@@ -22,5 +22,6 @@ class UXRequest:
     section_id: str | None = None
     tool: str | None = None
     function: str | None = None
+    topic_id: str | None = None
     id: str = field(default_factory=lambda: new_id("ux"))
     created_at: datetime = field(default_factory=now)

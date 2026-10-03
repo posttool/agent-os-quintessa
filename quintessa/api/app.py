@@ -263,6 +263,14 @@ def create_app(
             raise HTTPException(404, "that question is no longer waiting for an answer")
         return {"ok": True}
 
+    @app.post("/api/brief/{item_id}/act")
+    async def brief_act(item_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        """The user tapped a brief card's action; the tap is their approval."""
+        session = agent.start_brief_action(item_id)
+        if session is None:
+            raise HTTPException(404, "that card or its action is no longer in the brief")
+        return {"session_id": session.id}
+
     @app.post("/api/view")
     async def view(body: ViewBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
         """The user opened a document, expanded sections or asked for all of

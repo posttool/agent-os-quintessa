@@ -42,7 +42,7 @@ async def test_disambiguation_pauses_and_returns_to_the_document(script, make_ru
         "capability:generative_ui",
         {"prompt": "Which night works?", "purpose": "disambiguation",
          "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tuesday", "Wednesday"]}],
-         "document_id": "doc-dinner", "section_id": "sec-time", "tool": None, "function": None},
+         "document_id": "doc-dinner", "section_id": "sec-time", "topic_id": None, "tool": None, "function": None},
     )
     runtime = make_runtime(script)
     session = runtime.submit(InputEvent(InputKind.TEXT, "plan dinner with Jane"))
@@ -69,7 +69,7 @@ async def test_loops_run_concurrently_over_shared_memory(script, make_runtime):
     script.on(
         "capability:generative_ui",
         {"prompt": "Color?", "purpose": "disambiguation", "fields": [{"name": "c", "kind": "option", "label": "", "options": ["red", "blue"]}],
-         "document_id": None, "section_id": None, "tool": None, "function": None},
+         "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None},
     )
     script.on("capability:memory", memory_answer(node_op("pref-color", "Unknown color preference")))
     runtime = make_runtime(script)
@@ -107,7 +107,7 @@ async def test_clear_resets_memory_traces_and_device(script, make_runtime):
     script.on("decide", decide("generative_ui"))
     script.on(
         "capability:generative_ui",
-        {"prompt": "?", "purpose": "information", "fields": [], "document_id": None, "section_id": None, "tool": None, "function": None},
+        {"prompt": "?", "purpose": "information", "fields": [], "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None},
     )
     runtime = make_runtime(script)
     session = runtime.submit(InputEvent(InputKind.TEXT, "x"))

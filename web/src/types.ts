@@ -74,11 +74,15 @@ export interface UXField { name: string; kind: string; label: string; options: s
 export interface UXRequest {
   id: string; session_id: string; purpose: "disambiguation" | "permission" | "information"; prompt: string;
   fields: UXField[]; document_id: string | null; section_id: string | null; tool: string | null; function: string | null;
-  created_at: string;
+  topic_id: string | null; created_at: string;
+}
+/** One tap starts it; the tap is the user's approval for this tool function. */
+export interface BriefAction {
+  tool: string; function: string; label: string; arguments: Record<string, string>;
 }
 export interface BriefItem {
-  text: string; topic_id: string | null; document_id: string | null; section_id: string | null;
-  ux_request_id: string | null; urgency: string;
+  id: string; text: string; topic_id: string | null; document_id: string | null; section_id: string | null;
+  ux_request_id: string | null; urgency: string; detail: string; action: BriefAction | null;
 }
 export type ViewMode = "focused" | "full";
 export interface DocumentFocus {

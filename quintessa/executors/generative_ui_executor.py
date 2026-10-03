@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from quintessa.executors.common import call_capability
 from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
@@ -14,6 +16,9 @@ from quintessa.models import (
     UXResponse,
 )
 from quintessa.serde import to_dict
+
+if TYPE_CHECKING:
+    from quintessa.memory.store import MemoryStore
 
 # Skins send this value for an approved `confirm` field.
 CONFIRM_YES = "yes"
@@ -34,13 +39,23 @@ SCHEMA = s.obj(
         ),
         "document_id": s.nullable(s.string()),
         "section_id": s.nullable(s.string()),
+        "topic_id": s.nullable(s.string("Topic this question is about, when there is one.")),
         "tool": s.nullable(s.string("Tool whose function this permission authorizes.")),
         "function": s.nullable(s.string()),
     }
 )
 
 
-def build_request(session_id: str, data: dict) -> UXRequest:
+def question_topic(store: MemoryStore, topic_id: str | None, document_id: str | None) -> str | None:
+    """The topic a question belongs to: the one named if it exists, else the
+    topic of its document."""
+    if topic_id and topic_id in store.topics:
+        return topic_id
+    doc = store.documents.get(document_id) if document_id else None
+    return doc.topic_id if doc is not None else None
+
+
+def build_request(session_id: str, data: dict, store: MemoryStore) -> UXRequest:
     return UXRequest(
         session_id=session_id,
         purpose=UXPurpose(data["purpose"]),
@@ -50,6 +65,7 @@ def build_request(session_id: str, data: dict) -> UXRequest:
         section_id=data["section_id"],
         tool=data["tool"],
         function=data["function"],
+        topic_id=question_topic(store, data.get("topic_id"), data["document_id"]),
     )
 
 
@@ -88,7 +104,7 @@ def record_permission(ctx: StepContext, request: UXRequest, response: UXResponse
 class GenerativeUIExecutor:
     async def run(self, ctx: StepContext) -> StepOutcome:
         result = await call_capability(ctx, SCHEMA)
-        request = build_request(ctx.session.id, result.data)
+        request = build_request(ctx.session.id, result.data, ctx.runtime.store)
 
         async def on_answer(response: UXResponse) -> StepOutcome:
             permission = record_permission(ctx, request, response)
