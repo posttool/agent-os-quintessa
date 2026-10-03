@@ -4,6 +4,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from quintessa.clock import now
+from quintessa.device.freshness import brief_context
 from quintessa.executors.step_context import StepContext
 from quintessa.llm.result import LLMResult
 from quintessa.models import ReasoningSession
@@ -37,6 +38,7 @@ def controller_context(runtime: "AgentRuntime", session: ReasoningSession) -> di
         **session_context(session),
         "memory": runtime.store.snapshot(),
         "on_screen": runtime.on_screen(),
+        **brief_context(runtime),
         "max_steps_left": runtime.max_steps - len(session.steps),
     }
 
@@ -51,6 +53,7 @@ async def call_capability(
         **session_context(ctx.session),
         "memory": ctx.runtime.store.snapshot(),
         "on_screen": ctx.runtime.on_screen(),
+        **brief_context(ctx.runtime),
         **(extra or {}),
     }
     return await ctx.runtime.llm.generate_json(

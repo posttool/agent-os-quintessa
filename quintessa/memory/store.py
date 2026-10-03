@@ -94,8 +94,11 @@ class MemoryStore:
             self._emit("edge_deleted", to_dict(removed))
         return removed is not None
 
-    def upsert_topic(self, topic: Topic) -> Topic:
-        topic.updated_at = now()
+    def upsert_topic(self, topic: Topic, *, touch: bool = True) -> Topic:
+        """Save a topic. `touch=False` is for bookkeeping that changes nothing
+        the topic says (the user saw it), so brief cards about it stay fresh."""
+        if touch:
+            topic.updated_at = now()
         self.topics[topic.id] = topic
         self._emit("topic", to_dict(topic))
         return topic

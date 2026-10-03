@@ -162,8 +162,12 @@ function JevToggle({ api, state, act }: Pick<Props, "api" | "act"> & { state: Ag
             <input type="checkbox" checked={jev.jev_filter} disabled={!jev.available || !jev.jev} onChange={(e) => set({ jev_filter: e.target.checked })} />
             <span>Skip ambient events Jev says do not matter{jev.threshold != null && ` (p < ${jev.threshold})`}</span>
           </label>
+          <label className="check">
+            <input type="checkbox" checked={jev.jev_rank} disabled={!jev.available || !jev.jev} onChange={(e) => set({ jev_rank: e.target.checked })} />
+            <span>Let Jev score brief cards (urgency, fits now, person) to rank the brief</span>
+          </label>
           <div className="row" style={{ justifyContent: "flex-end" }}>
-            <button onClick={() => set({ jev: null, jev_shadow: null, jev_filter: null, jev_drive: null })} title="Use the server's defaults">Reset</button>
+            <button onClick={() => set({ jev: null, jev_shadow: null, jev_filter: null, jev_drive: null, jev_rank: null })} title="Use the server's defaults">Reset</button>
             <button onClick={() => setOpen(false)}>Close</button>
           </div>
         </div>

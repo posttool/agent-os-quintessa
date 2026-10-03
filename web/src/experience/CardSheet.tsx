@@ -1,10 +1,11 @@
 import { useState } from "react";
-import type { BriefItem, Topic, UXRequest } from "../types";
+import type { BriefItem, Salience, Topic, UXRequest } from "../types";
 import UXForm from "./UXForm";
+import { ago } from "../format";
 
 /** A brief card that has no document to open: what it is about, its open
  * questions and the one thing it proposes, over whatever screen is showing. */
-export default function CardSheet({ item, topic, questions, onAnswer, onAction, onAsk, onOpen, onClose }: {
+export default function CardSheet({ item, topic, questions, onAnswer, onAction, onAsk, onOpen, onSnooze, onDismiss, onClose }: {
   item: BriefItem;
   topic: Topic | undefined;
   questions: UXRequest[];
@@ -12,6 +13,8 @@ export default function CardSheet({ item, topic, questions, onAnswer, onAction, 
   onAction: () => void;
   onAsk: () => void;
   onOpen?: () => void;
+  onSnooze?: () => void;
+  onDismiss?: () => void;
   onClose: () => void;
 }) {
   const [started, setStarted] = useState(false);
@@ -27,6 +30,8 @@ export default function CardSheet({ item, topic, questions, onAnswer, onAction, 
         {!asksOnly && (
           <>
             <div className="sheet-title">{item.text}</div>
+            {item.updated_at && <div className="sheet-age">Updated {ago(item.updated_at)}</div>}
+            {item.salience && <div className="sheet-age" title={`scored by ${item.salience.scored_by}`}>{whyRanked(item.salience)}</div>}
             {item.detail && <p className="sheet-detail">{item.detail}</p>}
             {topic && (
               <div className="sheet-topic">
@@ -56,9 +61,21 @@ export default function CardSheet({ item, topic, questions, onAnswer, onAction, 
         <div className="sheet-buttons">
           {onOpen && <button onClick={onOpen}>Open document</button>}
           {!asksOnly && <button onClick={onAsk}>Ask about this</button>}
+          {onSnooze && <button onClick={onSnooze} title="Hide for an hour">Not now</button>}
+          {onDismiss && <button onClick={onDismiss}>Dismiss</button>}
           <button onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
   );
+}
+
+/** "Rank 0.71: urgency 0.8 · soon 0.9 · fits now 0.6 · person 0.7" */
+function whyRanked(s: Salience): string {
+  const parts: [string, number | null][] = [
+    ["urgency", s.urgency], ["soon", s.proximity], ["fits now", s.relevance], ["person", s.affinity],
+    ["pushed away", s.suppression || null],
+  ];
+  const shown = parts.filter(([, v]) => v !== null).map(([k, v]) => `${k} ${(v as number).toFixed(1)}`);
+  return `Rank ${s.score.toFixed(2)}: ${shown.join(" · ")}`;
 }

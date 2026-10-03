@@ -83,6 +83,14 @@ export interface BriefAction {
 export interface BriefItem {
   id: string; text: string; topic_id: string | null; document_id: string | null; section_id: string | null;
   ux_request_id: string | null; urgency: string; detail: string; action: BriefAction | null;
+  /** when the card stops applying; when it was written; the event behind it (agent cards only) */
+  expires_at?: string | null; created_at?: string; updated_at?: string; source_event_id?: string | null;
+  due_at?: string | null; salience?: Salience;
+}
+/** Why a card ranks where it does (quintessa/device/salience.py); score orders the brief. */
+export interface Salience {
+  urgency: number | null; relevance: number; affinity: number; proximity: number; suppression: number;
+  score: number; scored_by: string;
 }
 export type ViewMode = "focused" | "full";
 export interface DocumentFocus {
@@ -109,7 +117,7 @@ export interface AmbientSource {
 }
 export interface ModelSettings { chain: string[]; retries: number; base_delay: number; status: string }
 export interface JevStatus {
-  available: boolean; model: string; threshold: number | null; jev: boolean; jev_shadow: boolean; jev_filter: boolean; jev_drive: boolean;
+  available: boolean; model: string; threshold: number | null; jev: boolean; jev_shadow: boolean; jev_filter: boolean; jev_drive: boolean; jev_rank: boolean;
 }
 export interface ModelProvider {
   provider: string; label: string; setup: string; models: { id: string; label: string }[];

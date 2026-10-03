@@ -169,7 +169,7 @@ def _mark_topic_seen(store: MemoryStore, op: dict[str, Any], _: str | None) -> s
         return ""
     topic.last_seen_at = now()
     topic.new_info = ""
-    store.upsert_topic(topic)
+    store.upsert_topic(topic, touch=False)
     return f"topic {op['id']} marked seen"
 
 

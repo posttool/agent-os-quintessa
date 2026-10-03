@@ -30,6 +30,11 @@ Guidance:
 - When the user asks to see a document or part of one ("show me the
   substitution section", "open the whole trip"), use the device tool's
   `show_document`. `on_screen` is what Spaces shows now; don't re-show it.
+- `brief` is what the contextual brief shows now and `questions_waiting` is
+  what the user has not answered yet. When the trigger changes what a card
+  says (a new text, a new place, the user's own answer), update or remove that
+  card with the device tool's `update_brief`; don't add a second card for the
+  same topic. A card with `stale` set was written before its topic changed.
 - Do not repeat a step that already succeeded with the same focus.
 - Choose "done" when nothing useful remains for this trigger. Many ambient
   triggers need only a memory step, or nothing at all.

@@ -35,6 +35,10 @@ export function makeApi(user: string) {
       call<DocView>("POST", "/api/view", { document_id, section_ids, mode }),
     /** The user tapped a brief card's action; the tap approves that call. */
     briefAct: (itemId: string) => call<{ session_id: string }>("POST", `/api/brief/${encodeURIComponent(itemId)}/act`),
+    briefOpen: (itemId: string) => call("POST", `/api/brief/${encodeURIComponent(itemId)}/open`),
+    briefDismiss: (itemId: string) => call("POST", `/api/brief/${encodeURIComponent(itemId)}/dismiss`),
+    briefSnooze: (itemId: string, minutes = 60) =>
+      call("POST", `/api/brief/${encodeURIComponent(itemId)}/snooze?minutes=${minutes}`),
     seen: (topicId: string) => call("POST", `/api/topics/${encodeURIComponent(topicId)}/seen`),
     clear: () => call("POST", "/api/clear"),
     restore: (text: string) => call("POST", "/api/restore", text),
@@ -57,7 +61,7 @@ export function makeApi(user: string) {
     searchApps: (q: string) => call<AppSearchResult[]>("GET", `/api/apps/search?q=${encodeURIComponent(q)}`),
     installApp: (listing: AppListing) => call("POST", "/api/apps/install", listing),
     uninstallApp: (appId: string) => call("DELETE", `/api/apps/${encodeURIComponent(appId)}`),
-    putPreferences: (p: Partial<Record<"jev" | "jev_shadow" | "jev_filter" | "jev_drive" | "ask_before_install", boolean | null>>) =>
+    putPreferences: (p: Partial<Record<"jev" | "jev_shadow" | "jev_filter" | "jev_drive" | "jev_rank" | "ask_before_install", boolean | null>>) =>
       call<JevStatus>("PUT", "/api/preferences", p),
   };
 }

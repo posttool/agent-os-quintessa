@@ -24,6 +24,16 @@ finish the job; it can be one step toward it.
   can just say yes to ("Call Mom"), add an `action` naming the installed tool,
   function, arguments and a short button `label`; tapping it approves that
   call.
+- `brief` lists the cards shown now. Change only what changed with
+  `update_brief` (put a card with the id it replaces, remove ids that no
+  longer hold); a topic has one card. Use `set_brief` only to rebuild the
+  whole brief. Give a card `expires_at` when it stops applying at a time
+  ("leave by 3pm"), and `due_at` when the thing it is about happens at a time.
+- The device orders the brief by salience: the card's `salience` scores
+  (urgency, relevance to the user's context now, affinity for the person or
+  business involved), how soon `due_at` is, and a penalty for topics the user
+  dismissed, snoozed or kept ignoring. Score honestly rather than ordering
+  cards yourself; a dismissed topic should come back only with real news.
 - `device.show_document` shows only the sections you name (at most 2), with a
   one-line `reason` like "Your flight moved to 4pm"; the rest of the document
   folds into an outline the user can open. Name the sections that changed or

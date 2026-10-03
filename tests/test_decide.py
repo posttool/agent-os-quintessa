@@ -209,7 +209,7 @@ async def test_jev_preference_switches_both_deciders_off_and_on(script, make_run
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off", source="ambient:email"))
     assert session.prefilter.skipped and fake.requests == []
     assert runtime.jev_status() == {"available": True, "model": "jev-latest@jev.test", "threshold": 0.3,
-                                    "jev": True, "jev_shadow": False, "jev_filter": True, "jev_drive": False}
+                                    "jev": True, "jev_shadow": False, "jev_filter": True, "jev_drive": False, "jev_rank": True}
 
 
 def test_jev_options_from_env(monkeypatch):

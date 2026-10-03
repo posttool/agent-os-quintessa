@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable
 from quintessa.ambient.bus import AmbientBus
 from quintessa.apps import AppStore, OfflineCatalog
 from quintessa.capabilities.loader import load_capabilities, load_prompt
-from quintessa.decide import AmbientFilter, NextStepDecider
+from quintessa.decide import AmbientFilter, BriefRanker, NextStepDecider
 from quintessa.device import DeviceSurface
 from quintessa.device.focus import resolve_view
 from quintessa.llm import ResilientLLM
@@ -47,6 +47,7 @@ class AgentRuntime:
         ambient_filter: AmbientFilter | None = None,
         jev_shadow_default: bool = True,
         jev_filter_default: bool = True,
+        brief_ranker: BriefRanker | None = None,
     ):
         self.user_id = user_id
         self.llm = llm
@@ -57,7 +58,8 @@ class AgentRuntime:
         self.max_steps = max_steps
         self.jev_shadow = shadow  # a System One model asked beside the LLM at each decision; never steers
         self.jev_filter = ambient_filter  # skips ambient events a System One model says do not matter
-        self.jev_defaults = Preferences(True, jev_shadow_default, jev_filter_default, False, False)
+        self.jev_ranker = brief_ranker  # scores brief cards' urgency, context fit and person
+        self.jev_defaults = Preferences(True, jev_shadow_default, jev_filter_default, False, False, True)
         self.preferences = Preferences()
         self.persona: dict[str, Any] | None = None  # the attached Aura persona: profile, persona_id, date
         self.data_dir = Path(data_dir)
@@ -106,13 +108,18 @@ class AgentRuntime:
         """The Jev ambient filter, when configured and this user has it on."""
         return self.jev_filter if self.preference("jev") and self.preference("jev_filter") else None
 
+    @property
+    def brief_ranker(self) -> BriefRanker | None:
+        """Jev scoring brief cards, when configured and this user has it on."""
+        return self.jev_ranker if self.preference("jev") and self.preference("jev_rank") else None
+
     def jev_status(self) -> dict[str, Any]:
-        decider = self.jev_shadow or self.jev_filter
+        decider = self.jev_shadow or self.jev_filter or self.jev_ranker
         return {
             "available": decider is not None,
             "model": decider.client.label if decider else "",
             "threshold": self.jev_filter.threshold if self.jev_filter else None,
-            **{name: self.preference(name) for name in ("jev", "jev_shadow", "jev_filter", "jev_drive")},
+            **{name: self.preference(name) for name in ("jev", "jev_shadow", "jev_filter", "jev_drive", "jev_rank")},
         }
 
     @property

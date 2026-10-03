@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Callable
 
+from quintessa.clock import now
+from quintessa.device import salience
 from quintessa.device.brief_item import BriefItem
 from quintessa.device.device_state import DeviceState
 from quintessa.device.discovery_item import DiscoveryItem
+from quintessa.device.salience import Suppression
 from quintessa.device.document_focus import FOCUSED, DocumentFocus
 from quintessa.serde import to_dict
 
@@ -50,8 +54,120 @@ class DeviceSurface:
         self._emit("island")
 
     def set_brief(self, items: list[BriefItem]) -> None:
+        """Replace the brief. A card for a topic already in the brief takes
+        over that card's id, so a sheet open on it follows the new text."""
+        old = self.state.brief
+        for item in items:
+            match = _match(old, item)
+            if match is not None:
+                item.id, item.created_at = match.id, match.created_at
         self.state.brief = items
+        self._drop_snoozed(items)
+        self._changed_brief()
+
+    def put_brief(self, item: BriefItem) -> BriefItem | None:
+        """Add a card, or replace the one with its id or its topic: a topic has
+        one card, never a stack. Returns the card it replaced."""
+        replaced = self._put(item)
+        self._drop_snoozed([item])
+        self._changed_brief()
+        return replaced
+
+    def _put(self, item: BriefItem) -> BriefItem | None:
+        brief = self.state.brief
+        old = _match(brief, item)
+        if old is None:
+            brief.append(item)
+            return None
+        item.id, item.created_at = old.id, old.created_at
+        if item is not old and item.opened_at is None:
+            item.opened_at = old.opened_at
+        brief[brief.index(old)] = item
+        return old
+
+    def _drop_snoozed(self, items: list[BriefItem]) -> None:
+        """A new card on a snoozed card's topic replaces it; the snooze still
+        counts against the topic as a suppression."""
+        self.state.snoozed = [s for s in self.state.snoozed if _match(items, s) is None]
+
+    def remove_brief(self, item_ids: list[str]) -> list[BriefItem]:
+        removed = [b for b in self.state.brief if b.id in item_ids]
+        if removed:
+            self.state.brief = [b for b in self.state.brief if b.id not in item_ids]
+            self._changed_brief()
+        return removed
+
+    def prune_brief(self, at: datetime) -> list[BriefItem]:
+        """Drop cards whose time has passed ("Leave by 3pm" at 3:05), bring
+        back snoozed cards whose snooze is over, and re-rank: time moves
+        proximity and suppression even when no card changed."""
+        due = [s for s in self.state.snoozed if s.snoozed_until is None or s.snoozed_until <= at]
+        if due:
+            self.state.snoozed = [s for s in self.state.snoozed if s not in due]
+            for card in due:
+                card.snoozed_until = None
+                if not card.expired(at):
+                    self._put(card)
+        removed = self.remove_brief([b.id for b in self.state.brief if b.expired(at)])
+        if due and not removed:
+            self._changed_brief(at)
+        else:
+            self.rank_brief(at)
+        return removed
+
+    def rank_brief(self, at: datetime) -> None:
+        """Order the brief by salience, highest first."""
+        for card in self.state.brief:
+            s = card.salience
+            s.proximity = round(salience.proximity(card.due_at, at), 4)
+            s.suppression = round(salience.suppression(
+                salience.card_key(card.topic_id, card.text), card.opened_at, card.updated_at, self.state.suppressions, at), 4)
+            s.score = salience.score(s, card.urgency)
+        self.state.brief.sort(key=lambda b: b.salience.score, reverse=True)
+
+    def rerank(self) -> None:
+        """Scores changed outside the device (Jev scored the cards)."""
+        self._changed_brief()
+
+    def _changed_brief(self, at: datetime | None = None) -> None:
+        self.rank_brief(at or now())
         self._emit("brief")
+
+    def open_brief(self, item_id: str) -> bool:
+        """The user opened a card: it is not being ignored."""
+        card = next((b for b in self.state.brief if b.id == item_id), None)
+        if card is None:
+            return False
+        card.opened_at = now()
+        self._changed_brief()
+        return True
+
+    def dismiss_brief(self, item_id: str) -> BriefItem | None:
+        """The user swiped a card away. It leaves the brief, and its topic
+        ranks lower for a while if the agent writes about it again."""
+        card = next((b for b in self.state.brief if b.id == item_id), None)
+        if card is None:
+            return None
+        self.state.suppressions.append(Suppression(salience.card_key(card.topic_id, card.text), "dismissed"))
+        self._trim_suppressions()
+        self.remove_brief([card.id])
+        return card
+
+    def snooze_brief(self, item_id: str, until: datetime) -> BriefItem | None:
+        """"Not now": the card leaves the brief until `until`, then comes
+        back ranked a little lower."""
+        card = next((b for b in self.state.brief if b.id == item_id), None)
+        if card is None:
+            return None
+        card.snoozed_until = until
+        self.state.snoozed.append(card)
+        self.state.suppressions.append(Suppression(salience.card_key(card.topic_id, card.text), "snoozed"))
+        self._trim_suppressions()
+        self.remove_brief([card.id])
+        return card
+
+    def _trim_suppressions(self, keep: int = 200) -> None:
+        self.state.suppressions = self.state.suppressions[-keep:]
 
     def show_ux(self, ux_request_id: str) -> None:
         self.state.open_ux_ids.append(ux_request_id)
@@ -96,3 +212,11 @@ class DeviceSurface:
     def notify(self, text: str) -> None:
         self.state.notifications.append(text)
         self._emit("notification")
+
+
+def _match(brief: list[BriefItem], item: BriefItem) -> BriefItem | None:
+    """The card `item` replaces: the one with its id, else the one for its topic."""
+    same_id = next((b for b in brief if b.id == item.id), None)
+    if same_id is not None or not item.topic_id:
+        return same_id
+    return next((b for b in brief if b.topic_id == item.topic_id), None)

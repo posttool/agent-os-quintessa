@@ -89,13 +89,19 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
     id: r.id, text: r.prompt, topic_id: r.topic_id, document_id: r.document_id, section_id: r.section_id, ux_request_id: r.id,
     urgency: "needs-you", detail: "", action: null,
   }));
-  const brief = [...needsYou, ...device.brief];
+  // A card past its expires_at is gone even before the server drops it.
+  const live = device.brief.filter((b) => !b.expires_at || Date.parse(b.expires_at) > now.getTime());
+  const brief = [...needsYou, ...live];
 
-  // A question card's sheet closes once its question is answered.
-  const sheetQuestionGone = sheet?.ux_request_id && !state.pending_ux.some((r) => r.id === sheet.ux_request_id);
+  // An open sheet follows its card: rewritten, it shows the new text; removed,
+  // expired or (for a question card) answered, it closes.
+  const openCard = !sheet ? null : sheet.ux_request_id
+    ? (state.pending_ux.some((r) => r.id === sheet.ux_request_id) ? sheet : null)
+    : live.find((b) => b.id === sheet.id) ?? null;
+  const sheetGone = sheet !== null && openCard === null;
   useEffect(() => {
-    if (sheetQuestionGone) setSheet(null);
-  }, [sheetQuestionGone]);
+    if (sheetGone) setSheet(null);
+  }, [sheetGone]);
 
   function liveDocument(b: BriefItem): string | null {
     // a question belongs to the document it names, not to its topic's
@@ -107,24 +113,27 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
    * action to start, open a sheet over the current screen. */
   function tapCard(b: BriefItem) {
     const docId = liveDocument(b);
+    if (!b.ux_request_id) void act(() => api.briefOpen(b.id));
     if (docId && !b.action) return openDocument(docId, b.section_id);
     if (b.topic_id && topics.get(b.topic_id)?.new_info) void act(() => api.seen(b.topic_id!));
     setSheet(b);
   }
 
-  const sheetQuestions = !sheet ? [] : sheet.ux_request_id
-    ? state.pending_ux.filter((r) => r.id === sheet.ux_request_id)
-    : state.pending_ux.filter((r) => sheet.topic_id !== null && r.topic_id === sheet.topic_id);
-  const sheetDoc = sheet ? liveDocument(sheet) : null;
-  const sheetView = sheet && (
+  const sheetQuestions = !openCard ? [] : openCard.ux_request_id
+    ? state.pending_ux.filter((r) => r.id === openCard.ux_request_id)
+    : state.pending_ux.filter((r) => openCard.topic_id !== null && r.topic_id === openCard.topic_id);
+  const sheetDoc = openCard ? liveDocument(openCard) : null;
+  const sheetView = openCard && (
     <CardSheet
-      item={sheet}
-      topic={topics.get(sheet.topic_id ?? "")}
+      item={openCard}
+      topic={topics.get(openCard.topic_id ?? "")}
       questions={sheetQuestions}
       onAnswer={(r, values, dismissed) => answer(r, values, dismissed)}
-      onAction={() => void act(() => api.briefAct(sheet.id))}
-      onAsk={() => { void act(() => api.input(`Tell me more about: ${sheet.text}`)); setSheet(null); }}
-      onOpen={sheetDoc ? () => { setSheet(null); openDocument(sheetDoc, sheet.section_id); } : undefined}
+      onAction={() => void act(() => api.briefAct(openCard.id))}
+      onAsk={() => { void act(() => api.input(`Tell me more about: ${openCard.text}`)); setSheet(null); }}
+      onOpen={sheetDoc ? () => { setSheet(null); openDocument(sheetDoc, openCard.section_id); } : undefined}
+      onSnooze={openCard.ux_request_id ? undefined : () => { void act(() => api.briefSnooze(openCard.id)); setSheet(null); }}
+      onDismiss={openCard.ux_request_id ? undefined : () => { void act(() => api.briefDismiss(openCard.id)); setSheet(null); }}
       onClose={() => setSheet(null)}
     />
   );
