@@ -171,7 +171,7 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(title="Quintessa")
     settings = settings or ModelSettings(chain=[r.label for r in host.llm.routes])
-    personas: dict[str, tuple[PersonaSimulation, PersonaProfile, str | None]] = {}
+    personas: dict[str, PersonaSimulation] = {}  # running day replays; the attached persona itself is agent.persona
 
     def personas_client() -> AuraPersonaClient:
         nonlocal persona_client
@@ -191,10 +191,7 @@ def create_app(
     Agent = Depends(user_agent)
 
     def persona_profile(agent: AgentRuntime) -> dict[str, Any] | None:
-        entry = personas.get(agent.user_id)
-        if entry is None:
-            return None
-        return {k: v for k, v in to_dict(entry[1]).items() if k != "raw"}
+        return None if agent.persona is None else agent.persona["profile"]
 
     # --- state -------------------------------------------------------------------
 
@@ -217,10 +214,10 @@ def create_app(
                     {**to_dict(s), "done": agent.ambient.source_done(s.id)} for s in agent.ambient.sources.values()
                 ],
             },
-            "persona": None if entry is None else {
-                "profile": persona_profile(agent),
-                "date": entry[2],
-                "running": entry[0].running,
+            "persona": None if agent.persona is None else {
+                "profile": agent.persona["profile"],
+                "date": agent.persona.get("date"),
+                "running": entry is not None and entry.running,
             },
             "settings": to_dict(settings),
             "jev": agent.jev_status(),
@@ -305,7 +302,7 @@ def create_app(
     async def clear(agent: AgentRuntime = Agent) -> dict[str, Any]:
         entry = personas.pop(agent.user_id, None)
         if entry:
-            await entry[0].stop()
+            await entry.stop()
         await host.clear(agent.user_id)
         return {"ok": True}
 
@@ -323,7 +320,7 @@ def create_app(
             raise HTTPException(400, "the file is not JSON") from e
         entry = personas.pop(agent.user_id, None)
         if entry:
-            await entry[0].stop()
+            await entry.stop()
         try:
             await host.restore_state(agent.user_id, data)
         except StateFormatError as e:
@@ -467,13 +464,18 @@ def create_app(
     async def start_persona(body: PersonaStartBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
         previous = personas.pop(agent.user_id, None)
         if previous:
-            await previous[0].stop()
+            await previous.stop()
         sim = PersonaSimulation(agent, personas_client(), speed=body.speed)
         try:
             profile = await sim.start(body.persona_id, body.date)
         except Exception as e:
             raise HTTPException(502, f"could not start the persona: {e}") from e
-        personas[agent.user_id] = (sim, profile, sim.date)
+        personas[agent.user_id] = sim
+        agent.persona = {
+            "persona_id": body.persona_id,
+            "date": sim.date,
+            "profile": {k: v for k, v in to_dict(profile).items() if k != "raw"},
+        }
         agent.notify_changed()
         return {"ok": True, "date": sim.date}
 
@@ -481,7 +483,7 @@ def create_app(
     async def stop_persona(agent: AgentRuntime = Agent) -> dict[str, Any]:
         entry = personas.get(agent.user_id)
         if entry:
-            await entry[0].stop()
+            await entry.stop()
             agent.notify_changed()
         return {"ok": True}
 

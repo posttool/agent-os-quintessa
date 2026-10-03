@@ -132,6 +132,10 @@ async def test_persona_simulation_through_the_api(api):
     assert state["persona"]["profile"]["name"] == "Maya Okafor" and state["persona"]["date"] == "2026-05-26"
     assert [e["kind"] for e in state["memory"]["events"]][1:] == [InputKind.LOCATION.value, "notification", "location"]
     await api.post("/api/persona/stop?user=maya")
+    assert (await api.host.export_state("maya"))["persona"]["persona_id"] == "p_maya"  # saved with the agent
+    await api.host.unload("maya")  # a restart forgets the replay but not who the user is
+    state = (await api.get("/api/state?user=maya")).json()
+    assert state["persona"]["profile"]["name"] == "Maya Okafor" and state["persona"]["running"] is False
     await api.post("/api/clear?user=maya")
     assert (await api.get("/api/state?user=maya")).json()["persona"] is None
 

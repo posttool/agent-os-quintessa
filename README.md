@@ -34,7 +34,7 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 - **Long-running tool calls** create a `Subscription`. The ambient bus then emits progress events back into the loop and archives the subscription when the process completes.
 - **Resilience**: `ResilientLLM` retries transient errors and bad output with backoff, then falls back along the model chain. A session that runs out of models is marked failed, with the error in its trace, and the other loops keep running.
 - **Per-user state**: there is no global memory. Every `AgentHost` call takes a `user_id`, and each user has their own memory, device surface, pending questions, tools and process subscriptions. Only the model chain and the capability definitions are shared.
-- **Durability**: each user's state is saved shortly after anything changes, through a `StateBackend`. `FileStateBackend` writes one JSON file per user, atomically. After a restart, a user's state reloads on their next request:
+- **Durability**: each user's state is saved shortly after anything changes, through a `StateBackend`. `SqlStateBackend` keeps it in a database: every table is keyed by user id, each memory item is one row (its JSON plus a few indexed columns), and a save writes only the rows that changed, in one transaction. The Aura persona a user attached is saved too. After a restart, a user's state reloads on their next request:
   - Process subscriptions that were still running resume.
   - Sessions that were mid-flight are marked stopped, and their trace notes that a restart interrupted them.
 - **Download and restore**: `host.export_state(user_id)` returns the whole agent state as one versioned JSON document. `host.restore_state(user_id, data)` replaces a user's state with one. A restore is fully validated before anything is replaced, and a state can be restored under a different user id.
@@ -50,7 +50,7 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 | `quintessa/executors/` | code that applies each capability's output |
 | `quintessa/memory/` | `MemoryStore` and memory operations |
 | `quintessa/host.py` | `AgentHost`: per-user agents, saving, download and restore |
-| `quintessa/state/` | state backends (file, in-memory) and the snapshot format |
+| `quintessa/state/` | state backends (SQL, file, in-memory) and the snapshot format |
 | `quintessa/loop/` | `AgentReasoningLoop`, `AgentRuntime`, `UXBroker` |
 | `quintessa/decide/` | System One decision models (Jev, gev) asked beside the LLM, and the agreement report |
 | `quintessa/tools/` | built-in `web` and `device` tools and the tool runner |
@@ -135,7 +135,16 @@ uv run python -m quintessa --user maya clear
 uv run python -m quintessa users
 ```
 
-Questions the agent asks are answered in the terminal. Agent state lives in `data/agents/`, one file per user.
+Questions the agent asks are answered in the terminal.
+
+### Where state is kept
+
+Agent state lives in a SQLite database, `data/quintessa.db`; `--data` moves the whole folder. There is no database server to install. Files the agent downloads go in `data/downloads/`, in a folder per user.
+
+- `QUINTESSA_DATABASE_URL` points at another database, such as `postgresql://user:pass@host/quintessa` (install the driver with `uv pip install -e ".[postgres]"`). The schema is created and upgraded on first use.
+- `QUINTESSA_STATE=file` goes back to the old store, one JSON file per user in `data/agents/`.
+- State saved by earlier versions in `data/agents/` is imported on first start, and each file is renamed to `.json.imported`. To go back, rename them and set `QUINTESSA_STATE=file`.
+- Run one server per database.
 
 ## Web app
 

@@ -58,6 +58,7 @@ class AgentRuntime:
         self.jev_filter = ambient_filter  # skips ambient events a System One model says do not matter
         self.jev_defaults = Preferences(True, jev_shadow_default, jev_filter_default, False, False)
         self.preferences = Preferences()
+        self.persona: dict[str, Any] | None = None  # the attached Aura persona: profile, persona_id, date
         self.data_dir = Path(data_dir)
         self.search = search
         self.apps = apps or OfflineCatalog()  # where tool discovery finds apps to install
@@ -177,5 +178,6 @@ class AgentRuntime:
         self.ux.cancel_all()
         await self.cancel_tasks()
         self.store.clear()
+        self.persona = None
         self.device.reset()
         self.install_builtin_tools()

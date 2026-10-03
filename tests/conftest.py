@@ -76,6 +76,36 @@ def make_host(tmp_path) -> Callable[..., Any]:
     return build
 
 
+@pytest.fixture
+async def open_sql(tmp_path):
+    """Opens SqlStateBackends (default: one SQLite file per test) and closes
+    them when the test ends."""
+    from quintessa.state import SqlStateBackend
+
+    opened = []
+
+    def build(url: str | None = None, **kwargs: Any) -> SqlStateBackend:
+        backend = SqlStateBackend(url or f"sqlite:///{tmp_path / 'quintessa.db'}", **kwargs)
+        opened.append(backend)
+        return backend
+
+    yield build
+    for backend in opened:
+        await backend.close()
+
+
+@pytest.fixture(params=["memory", "sql"])
+def make_backend(request, open_sql) -> Callable[[], Any]:
+    """Durable storage for host tests. Each call is one platform start: the
+    in-memory backend is shared, the SQL backend reopens the same database."""
+    from quintessa.state import InMemoryStateBackend
+
+    if request.param == "memory":
+        shared = InMemoryStateBackend()
+        return lambda: shared
+    return lambda: open_sql()
+
+
 async def until(predicate: Callable[[], bool], timeout: float = 2.0) -> None:
     async def poll() -> None:
         while not predicate():
