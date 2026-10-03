@@ -1,5 +1,7 @@
 import json
 
+import httpx
+
 from quintessa.models import (
     InputEvent,
     InputKind,
@@ -10,6 +12,8 @@ from quintessa.models import (
     ToolKind,
     UXResponse,
 )
+
+from quintessa.tools import runner
 
 from conftest import decide, until
 from test_memory import doc_op, section_op, topic_op
@@ -150,14 +154,54 @@ async def test_device_tool_updates_the_brief_and_spaces(script, make_runtime):
     assert runtime.device.state.focused_document_id == "doc-groceries"
 
 
-async def test_unimplemented_tool_kinds_fail_softly(script, make_runtime):
+async def test_mcp_tools_are_played_by_a_model_until_they_have_a_runtime(script, make_runtime):
     script.on("decide", decide("tool_use"))
     script.on("capability:tool_use", call("messaging", "read_thread"))
+    script.on("tool:messaging.read_thread", {"status": "done", "result": "Jane: see you at 7", "progress_stages": []})
     runtime = make_runtime(script)
     runtime.store.put_tool(Tool("messaging", "chat", ToolKind.MCP, [ToolFunction("read_thread")]))
     session = await runtime.run(InputEvent(InputKind.TEXT, "what did Jane say"))
     assert session.status == SessionStatus.COMPLETE
-    assert "not implemented yet" in session.steps[0].summary
+    assert session.steps[0].summary == "messaging.read_thread -> done: Jane: see you at 7"
+
+
+def mock_http(monkeypatch, handler):
+    real = httpx.AsyncClient
+    monkeypatch.setattr(runner.httpx, "AsyncClient",
+                        lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+
+
+async def test_web_api_tools_make_the_request(script, make_runtime, monkeypatch):
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json={"temperature": 18})
+
+    mock_http(monkeypatch, handler)
+    script.on("decide", decide("tool_use"))
+    script.on("capability:tool_use", call("weather", "current", {"city": "Paris"}))
+    script.on("tool:weather.current:request",
+              {"method": "GET", "url": "https://api.example.com/v1/current?lat=48.85&lon=2.35", "headers": [], "body": None})
+    runtime = make_runtime(script)
+    runtime.store.put_tool(Tool("weather", "Weather", ToolKind.WEB_API, [ToolFunction("current")],
+                                endpoint="https://api.example.com/v1"))
+    session = await runtime.run(InputEvent(InputKind.TEXT, "weather in paris"))
+    assert str(seen[0].url) == "https://api.example.com/v1/current?lat=48.85&lon=2.35"
+    assert "HTTP 200" in session.steps[0].summary and '"temperature":18' in session.steps[0].summary
+
+
+async def test_network_errors_fail_the_call_not_the_session(script, make_runtime, monkeypatch):
+    def handler(request):
+        raise httpx.ConnectError("blocked")
+
+    mock_http(monkeypatch, handler)
+    script.on("decide", decide("tool_use"))
+    script.on("capability:tool_use", call("web", "fetch", {"url": "https://wttr.in/Paris"}))
+    runtime = make_runtime(script)
+    session = await runtime.run(InputEvent(InputKind.TEXT, "weather in paris"))
+    assert session.status == SessionStatus.COMPLETE
+    assert session.steps[0].summary.startswith("web.fetch -> failed: web.fetch: ConnectError")
 
 
 async def test_web_search_without_backend_reports_it(script, make_runtime):
@@ -166,3 +210,25 @@ async def test_web_search_without_backend_reports_it(script, make_runtime):
     runtime = make_runtime(script)
     session = await runtime.run(InputEvent(InputKind.TEXT, "is zuni open"))
     assert "no web search backend" in session.steps[0].summary
+
+
+async def test_claude_web_search_continues_paused_turns_and_lists_sources():
+    from types import SimpleNamespace as NS
+
+    from quintessa.tools.search import ClaudeWebSearch
+
+    cite = NS(url="https://example.com/zuni")
+    replies = [
+        NS(stop_reason="pause_turn", content=[NS(type="server_tool_use")]),
+        NS(stop_reason="end_turn", content=[NS(type="text", text="Open until 10pm.", citations=[cite, cite])]),
+    ]
+    calls = []
+
+    async def create(**kwargs):
+        calls.append(kwargs)
+        return replies.pop(0)
+
+    search = ClaudeWebSearch(NS(messages=NS(create=create)))
+    assert await search.search("zuni hours") == "Open until 10pm.\n\nSources:\nhttps://example.com/zuni"
+    assert calls[0]["tools"][0]["type"] == "web_search_20260209"
+    assert calls[1]["messages"][1]["role"] == "assistant"

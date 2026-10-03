@@ -84,7 +84,9 @@ export QUINTESSA_MODEL_CHAIN="claude:claude-opus-5-5,claude:claude-opus-5,gemini
 - **Claude**: set `QUINTESSA_ANTHROPIC_API_KEY`, or `ANTHROPIC_API_KEY` if that is not set. The Quintessa name is there because some hosts, such as Claude Code cloud sessions, keep `ANTHROPIC_API_KEY` for themselves. To route Claude through Vertex instead, set `QUINTESSA_CLAUDE_ON_VERTEX=1` with the Google variables above. On the Anthropic API, current models also get Anthropic's server-side refusal fallback.
 - `QUINTESSA_LLM_RETRIES` sets retries per model (default 2).
 
-Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is set.
+Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is set, and otherwise Claude's web search tool when an Anthropic key is set (`QUINTESSA_SEARCH_MODEL` picks the model, default `claude-opus-5-5`).
+
+Tools the agent discovers run by kind: `web_api` tools make a real HTTP request (the model writes the request from the tool's endpoint), while `llm`, `mcp` and `code` tools are played by a model grounded in the tool's description, since MCP and agent-written code have no runtime yet. A network error fails that one call rather than the whole session.
 
 ### Jev shadow mode
 
