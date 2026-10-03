@@ -86,7 +86,9 @@ async def _fetch(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResul
 
 
 async def _download(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
-    folder = Path(runtime.data_dir) / "downloads"
+    from quintessa.state import user_folder_name  # quintessa.state imports the runtime's models
+
+    folder = Path(runtime.data_dir) / "downloads" / user_folder_name(runtime.user_id)
     folder.mkdir(parents=True, exist_ok=True)
     async with httpx.AsyncClient(follow_redirects=True, timeout=60) as client:
         response = await client.get(args["url"])

@@ -19,7 +19,7 @@ from quintessa.memory import MemoryStore
 from quintessa.models import InputEvent, InputKind, UXFieldKind, UXRequest, UXResponse
 from quintessa.persona import AuraPersonaClient, PersonaSimulation
 from quintessa.serde import to_dict
-from quintessa.state import FileStateBackend, StateFormatError
+from quintessa.state import StateFormatError, state_backend_from_env
 from quintessa.tools.search import search_backend_from_env
 
 
@@ -58,7 +58,15 @@ async def main_async(args: argparse.Namespace) -> None:
         await uvicorn.Server(config).serve()
         return
 
-    backend = FileStateBackend(Path(args.data) / "agents")
+    backend = state_backend_from_env(args.data)
+    try:
+        await _run_command(args, backend)
+    finally:
+        if hasattr(backend, "close"):
+            await backend.close()
+
+
+async def _run_command(args: argparse.Namespace, backend) -> None:
     if args.command == "users":
         print("\n".join(await backend.list_users()))
         return
@@ -83,7 +91,9 @@ async def main_async(args: argparse.Namespace) -> None:
         await host.run(args.user, InputEvent(InputKind.TEXT, " ".join(args.text)))
     elif args.command == "persona":
         sim = PersonaSimulation(agent, AuraPersonaClient(), speed=args.speed)
-        await sim.start(args.id, args.date)
+        profile = await sim.start(args.id, args.date)
+        agent.persona = {"persona_id": args.id, "date": sim.date,
+                         "profile": {k: v for k, v in to_dict(profile).items() if k != "raw"}}
         await sim.wait()
         await agent.wait_idle()
     elif args.command == "export":

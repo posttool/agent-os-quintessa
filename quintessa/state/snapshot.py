@@ -1,6 +1,6 @@
 """The portable form of one user's agent state: memory (graph, topics,
 documents, tools, permissions, processes, events, traces), what the
-device was showing and the user's preferences. The same format is used for durable storage and for
+device was showing, the user's preferences and the Aura persona they attached. The same format is used for durable storage and for
 user download / restore."""
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ def take_snapshot(runtime: "AgentRuntime") -> dict[str, Any]:
         "memory": runtime.store.to_data(),
         "device": to_dict(runtime.device.state),
         "preferences": to_dict(runtime.preferences),
+        "persona": runtime.persona,
     }
 
 
@@ -71,6 +72,7 @@ def apply_snapshot(runtime: "AgentRuntime", data: dict[str, Any]) -> None:
     runtime.device.load_state(device)
     if data.get("preferences"):  # states saved before preferences existed keep the current ones
         runtime.preferences = from_dict(Preferences, data["preferences"])
+    runtime.persona = data.get("persona")
     runtime.install_builtin_tools()
     for session in runtime.store.sessions.values():
         if session.status in (SessionStatus.RUNNING, SessionStatus.WAITING_FOR_USER):

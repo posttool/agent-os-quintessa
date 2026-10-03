@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 
+def user_folder_name(user_id: str) -> str:
+    """A file-system-safe name for anything stored per user."""
+    return hashlib.sha256(user_id.encode()).hexdigest()[:32]
+
+
 class FileStateBackend:
     """One JSON file per user under `root`. File names are a hash of the user
     id, so any id is safe to use; writes go to a temp file and are renamed
@@ -18,8 +23,7 @@ class FileStateBackend:
         self.root.mkdir(parents=True, exist_ok=True)
 
     def path_for(self, user_id: str) -> Path:
-        digest = hashlib.sha256(user_id.encode()).hexdigest()[:32]
-        return self.root / f"{digest}.json"
+        return self.root / f"{user_folder_name(user_id)}.json"
 
     async def load(self, user_id: str) -> dict[str, Any] | None:
         path = self.path_for(user_id)
