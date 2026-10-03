@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import httpx
 
 from quintessa.llm import schema as s
-from quintessa.models import AuthState, Tool, ToolBinding, ToolFunction, ToolKind
+from quintessa.models import AuthState, Tool, ToolBinding, ToolCallRecord, ToolFunction, ToolKind
 from quintessa.serde import to_dict
 from quintessa.tools.builtin import BUILTIN_IMPLEMENTATIONS, FETCH_LIMIT
 from quintessa.tools.tool_call_result import ToolCallResult
@@ -36,8 +36,21 @@ WEB_API_REQUEST_SCHEMA = s.obj(
 # model grounded in the tool's description plays the service, like llm tools.
 SIMULATED_KINDS = (ToolKind.LLM, ToolKind.MCP, ToolKind.CODE)
 
+# A simulated tool keeps its recent calls and sees them on each new call,
+# so a menu, an order or a booking matches what it reported earlier.
+HISTORY_KEPT = 30
+HISTORY_SHOWN = 12
+HISTORY_RESULT_LIMIT = 3000
+SIMULATE_INSTRUCTION = (
+    "Carry out this call and report. Stay consistent with earlier_calls: the same places, items, ids, prices, "
+    "times and order states. When the arguments name something an earlier result described, use exactly that "
+    "record, and if it does not exist in your earlier results, say so instead of inventing a different one."
+)
 
-async def run_tool(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str]) -> ToolCallResult:
+
+async def run_tool(
+    runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str], *, purpose: str = ""
+) -> ToolCallResult:
     """Execute one function call. Builtins run in code, web API tools make a
     real HTTP request, and the rest are a differently grounded model acting
     as the service. A network failure is a failed call, not a failed session."""
@@ -48,39 +61,55 @@ async def run_tool(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, 
                 return ToolCallResult("failed", f"{tool.name}.{function.name} has no implementation")
             return await impl(args, runtime)
         if tool.kind == ToolKind.APP:
-            return await _call_app(runtime, tool, function, args)
+            return await _call_app(runtime, tool, function, args, purpose)
         if tool.kind == ToolKind.WEB_API:
             return await _call_web_api(runtime, tool, function, args)
         if tool.kind in SIMULATED_KINDS:
-            return await _simulate(runtime, tool, function, args)
+            return await _simulate(runtime, tool, function, args, purpose)
     except httpx.HTTPError as e:
         return ToolCallResult("failed", f"{tool.name}.{function.name}: {type(e).__name__}: {e}")
     return ToolCallResult("failed", f"running {tool.kind.value} tools is not implemented yet")
 
 
-async def _call_app(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str]) -> ToolCallResult:
+async def _call_app(
+    runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str], purpose: str
+) -> ToolCallResult:
     """Installed apps run through their binding. Only simulated apps exist
     today; a real binding would first need the user signed in."""
     title = tool.listing.title if tool.listing else tool.name
     if tool.auth.state == AuthState.NEEDED:
         return ToolCallResult("needs_user", f"Sign in to {title} before the agent can use it.")
     if tool.binding == ToolBinding.SIMULATED:
-        return await _simulate(runtime, tool, function, args)
+        return await _simulate(runtime, tool, function, args, purpose)
     return ToolCallResult("failed", f"{title}: running apps through {tool.binding.value} is not implemented yet")
 
 
-async def _simulate(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str]) -> ToolCallResult:
+async def _simulate(
+    runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str], purpose: str
+) -> ToolCallResult:
+    earlier = [
+        {"function": r.function, "arguments": r.arguments, "status": r.status, "result": r.result}
+        for r in tool.history[-HISTORY_SHOWN:]
+    ]
     result = await runtime.llm.generate_json(
         system=tool.grounding or f"You act as the service '{tool.name}': {tool.description}",
         prompt=json.dumps(
-            {"function": to_dict(function), "arguments": args, "instruction": "Carry out this call and report."},
+            {"function": to_dict(function), "arguments": args, "why_the_agent_is_calling": purpose,
+             "earlier_calls": earlier, "instruction": SIMULATE_INSTRUCTION},
             indent=2,
         ),
         schema=LLM_TOOL_SCHEMA,
         purpose=f"tool:{tool.name}.{function.name}",
     )
     data = result.data
+    _remember(runtime, tool, ToolCallRecord(function.name, args, purpose, data["status"], data["result"][:HISTORY_RESULT_LIMIT]))
     return ToolCallResult(data["status"], data["result"], data["progress_stages"])
+
+
+def _remember(runtime: "AgentRuntime", tool: Tool, record: ToolCallRecord) -> None:
+    tool.history = [*tool.history, record][-HISTORY_KEPT:]
+    if runtime.store.tools.get(tool.name) is tool:  # not if it was uninstalled meanwhile
+        runtime.store.put_tool(tool)
 
 
 async def _call_web_api(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str]) -> ToolCallResult:

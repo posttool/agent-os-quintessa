@@ -137,7 +137,7 @@ class MemoryStore:
             "edges": [to_dict(e) for e in self.edges.values()],
             "topics": [to_dict(t) for t in self.topics.values() if not t.archived],
             "documents": [to_dict(d) for d in self.documents.values() if d.status.value != "archived"],
-            "tools": [to_dict(t) for t in self.tools.values()],
+            "tools": [{k: v for k, v in to_dict(t).items() if k != "history"} for t in self.tools.values()],
             "permissions": [to_dict(p) for p in self.permissions],
             "active_processes": [to_dict(s) for s in self.subscriptions.values() if not s.archived],
         }

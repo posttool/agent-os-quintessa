@@ -61,7 +61,7 @@ class ToolUseExecutor:
         args = {a["name"]: a["value"] for a in call["arguments"]}
 
         async def execute() -> StepOutcome:
-            outcome = await run_tool(ctx.runtime, tool, function, args)
+            outcome = await run_tool(ctx.runtime, tool, function, args, purpose=call["rationale"])
             output = {**call, "result": to_dict(outcome)}
             stages = outcome.progress_stages or call["progress_stages"]
             if (call["track_progress"] or function.long_running or outcome.status == "in_progress") and stages:

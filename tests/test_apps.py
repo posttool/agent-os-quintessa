@@ -217,3 +217,39 @@ async def test_apps_api_search_install_uninstall(script, make_host):
         assert (await api.delete("/api/apps/com.dd.doordash?user=maya")).status_code == 200
         assert (await api.delete("/api/apps/com.dd.doordash?user=maya")).status_code == 404
         assert "doordash" not in (await host.agent("maya")).store.tools
+
+
+async def test_simulated_app_sees_its_earlier_calls(script, make_runtime):
+    """The menu call gets the search results it returned before, so it can
+    describe the same restaurant instead of inventing another one."""
+    script.on("decide", decide("tool_use", "find thai"), decide("tool_use", "menu"))
+    script.on("app_manifest:com.ubercab.eats", manifest(name="uber_eats"))
+    script.on("capability:tool_use",
+              call("uber_eats", "search", {"query": "thai near me"}),
+              call("uber_eats", "search", {"query": "Kin Khao menu"}))
+    script.on("tool:uber_eats.search", {"status": "done", "result": "Kin Khao (store_77), Lers Ros (store_12)", "progress_stages": []})
+    script.on("tool:uber_eats.search", {"status": "done", "result": "Kin Khao menu: pad thai $16", "progress_stages": []})
+    runtime = make_runtime(script)
+    await install_app(runtime, (await runtime.apps.search("uber eats"))[0])
+
+    await runtime.run(InputEvent(InputKind.TEXT, "order thai"))
+
+    first, second = script.prompts["tool:uber_eats.search"]
+    assert first["earlier_calls"] == [] and first["why_the_agent_is_calling"] == "test"
+    assert second["earlier_calls"][0]["result"] == "Kin Khao (store_77), Lers Ros (store_12)"
+    tool = runtime.store.tools["uber_eats"]
+    assert [r.arguments["query"] for r in tool.history] == ["thai near me", "Kin Khao menu"]
+    assert all("history" not in t for t in runtime.store.snapshot()["tools"])  # kept out of the agent's prompts
+
+
+async def test_tool_history_is_capped_and_saved(script, make_runtime):
+    script.on("app_manifest:com.opentable", manifest())
+    runtime = make_runtime(script)
+    tool = await install_app(runtime, (await runtime.apps.search("opentable"))[0])
+    for i in range(runner.HISTORY_KEPT + 5):
+        script.on("tool:opentable.search", {"status": "done", "result": f"result {i}", "progress_stages": []})
+        await runner.run_tool(runtime, tool, tool.function("search"), {"query": str(i)})
+    assert len(tool.history) == runner.HISTORY_KEPT and tool.history[-1].result == f"result {runner.HISTORY_KEPT + 4}"
+    assert len(script.prompts["tool:opentable.search"][-1]["earlier_calls"]) == runner.HISTORY_SHOWN
+    restored = runtime.store.to_data()["tools"]
+    assert next(t for t in restored if t["name"] == "opentable")["history"][-1]["arguments"] == {"query": str(runner.HISTORY_KEPT + 4)}

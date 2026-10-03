@@ -27,6 +27,7 @@ from quintessa.models.step_decision import StepDecision
 from quintessa.models.subscription import Subscription
 from quintessa.models.tool import Tool
 from quintessa.models.tool_binding import ToolBinding
+from quintessa.models.tool_call_record import ToolCallRecord
 from quintessa.models.tool_function import ToolFunction
 from quintessa.models.tool_kind import ToolKind
 from quintessa.models.tool_parameter import ToolParameter
@@ -68,6 +69,7 @@ __all__ = [
     "Subscription",
     "Tool",
     "ToolBinding",
+    "ToolCallRecord",
     "ToolFunction",
     "ToolKind",
     "ToolParameter",
