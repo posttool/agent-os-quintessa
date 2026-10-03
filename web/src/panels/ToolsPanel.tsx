@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { Api } from "../api";
 import type { AgentState, AppSearchResult, Tool } from "../types";
 import AppIcon from "../components/AppIcon";
@@ -94,19 +94,35 @@ export default function ToolsPanel({ state, api, act }: { state: AgentState; api
 
 function Functions({ tool }: { tool: Tool }) {
   return (
-    <>
+    <div className="fn-list">
       {tool.functions.map((f) => (
-        <div key={f.name} className="row small" style={{ padding: "3px 0", borderTop: "1px solid var(--border)" }}>
-          <code>
-            {f.name}({f.parameters.map((p) => `${p.name}${p.required ? "" : "?"}: ${p.type}`).join(", ")}) → {f.returns}
+        <div key={f.name} className="fn-row small">
+          <code className="fn-sig">
+            {signature(f).map((part, i) => (
+              <Fragment key={i}>
+                {i > 0 && " "}
+                <span className="fn-param">{part}</span>
+              </Fragment>
+            ))}
           </code>
-          <span className="grow faint">{f.description}</span>
-          {f.long_running && <span className="badge">long-running</span>}
-          <span className={`badge ${OVERSIGHT_TONE[f.oversight]}`}>{label(f.oversight)}</span>
+          <span className="faint fn-desc">{f.description}</span>
+          <span className="fn-badges">
+            {f.long_running && <span className="badge">long-running</span>}
+            <span className={`badge ${OVERSIGHT_TONE[f.oversight]}`}>{label(f.oversight)}</span>
+          </span>
         </div>
       ))}
-    </>
+    </div>
   );
+}
+
+/** Signature pieces that break between parameters, and inside one only when it can't fit a line. */
+function signature(f: Tool["functions"][number]): string[] {
+  const params = f.parameters.map((p) => `${p.name}${p.required ? "" : "?"}: ${p.type}`);
+  if (params.length === 0) return [`${f.name}() → ${f.returns}`];
+  params[0] = `${f.name}(${params[0]}`;
+  params[params.length - 1] += `) → ${f.returns}`;
+  return params.map((p, i) => (i < params.length - 1 ? `${p},` : p));
 }
 
 function Apps({ state, api, act }: { state: AgentState; api: Api; act: (fn: () => Promise<unknown>) => Promise<void> }) {
