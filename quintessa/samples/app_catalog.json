@@ -1,0 +1,310 @@
+[
+ {
+  "app_id": "com.opentable",
+  "title": "OpenTable",
+  "developer": "OpenTable, Inc.",
+  "category": "Food & Drink",
+  "summary": "Find restaurants and book tables, see availability, manage reservations."
+ },
+ {
+  "app_id": "com.resy.android",
+  "title": "Resy",
+  "developer": "Resy Network, Inc.",
+  "category": "Food & Drink",
+  "summary": "Book reservations at restaurants, join waitlists and get notified of open tables."
+ },
+ {
+  "app_id": "com.yelp.android",
+  "title": "Yelp",
+  "developer": "Yelp Inc.",
+  "category": "Food & Drink",
+  "summary": "Find and review local restaurants and businesses, book tables and request quotes."
+ },
+ {
+  "app_id": "com.dd.doordash",
+  "title": "DoorDash",
+  "developer": "DoorDash",
+  "category": "Food & Drink",
+  "summary": "Order food delivery and takeout from local restaurants and track the order."
+ },
+ {
+  "app_id": "com.ubercab.eats",
+  "title": "Uber Eats",
+  "developer": "Uber Technologies, Inc.",
+  "category": "Food & Drink",
+  "summary": "Order food and groceries for delivery and follow the courier."
+ },
+ {
+  "app_id": "com.grubhub.android",
+  "title": "Grubhub",
+  "developer": "Grubhub",
+  "category": "Food & Drink",
+  "summary": "Order delivery or pickup from local restaurants."
+ },
+ {
+  "app_id": "com.starbucks.mobilecard",
+  "title": "Starbucks",
+  "developer": "Starbucks Coffee Company",
+  "category": "Food & Drink",
+  "summary": "Order ahead for pickup, pay and earn rewards."
+ },
+ {
+  "app_id": "com.instacart.client",
+  "title": "Instacart",
+  "developer": "Instacart",
+  "category": "Shopping",
+  "summary": "Grocery delivery and pickup from local stores, same day."
+ },
+ {
+  "app_id": "com.amazon.mShop.android.shopping",
+  "title": "Amazon Shopping",
+  "developer": "Amazon Mobile LLC",
+  "category": "Shopping",
+  "summary": "Shop, buy, track packages and manage returns."
+ },
+ {
+  "app_id": "com.target.ui",
+  "title": "Target",
+  "developer": "Target Corporation",
+  "category": "Shopping",
+  "summary": "Shop online, order pickup or same-day delivery, use offers."
+ },
+ {
+  "app_id": "com.walmart.android",
+  "title": "Walmart",
+  "developer": "Walmart",
+  "category": "Shopping",
+  "summary": "Shop groceries and household items with pickup and delivery."
+ },
+ {
+  "app_id": "com.ubercab",
+  "title": "Uber",
+  "developer": "Uber Technologies, Inc.",
+  "category": "Maps & Navigation",
+  "summary": "Request a ride, see the price up front and follow the driver."
+ },
+ {
+  "app_id": "me.lyft.android",
+  "title": "Lyft",
+  "developer": "Lyft, Inc.",
+  "category": "Maps & Navigation",
+  "summary": "Request rides, scooters and bikes; schedule rides ahead."
+ },
+ {
+  "app_id": "com.google.android.apps.maps",
+  "title": "Google Maps",
+  "developer": "Google LLC",
+  "category": "Maps & Navigation",
+  "summary": "Directions, traffic, transit, places and saved lists."
+ },
+ {
+  "app_id": "com.waze",
+  "title": "Waze",
+  "developer": "Waze",
+  "category": "Maps & Navigation",
+  "summary": "Driving directions with live traffic and arrival times."
+ },
+ {
+  "app_id": "com.whatsapp",
+  "title": "WhatsApp Messenger",
+  "developer": "WhatsApp LLC",
+  "category": "Communication",
+  "summary": "Message and call contacts and groups."
+ },
+ {
+  "app_id": "com.google.android.apps.messaging",
+  "title": "Google Messages",
+  "developer": "Google LLC",
+  "category": "Communication",
+  "summary": "Send SMS and RCS text messages."
+ },
+ {
+  "app_id": "org.telegram.messenger",
+  "title": "Telegram",
+  "developer": "Telegram FZ-LLC",
+  "category": "Communication",
+  "summary": "Messaging with groups and channels."
+ },
+ {
+  "app_id": "com.Slack",
+  "title": "Slack",
+  "developer": "Slack Technologies Inc.",
+  "category": "Business",
+  "summary": "Team messaging, channels and huddles."
+ },
+ {
+  "app_id": "com.google.android.gm",
+  "title": "Gmail",
+  "developer": "Google LLC",
+  "category": "Communication",
+  "summary": "Read, search and send email."
+ },
+ {
+  "app_id": "com.google.android.calendar",
+  "title": "Google Calendar",
+  "developer": "Google LLC",
+  "category": "Productivity",
+  "summary": "Schedule events, see your day and find free time."
+ },
+ {
+  "app_id": "com.google.android.keep",
+  "title": "Google Keep",
+  "developer": "Google LLC",
+  "category": "Productivity",
+  "summary": "Notes, lists and reminders."
+ },
+ {
+  "app_id": "com.todoist",
+  "title": "Todoist",
+  "developer": "Doist Inc",
+  "category": "Productivity",
+  "summary": "To-do lists, tasks, due dates and projects."
+ },
+ {
+  "app_id": "com.evernote",
+  "title": "Evernote",
+  "developer": "Evernote Corporation",
+  "category": "Productivity",
+  "summary": "Notes, documents and web clips in one place."
+ },
+ {
+  "app_id": "com.google.android.apps.docs",
+  "title": "Google Drive",
+  "developer": "Google LLC",
+  "category": "Productivity",
+  "summary": "Store, share and find files."
+ },
+ {
+  "app_id": "com.airbnb.android",
+  "title": "Airbnb",
+  "developer": "Airbnb",
+  "category": "Travel & Local",
+  "summary": "Book stays and experiences, message hosts."
+ },
+ {
+  "app_id": "com.booking",
+  "title": "Booking.com",
+  "developer": "Booking.com",
+  "category": "Travel & Local",
+  "summary": "Book hotels, homes, flights and car rentals."
+ },
+ {
+  "app_id": "com.expedia.bookings",
+  "title": "Expedia",
+  "developer": "Expedia",
+  "category": "Travel & Local",
+  "summary": "Book flights, hotels, cars and trip packages."
+ },
+ {
+  "app_id": "com.united.mobile.android",
+  "title": "United Airlines",
+  "developer": "United Airlines",
+  "category": "Travel & Local",
+  "summary": "Book flights, check in, get boarding passes and flight status."
+ },
+ {
+  "app_id": "com.delta.mobile.android",
+  "title": "Fly Delta",
+  "developer": "Delta Air Lines, Inc.",
+  "category": "Travel & Local",
+  "summary": "Book and change flights, check in and track bags."
+ },
+ {
+  "app_id": "com.venmo",
+  "title": "Venmo",
+  "developer": "PayPal, Inc.",
+  "category": "Finance",
+  "summary": "Send and request money from friends."
+ },
+ {
+  "app_id": "com.paypal.android.p2pmobile",
+  "title": "PayPal",
+  "developer": "PayPal Mobile",
+  "category": "Finance",
+  "summary": "Pay, send money and manage your PayPal account."
+ },
+ {
+  "app_id": "com.squareup.cash",
+  "title": "Cash App",
+  "developer": "Block, Inc.",
+  "category": "Finance",
+  "summary": "Send and receive money, banking and card."
+ },
+ {
+  "app_id": "com.spotify.music",
+  "title": "Spotify",
+  "developer": "Spotify AB",
+  "category": "Music & Audio",
+  "summary": "Play music and podcasts, make playlists."
+ },
+ {
+  "app_id": "com.audible.application",
+  "title": "Audible",
+  "developer": "Audible, Inc.",
+  "category": "Books & Reference",
+  "summary": "Listen to audiobooks and podcasts."
+ },
+ {
+  "app_id": "com.netflix.mediaclient",
+  "title": "Netflix",
+  "developer": "Netflix, Inc.",
+  "category": "Entertainment",
+  "summary": "Watch shows and movies."
+ },
+ {
+  "app_id": "com.ticketmaster.mobile.android.na",
+  "title": "Ticketmaster",
+  "developer": "Ticketmaster L.L.C.",
+  "category": "Events",
+  "summary": "Buy and sell tickets to concerts, sports and theater."
+ },
+ {
+  "app_id": "com.fandango",
+  "title": "Fandango",
+  "developer": "Fandango",
+  "category": "Entertainment",
+  "summary": "Movie showtimes and tickets."
+ },
+ {
+  "app_id": "com.zillow.android.zillowmap",
+  "title": "Zillow",
+  "developer": "Zillow",
+  "category": "House & Home",
+  "summary": "Homes for sale and rent, estimates and tours."
+ },
+ {
+  "app_id": "com.google.android.apps.chromecast.app",
+  "title": "Google Home",
+  "developer": "Google LLC",
+  "category": "House & Home",
+  "summary": "Control lights, thermostats, cameras and speakers."
+ },
+ {
+  "app_id": "com.strava",
+  "title": "Strava",
+  "developer": "Strava Inc.",
+  "category": "Health & Fitness",
+  "summary": "Track runs and rides, routes and training."
+ },
+ {
+  "app_id": "com.myfitnesspal.android",
+  "title": "MyFitnessPal",
+  "developer": "MyFitnessPal, Inc.",
+  "category": "Health & Fitness",
+  "summary": "Track food, calories and exercise."
+ },
+ {
+  "app_id": "com.zocdoc.android",
+  "title": "Zocdoc",
+  "developer": "Zocdoc",
+  "category": "Medical",
+  "summary": "Find doctors and book appointments."
+ },
+ {
+  "app_id": "com.duolingo",
+  "title": "Duolingo",
+  "developer": "Duolingo",
+  "category": "Education",
+  "summary": "Learn languages with short daily lessons."
+ }
+]

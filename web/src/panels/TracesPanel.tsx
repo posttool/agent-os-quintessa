@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { AgentState, Session, ShadowDecision } from "../types";
+import type { AgentState, AppSearchResult, Session, ShadowDecision } from "../types";
+import AppIcon from "../components/AppIcon";
 import { label, time } from "../format";
 
 const STATUS_TONE: Record<string, string> = {
@@ -71,6 +72,9 @@ function SessionTrace({ session }: { session: Session }) {
             <Shadow decision={shadow.get(step.index)} />
             {step.summary && <div style={{ marginTop: 2 }}>→ {step.summary}</div>}
             {step.error && <div style={{ color: "var(--bad)" }}>{step.error}</div>}
+            {Array.isArray(step.output.candidates) && step.output.candidates.length > 0 && (
+              <Candidates output={step.output} />
+            )}
             {Object.keys(step.output).length > 0 && (
               <details className="small">
                 <summary className="muted">output</summary>
@@ -142,6 +146,25 @@ function Prefilter({ decision: d }: { decision: NonNullable<Session["prefilter"]
     <div className="small" style={{ marginBottom: 6 }}>
       <span className={`badge ${d.skipped ? "" : "good"}`}>{d.model || "Jev"}: {d.skipped ? "does not matter, skipped" : "matters"}</span>{" "}
       <span className="faint">p {d.matters.toFixed(2)} (threshold {d.threshold}) · {Math.round(d.latency_ms)} ms</span>
+    </div>
+  );
+}
+
+function Candidates({ output }: { output: Record<string, unknown> }) {
+  const candidates = output.candidates as AppSearchResult[];
+  const reasons = (output.install_reasons ?? {}) as Record<string, string>;
+  return (
+    <div className="small" style={{ margin: "4px 0" }}>
+      <span className="muted">searched {(output.app_queries as string[]).map((q) => `"${q}"`).join(", ")}:</span>
+      <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+        {candidates.map((c) => (
+          <span key={c.app_id} className={`badge ${reasons[c.app_id] ? "good" : ""}`} title={reasons[c.app_id] ?? c.summary}
+            style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <AppIcon listing={c} name={c.title} size={16} />
+            {c.title}{reasons[c.app_id] ? " ✓" : ""}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

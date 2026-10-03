@@ -86,6 +86,9 @@ button, input { font: inherit; color: inherit; }
   width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; font-size: 20px; font-weight: 600;
   background: #ffffff; border: 1px solid var(--line);
 }
+.app { animation: app-in .35s ease-out; }
+@keyframes app-in { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.app img.icon { object-fit: cover; padding: 0; }
 .app span { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .inputbar {

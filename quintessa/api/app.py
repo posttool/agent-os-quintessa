@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from quintessa.ambient import ambient_templates, source_from_description, source_from_template
 from quintessa.api.model_settings import ModelSettings
+from quintessa.apps.installer import install_app, installed_app, uninstall_app
 from quintessa.api.unconfigured import UnconfiguredLLM
 from quintessa.device import FOCUSED, FULL, DocumentFocus
 from quintessa.device.focus import is_stale
@@ -28,6 +29,7 @@ from quintessa.llm.factory import build_llm
 from quintessa.loop.runtime import AgentRuntime
 from quintessa.models import (
     AmbientSource,
+    AppListing,
     InputEvent,
     InputKind,
     OversightLevel,
@@ -135,6 +137,19 @@ class PreferencesBody(BaseModel):
     jev_shadow: bool | None = None
     jev_filter: bool | None = None
     jev_drive: bool | None = None
+    ask_before_install: bool | None = None
+
+
+class AppListingBody(BaseModel):
+    app_id: str
+    title: str
+    store: str = ""
+    developer: str = ""
+    icon_url: str = ""
+    category: str = ""
+    rating: float | None = None
+    store_url: str = ""
+    summary: str = ""
 
 
 class SettingsBody(BaseModel):
@@ -209,6 +224,7 @@ def create_app(
             },
             "settings": to_dict(settings),
             "jev": agent.jev_status(),
+            "apps": {"store": agent.apps.name, "ask_before_install": agent.preference("ask_before_install")},
             "server_time": now().isoformat(),
         }
 
@@ -321,6 +337,8 @@ def create_app(
         existing = agent.store.tools.get(body.name)
         if body.kind == ToolKind.BUILTIN or (existing and existing.kind == ToolKind.BUILTIN):
             raise HTTPException(400, "built-in tools cannot be replaced")
+        if body.kind == ToolKind.APP or (existing and existing.kind == ToolKind.APP):
+            raise HTTPException(400, "apps are installed from the app store, not edited")
         agent.store.put_tool(
             Tool(
                 name=body.name,
@@ -353,6 +371,30 @@ def create_app(
         if tool.kind == ToolKind.BUILTIN:
             raise HTTPException(400, "built-in tools cannot be deleted")
         agent.store.delete_tool(name)
+        return {"ok": True}
+
+    # --- apps --------------------------------------------------------------------
+
+    @app.get("/api/apps/search")
+    async def search_apps(q: str = Query(min_length=1), agent: AgentRuntime = Agent) -> list[dict[str, Any]]:
+        listings = await agent.apps.search(q)
+        return [
+            {**to_dict(listing), "installed_as": t.name if (t := installed_app(agent.store, listing.app_id)) else None}
+            for listing in listings
+        ]
+
+    @app.post("/api/apps/install")
+    async def install(body: AppListingBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        try:
+            tool = await install_app(agent, AppListing(**body.model_dump()), created_by="user")
+        except LLMError as e:
+            raise HTTPException(502, f"could not write the app's manifest: {e}") from e
+        return to_dict(tool)
+
+    @app.delete("/api/apps/{app_id}")
+    async def uninstall(app_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        if uninstall_app(agent.store, app_id) is None:
+            raise HTTPException(404, "that app is not installed")
         return {"ok": True}
 
     # --- ambient data ------------------------------------------------------------

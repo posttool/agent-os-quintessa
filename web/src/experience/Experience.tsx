@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import AppIcon from "../components/AppIcon";
 import type { Api } from "../api";
 import type { AgentState, BriefItem, UXRequest } from "../types";
 import { load, save } from "../storage";
@@ -130,7 +131,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
 
   const current = docs.find((d) => d.id === openDoc) ?? docs.find((d) => device.space_document_ids.includes(d.id)) ?? docs[0];
   const looseQuestions = state.pending_ux.filter((r) => !r.document_id || !docs.some((d) => d.id === r.document_id));
-  const apps = state.memory.tools;
+  const apps = [...state.memory.tools].sort((a, b) => Number(b.kind === "builtin") - Number(a.kind === "builtin"));
 
   return (
     <div className="phone">
@@ -159,8 +160,8 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
           <div className="apps">
             {apps.map((t) => (
               <div key={t.name} className="app" title={t.description}>
-                <div className="icon">{t.name === "web" ? "🌐" : t.name === "device" ? "✦" : t.name[0].toUpperCase()}</div>
-                <span>{t.name.replace(/_/g, " ")}</span>
+                <AppIcon listing={t.listing} name={t.name} glyph={t.name === "web" ? "🌐" : t.name === "device" ? "✦" : undefined} />
+                <span>{t.listing?.title ?? t.name.replace(/_/g, " ")}</span>
               </div>
             ))}
           </div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Api } from "../api";
-import type { AgentState } from "../types";
+import type { AgentState, AppSearchResult, Tool } from "../types";
+import AppIcon from "../components/AppIcon";
 import { label } from "../format";
 
 const TEMPLATE = {
@@ -21,7 +22,9 @@ const OVERSIGHT_TONE: Record<string, string> = { auto: "good", auto_from_memory:
 export default function ToolsPanel({ state, api, act }: { state: AgentState; api: Api; act: (fn: () => Promise<unknown>) => Promise<void> }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
-  const tools = [...state.memory.tools].sort((a, b) => Number(b.kind === "builtin") - Number(a.kind === "builtin"));
+  const tools = [...state.memory.tools]
+    .filter((t) => t.kind !== "app")
+    .sort((a, b) => Number(b.kind === "builtin") - Number(a.kind === "builtin"));
 
   function save() {
     let tool: unknown;
@@ -40,6 +43,8 @@ export default function ToolsPanel({ state, api, act }: { state: AgentState; api
 
   return (
     <div>
+      <Apps state={state} api={api} act={act} />
+      <h3 style={{ margin: "18px 0 8px" }}>Other tools</h3>
       <div className="row" style={{ marginBottom: 12 }}>
         <span className="muted grow">
           Built-in tools are web access and device control. Everything else is created on demand by the agent or by you.
@@ -74,22 +79,117 @@ export default function ToolsPanel({ state, api, act }: { state: AgentState; api
             )}
           </div>
           <div className="muted" style={{ margin: "4px 0 6px" }}>{t.description}</div>
-          {t.functions.map((f) => (
-            <div key={f.name} className="row small" style={{ padding: "3px 0", borderTop: "1px solid var(--border)" }}>
-              <code>
-                {f.name}({f.parameters.map((p) => `${p.name}${p.required ? "" : "?"}: ${p.type}`).join(", ")}) → {f.returns}
-              </code>
-              <span className="grow faint">{f.description}</span>
-              {f.long_running && <span className="badge">long-running</span>}
-              <span className={`badge ${OVERSIGHT_TONE[f.oversight]}`}>{label(f.oversight)}</span>
-            </div>
-          ))}
+          <Functions tool={t} />
           {t.grounding && (
             <details className="small" style={{ marginTop: 6 }}>
               <summary className="muted">grounding</summary>
               <pre className="json">{t.grounding}</pre>
             </details>
           )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Functions({ tool }: { tool: Tool }) {
+  return (
+    <>
+      {tool.functions.map((f) => (
+        <div key={f.name} className="row small" style={{ padding: "3px 0", borderTop: "1px solid var(--border)" }}>
+          <code>
+            {f.name}({f.parameters.map((p) => `${p.name}${p.required ? "" : "?"}: ${p.type}`).join(", ")}) → {f.returns}
+          </code>
+          <span className="grow faint">{f.description}</span>
+          {f.long_running && <span className="badge">long-running</span>}
+          <span className={`badge ${OVERSIGHT_TONE[f.oversight]}`}>{label(f.oversight)}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function Apps({ state, api, act }: { state: AgentState; api: Api; act: (fn: () => Promise<unknown>) => Promise<void> }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<AppSearchResult[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const apps = state.memory.tools.filter((t) => t.kind === "app");
+
+  function search() {
+    if (!query.trim()) return;
+    setBusy("search");
+    void act(async () => setResults(await api.searchApps(query.trim()))).finally(() => setBusy(null));
+  }
+
+  function install(r: AppSearchResult) {
+    setBusy(r.app_id);
+    void act(async () => {
+      await api.installApp(r);
+      setResults(await api.searchApps(query.trim()));
+    }).finally(() => setBusy(null));
+  }
+
+  return (
+    <div>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <h3 className="grow" style={{ margin: 0 }}>Apps</h3>
+        <label className="small muted row" style={{ gap: 6 }}>
+          <input type="checkbox" checked={state.apps.ask_before_install}
+            onChange={(e) => act(() => api.putPreferences({ ask_before_install: e.target.checked }))} />
+          Ask before installing apps
+        </label>
+      </div>
+      <div className="muted small" style={{ marginBottom: 8 }}>
+        The agent installs apps from the store ({state.apps.store}) when it needs one. Installed apps are simulated by a model for now.
+      </div>
+      <div className="row" style={{ marginBottom: 10 }}>
+        <input className="grow" placeholder="Search the app store" value={query}
+          onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} />
+        <button onClick={search} disabled={busy === "search"}>{busy === "search" ? "Searching…" : "Search"}</button>
+      </div>
+      {results && (
+        <div className="card">
+          {results.length === 0 && <div className="muted">No apps found.</div>}
+          {results.map((r) => (
+            <div key={r.app_id} className="row" style={{ padding: "4px 0" }}>
+              <AppIcon listing={r} name={r.title} size={32} />
+              <div className="grow">
+                <div><strong>{r.title}</strong> <span className="faint small">{r.developer}</span></div>
+                <div className="muted small">{r.summary}</div>
+              </div>
+              {r.installed_as
+                ? <span className="badge good">installed</span>
+                : <button onClick={() => install(r)} disabled={busy !== null}>{busy === r.app_id ? "Installing…" : "Install"}</button>}
+            </div>
+          ))}
+        </div>
+      )}
+      {apps.length === 0 && <div className="muted small">No apps installed yet.</div>}
+      {apps.map((t) => (
+        <div className="card" key={t.name}>
+          <div className="row">
+            <AppIcon listing={t.listing} name={t.name} size={36} />
+            <div className="grow">
+              <div className="row" style={{ gap: 6 }}>
+                <strong>{t.listing?.title ?? t.name}</strong>
+                <code className="faint small">{t.name}</code>
+                <span className="badge">{t.binding}</span>
+                <span className="badge">sign-in: {t.auth.kind === "none" ? "none" : `${t.auth.kind}, ${t.auth.state}`}</span>
+                <span className="faint small">by {t.created_by}</span>
+              </div>
+              <div className="faint small">
+                {t.listing?.developer}
+                {t.listing?.store_url && <> · <a href={t.listing.store_url} target="_blank" rel="noreferrer">store page</a></>}
+              </div>
+            </div>
+            {t.listing && (
+              <button className="danger" onClick={() => confirm(`Uninstall ${t.listing!.title}?`) && act(() => api.uninstallApp(t.listing!.app_id))}>
+                Uninstall
+              </button>
+            )}
+          </div>
+          <div className="muted" style={{ margin: "4px 0 6px" }}>{t.description}</div>
+          <Functions tool={t} />
         </div>
       ))}
     </div>

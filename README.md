@@ -54,10 +54,11 @@ AgentRuntime.submit(event) ──► AgentReasoningLoop (one per input, many at 
 | `quintessa/loop/` | `AgentReasoningLoop`, `AgentRuntime`, `UXBroker` |
 | `quintessa/decide/` | System One decision models (Jev, gev) asked beside the LLM, and the agreement report |
 | `quintessa/tools/` | built-in `web` and `device` tools and the tool runner |
+| `quintessa/apps/` | app stores (Play, web search, bundled catalog) and installing apps as tools |
 | `quintessa/device/` | device surface state |
 | `quintessa/ambient/` | ambient data bus and template-based generators |
 | `quintessa/persona/` | Aura persona client and day-in-the-life simulation |
-| `quintessa/samples/` | bootstrap data: tool suggestions, ambient templates |
+| `quintessa/samples/` | bootstrap data: tool suggestions, ambient templates, the offline app catalog |
 | `quintessa/api/` | FastAPI app: per-user HTTP API, live change stream, serves the web app |
 | `web/` | React web app (Vite, TypeScript) |
 
@@ -87,6 +88,21 @@ export QUINTESSA_MODEL_CHAIN="claude:claude-opus-5-5,claude:claude-opus-5,gemini
 Web search uses Gemini's Google Search grounding when `GOOGLE_CLOUD_PROJECT` is set, and otherwise Claude's web search tool when an Anthropic key is set (`QUINTESSA_SEARCH_MODEL` picks the model, default `claude-opus-5-5`).
 
 Tools the agent discovers run by kind: `web_api` tools make a real HTTP request (the model writes the request from the tool's endpoint), while `llm`, `mcp` and `code` tools are played by a model grounded in the tool's description, since MCP and agent-written code have no runtime yet. A network error fails that one call rather than the whole session.
+
+### Apps
+
+When the user wants something done that people do in a phone app (book a table, order food, get a ride), `tool_discovery` searches an app store, picks an app (one the user is known to use first) and installs it. A model writes the app's functions and oversight levels from its store listing. An installed app is a `Tool` of kind `app` in that user's memory, so it is saved, exported and restored like everything else, and only installed tools can be called.
+
+Each app records its store `listing` (id, title, developer, icon), its `binding` (how calls run) and its `auth` (what sign-in it would need). Every app is `simulated` for now: a model grounded in the listing plays the app, and sign-in is skipped. The binding values `mcp`, `web_api` and `android` are reserved for real backends, and the runner already returns "sign in first" for an app whose auth state is `needed`.
+
+`QUINTESSA_APP_STORE` picks the store:
+
+- `play`: Google Play through the `google-play-scraper` library, with real icons. Needs access to play.google.com.
+- `search`: web search limited to Play listings, with no icons.
+- `offline`: a bundled catalog of 44 common apps, with no icons.
+- `auto` (the default): Play, then web search, then the catalog. A store that fails is skipped.
+
+Installing needs no approval unless the user ticks "Ask before installing apps" in the Tools panel. Installing never grants an app's risky functions; those still go through their oversight levels.
 
 ### Jev shadow mode
 
@@ -133,16 +149,16 @@ For UI work, run `uv run python -m quintessa serve` and `cd web && npm run dev` 
 - **User**: every API call names a user with `?user=` or the `X-Quintessa-User` header. The top bar sets it, so two browser tabs with different users have separate agents.
 - **Experience**: a phone with Lock, Discover, Home and Spaces screens, the dynamic island, the contextual brief and an input bar (text and speech). Open questions from the agent appear first in the brief. Spaces opens a document showing only the sections that matter now (chosen by the agent's `device.show_document`, or by a rule: sections with a waiting question, then sections changed since the user last looked, then the first open section with a next step). The rest fold into an outline the user can open one at a time, or all at once with "Show full document"; `POST /api/view` records the user's choice, which holds until another part of the document changes. The phone renders inside a shadow root with only its skin's stylesheet, so a skin is one CSS file in `web/src/experience/skins/` (`aurora` and `paper` so far).
 - **Memory**: the graph, topics, documents, facts and permissions.
-- **Tools**: built-in and agent-made tools; create or delete your own.
+- **Tools**: installed apps with their icons, functions and sign-in state, a store search to install or uninstall apps yourself, the "Ask before installing apps" setting, and the other built-in and agent-made tools.
 - **Data**: the global on/off switch (on, with no sources), sources from templates or described in plain words ("vibe coded"), and per-source speed.
-- **Traces**: every reasoning step, grouped by the input that started it.
+- **Traces**: every reasoning step, grouped by the input that started it. App searches show the candidates, with a check on the ones installed.
 - **Top bar**: Aura persona picker (clears the user's state and plays a day), Jev on/off, model chain (pulldowns of Claude and Gemini models, or any `provider:model`) with retries and fallbacks, download and restore of agent state, clear memory, dark and light mode.
 
 The app starts blank. With no model configured, inputs fail with a message saying so; set the chain in the top bar or with `QUINTESSA_MODEL_CHAIN`.
 
 ## Not yet built
 
-- Executing `web_api`, `mcp` and `code` tools. They can be defined and stored, but calls report that they are not implemented yet.
+- Running `mcp` and `code` tools and real apps. A model plays them for now.
 - Memory retrieval: the whole graph currently goes into each prompt.
 - Resuming a question that was open during a restart: the session is recorded as interrupted, and the next input starts fresh.
 - Authentication: the API trusts the user id it is given. It must check identity before it is exposed beyond localhost.

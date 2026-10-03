@@ -41,7 +41,11 @@ def controller_context(runtime: "AgentRuntime", session: ReasoningSession) -> di
     }
 
 
-async def call_capability(ctx: StepContext, schema: dict[str, Any], extra: dict[str, Any] | None = None) -> LLMResult:
+async def call_capability(
+    ctx: StepContext, schema: dict[str, Any], extra: dict[str, Any] | None = None, *, stage: str = ""
+) -> LLMResult:
+    """One model call for the capability. `stage` names a later call of a
+    multi-call capability in its purpose (capability:tool_discovery:choose)."""
     payload = {
         "focus": ctx.decision.focus,
         **session_context(ctx.session),
@@ -53,5 +57,5 @@ async def call_capability(ctx: StepContext, schema: dict[str, Any], extra: dict[
         system=f"{ctx.capability.instructions}\n\n{JSON_INSTRUCTION}",
         prompt=json.dumps(payload, indent=1, default=str),
         schema=schema,
-        purpose=f"capability:{ctx.capability.name}",
+        purpose=f"capability:{ctx.capability.name}" + (f":{stage}" if stage else ""),
     )

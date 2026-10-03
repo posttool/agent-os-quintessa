@@ -1,6 +1,10 @@
 """Data structures. One dataclass or enum per file."""
 
 from quintessa.models.ambient_source import AmbientSource
+from quintessa.models.app_listing import AppListing
+from quintessa.models.auth_kind import AuthKind
+from quintessa.models.auth_requirement import AuthRequirement
+from quintessa.models.auth_state import AuthState
 from quintessa.models.capability import Capability
 from quintessa.models.document import Document
 from quintessa.models.document_section import DocumentSection
@@ -22,6 +26,7 @@ from quintessa.models.shadow_decision import ShadowDecision
 from quintessa.models.step_decision import StepDecision
 from quintessa.models.subscription import Subscription
 from quintessa.models.tool import Tool
+from quintessa.models.tool_binding import ToolBinding
 from quintessa.models.tool_function import ToolFunction
 from quintessa.models.tool_kind import ToolKind
 from quintessa.models.tool_parameter import ToolParameter
@@ -37,6 +42,10 @@ from quintessa.models.ux_response import UXResponse
 
 __all__ = [
     "AmbientSource",
+    "AppListing",
+    "AuthKind",
+    "AuthRequirement",
+    "AuthState",
     "Capability",
     "Document",
     "DocumentSection",
@@ -58,6 +67,7 @@ __all__ = [
     "StepDecision",
     "Subscription",
     "Tool",
+    "ToolBinding",
     "ToolFunction",
     "ToolKind",
     "ToolParameter",

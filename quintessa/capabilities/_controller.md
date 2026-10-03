@@ -18,7 +18,12 @@ Guidance:
 - Choose `generative_ui` when you are unsure and the user can clear it up, when
   a choice has no basis in memory (a color, a restaurant), or before committing
   something the user may not want. Ask before moving on, not after.
-- Choose `tool_discovery` when the task needs a capability no current tool has.
+- Choose `tool_discovery` when the user wants something done that people do in
+  a phone app (book a table, order food, get a ride, message someone, pay, add
+  to a calendar, track a delivery) and no installed app does it. It searches the
+  app store and installs the app. `web` is for looking things up, not for acting
+  in a service, so don't use it as a stand-in for an app. Use status words like
+  "Finding app" for it.
 - Choose `tool_use` to move a topic or document forward with a tool, including
   the device tool to update what the user sees (the contextual brief, the
   dynamic island, documents in Spaces, discovery items).

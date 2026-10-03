@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import httpx
 
 from quintessa.llm import schema as s
-from quintessa.models import Tool, ToolFunction, ToolKind
+from quintessa.models import AuthState, Tool, ToolBinding, ToolFunction, ToolKind
 from quintessa.serde import to_dict
 from quintessa.tools.builtin import BUILTIN_IMPLEMENTATIONS, FETCH_LIMIT
 from quintessa.tools.tool_call_result import ToolCallResult
@@ -47,6 +47,8 @@ async def run_tool(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, 
             if impl is None:
                 return ToolCallResult("failed", f"{tool.name}.{function.name} has no implementation")
             return await impl(args, runtime)
+        if tool.kind == ToolKind.APP:
+            return await _call_app(runtime, tool, function, args)
         if tool.kind == ToolKind.WEB_API:
             return await _call_web_api(runtime, tool, function, args)
         if tool.kind in SIMULATED_KINDS:
@@ -54,6 +56,17 @@ async def run_tool(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, 
     except httpx.HTTPError as e:
         return ToolCallResult("failed", f"{tool.name}.{function.name}: {type(e).__name__}: {e}")
     return ToolCallResult("failed", f"running {tool.kind.value} tools is not implemented yet")
+
+
+async def _call_app(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str]) -> ToolCallResult:
+    """Installed apps run through their binding. Only simulated apps exist
+    today; a real binding would first need the user signed in."""
+    title = tool.listing.title if tool.listing else tool.name
+    if tool.auth.state == AuthState.NEEDED:
+        return ToolCallResult("needs_user", f"Sign in to {title} before the agent can use it.")
+    if tool.binding == ToolBinding.SIMULATED:
+        return await _simulate(runtime, tool, function, args)
+    return ToolCallResult("failed", f"{title}: running apps through {tool.binding.value} is not implemented yet")
 
 
 async def _simulate(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str]) -> ToolCallResult:
