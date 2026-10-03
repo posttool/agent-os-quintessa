@@ -63,12 +63,16 @@ async def test_shadow_records_jev_beside_the_llm_without_steering(script, make_r
     assert set(question["criteria"]) == {*runtime.capabilities, "done"}
     assert question["criteria"]["memory"] == runtime.capabilities["memory"].choose_when != ""
     assert fake.requests[0]["model"] == "jev-latest"
-    # the trimmed state: the trigger, then the chain so far and memory's outline
-    assert fake.requests[0]["state"]["trigger"]["content"] == "Jane: zuni on tuesday?"
-    assert fake.requests[0]["state"]["steps_so_far"] == []
+    # the same context the LLM controller saw, without the capability list the criteria carry
+    first_llm, second_llm = script.prompts["decide"]
+    for request, llm_prompt in zip(fake.requests, (first_llm, second_llm)):
+        assert {k: v for k, v in llm_prompt.items() if k not in ("capabilities", "now")} == {
+            k: v for k, v in request["state"].items() if k != "now"
+        }
+    assert "capabilities" not in fake.requests[0]["state"]
     second = fake.requests[1]["state"]
     assert second["steps_so_far"][0]["capability"] == "memory"
-    assert second["topics"][0]["title"] == "Dinner Plans"
+    assert second["memory"]["topics"][0]["title"] == "Dinner Plans"
 
 
 async def test_a_failing_endpoint_never_fails_the_session(script, make_runtime):

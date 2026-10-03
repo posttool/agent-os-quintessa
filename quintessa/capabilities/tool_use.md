@@ -2,7 +2,7 @@
 name: tool_use
 description: Call one tool function to move a topic or document forward, including the device tool.
 executor: tool_use
-choose_when: "A tool can move a topic or document forward now, or what the user sees should change: the contextual brief, the dynamic island, a document shown in Spaces, or the user asked to see a document or part of one that is not already on screen."
+choose_when: "What this trigger means is already saved in memory, and a tool call now moves the topic or document forward, or changes what the user sees (brief, dynamic island, a document shown in Spaces)."
 ---
 You call exactly one function of one available tool. A call does not have to
 finish the job; it can be one step toward it.
