@@ -20,15 +20,7 @@ from quintessa.models import InputEvent, InputKind, UXFieldKind, UXRequest, UXRe
 from quintessa.persona import AuraPersonaClient, PersonaSimulation
 from quintessa.serde import to_dict
 from quintessa.state import FileStateBackend, StateFormatError
-
-
-def _search_backend():
-    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
-        return None
-    from quintessa.tools.search import GeminiGroundedSearch
-
-    return GeminiGroundedSearch(project=os.environ["GOOGLE_CLOUD_PROJECT"],
-                                location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"))
+from quintessa.tools.search import search_backend_from_env
 
 
 def _answer_in_terminal(runtime: AgentRuntime):
@@ -82,7 +74,7 @@ async def main_async(args: argparse.Namespace) -> None:
         llm = build_llm(args.models)
     except LLMError as e:
         raise SystemExit(f"quintessa: {e}") from e
-    host = AgentHost(llm, backend, data_dir=args.data, search=_search_backend(), **jev_options_from_env())
+    host = AgentHost(llm, backend, data_dir=args.data, search=search_backend_from_env(), **jev_options_from_env())
     agent = await host.agent(args.user)
     _answer_in_terminal(agent)
     before = set(agent.store.sessions)
