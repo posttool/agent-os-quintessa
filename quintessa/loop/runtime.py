@@ -14,10 +14,10 @@ from quintessa.decide import AmbientFilter, CardScorer, NextStepDecider
 from quintessa.device import DeviceSurface
 from quintessa.device.focus import resolve_view
 from quintessa.llm import ResilientLLM
+from quintessa.loop.question_broker import QuestionBroker
 from quintessa.loop.reasoning_loop import AgentReasoningLoop
-from quintessa.loop.ux_broker import UXBroker
 from quintessa.memory import MemoryStore
-from quintessa.models import Capability, InputEvent, InputKind, Permission, Preferences, ReasoningSession, UXResponse
+from quintessa.models import Answer, Capability, InputEvent, InputKind, Permission, Preferences, ReasoningSession
 from quintessa.tools import BUILTIN_TOOLS
 from quintessa.tools.search import SearchBackend
 
@@ -67,14 +67,14 @@ class AgentRuntime:
         self.data_dir = Path(data_dir)
         self.search = search
         self.apps = apps or OfflineCatalog()  # where tool discovery finds apps to install
-        self.ux = UXBroker()
+        self.questions = QuestionBroker()
         self.ambient = AmbientBus(self, process_interval=process_interval, sleep=sleep)
         self._tasks: set[asyncio.Task] = set()
         self.on_change: Callable[[], None] | None = None
         self.watchers: set[Callable[[], None]] = set()
         self.store.listen(lambda *_: self.notify_changed())
         self.device.listen(lambda *_: self.notify_changed())
-        self.ux.on_request(lambda _: self.notify_changed())
+        self.questions.on_request(lambda _: self.notify_changed())
         self.install_builtin_tools()
 
     def notify_changed(self) -> None:
@@ -147,25 +147,25 @@ class AgentRuntime:
         task.add_done_callback(self._tasks.discard)
         return session
 
-    def start_brief_action(self, item_id: str) -> ReasoningSession | None:
+    def start_card_action(self, card_id: str) -> ReasoningSession | None:
         """The user tapped a brief card's action. A reasoning session carries
         it out, holding the tap as approval for that one tool function so it
         is not asked about again; any other tool still asks as usual."""
-        item = next((b for b in self.device.state.brief if b.id == item_id), None)
-        if item is None or item.action is None:
+        card = next((b for b in self.device.state.brief if b.id == card_id), None)
+        if card is None or card.action is None:
             return None
-        action = item.action
+        action = card.action
         about = ", ".join(
             f"{k}: {v}"
             for k, v in (
-                ("topic_id", item.topic_id),
-                ("document_id", item.document_id),
-                ("section_id", item.section_id),
+                ("topic_id", card.topic_id),
+                ("document_id", card.document_id),
+                ("section_id", card.section_id),
             )
             if v
         )
         content = (
-            f'The user tapped "{action.label}" on the brief card "{item.text}"'
+            f'The user tapped "{action.label}" on the brief card "{card.text}"'
             + (f" ({about})" if about else "")
             + f". Do it now with {action.tool}.{action.function}"
             + (f" using {json.dumps(action.arguments)}" if action.arguments else "")
@@ -186,7 +186,7 @@ class AgentRuntime:
 
     def document_views(self) -> dict[str, dict[str, Any]]:
         """For each live document, which sections Spaces shows expanded."""
-        questions = list(self.ux.pending.values())
+        questions = list(self.questions.pending.values())
         return {
             doc.id: resolve_view(
                 doc,
@@ -206,12 +206,12 @@ class AgentRuntime:
             return None
         return self.document_views()[doc.id]
 
-    def answer(self, response: UXResponse) -> bool:
-        return self.ux.answer(response)
+    def answer(self, response: Answer) -> bool:
+        return self.questions.answer(response)
 
-    def stash_question(self, request_id: str) -> bool:
+    def stash_question(self, question_id: str) -> bool:
         """The user put a waiting question aside; its session keeps waiting."""
-        request = self.ux.pending.get(request_id)
+        request = self.questions.pending.get(question_id)
         if request is None:
             return False
         self.device.stash(request.id, request.topic_id)
@@ -225,7 +225,7 @@ class AgentRuntime:
             topic = self.store.topics.get(topic_id)
             return topic is not None and topic.updated_at > since
 
-        return self.device.prune_stash(set(self.ux.pending), changed)
+        return self.device.prune_stash(set(self.questions.pending), changed)
 
     async def cancel_tasks(self) -> None:
         for task in list(self._tasks):
@@ -235,7 +235,7 @@ class AgentRuntime:
     async def clear(self) -> None:
         """Clear memory, traces, tools, subscriptions and the device."""
         self.ambient.stop_all()
-        self.ux.cancel_all()
+        self.questions.cancel_all()
         await self.cancel_tasks()
         self.store.clear()
         self.persona = None

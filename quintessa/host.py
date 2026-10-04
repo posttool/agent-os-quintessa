@@ -7,7 +7,7 @@ from typing import Any
 
 from quintessa.llm import ResilientLLM
 from quintessa.loop.runtime import AgentRuntime
-from quintessa.models import InputEvent, ReasoningSession, UXResponse
+from quintessa.models import Answer, InputEvent, ReasoningSession
 from quintessa.state.snapshot import apply_snapshot, take_snapshot, validate_snapshot
 from quintessa.state.state_backend import StateBackend
 
@@ -67,7 +67,7 @@ class AgentHost:
     async def run(self, user_id: str, event: InputEvent) -> ReasoningSession:
         return await (await self.agent(user_id)).run(event)
 
-    async def answer(self, user_id: str, response: UXResponse) -> bool:
+    async def answer(self, user_id: str, response: Answer) -> bool:
         return (await self.agent(user_id)).answer(response)
 
     async def clear(self, user_id: str) -> None:
@@ -123,7 +123,7 @@ class AgentHost:
             pending.cancel()
         snapshot = take_snapshot(runtime)
         runtime.ambient.stop_all()
-        runtime.ux.cancel_all()
+        runtime.questions.cancel_all()
         await runtime.cancel_tasks()
         await self.backend.save(user_id, snapshot)
 

@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from quintessa.clock import now
-from quintessa.device.brief_item import BriefItem
+from quintessa.device.card import Card
 from quintessa.serde import to_dict
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
 
 
-def staleness(runtime: AgentRuntime, card: BriefItem) -> str:
+def staleness(runtime: AgentRuntime, card: Card) -> str:
     """Why a card may no longer hold, or "" when nothing changed under it."""
     store = runtime.store
     if card.topic_id:
@@ -61,6 +61,6 @@ def brief_context(runtime: AgentRuntime) -> dict[str, Any]:
             "asked_at": r.created_at,
             "stashed": runtime.device.is_stashed(r.id),
         }
-        for r in runtime.ux.pending.values()
+        for r in runtime.questions.pending.values()
     ]
     return to_dict({"brief": cards, "questions_waiting": questions})  # plain JSON, for Jev too

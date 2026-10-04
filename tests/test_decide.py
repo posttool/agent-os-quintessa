@@ -170,7 +170,8 @@ async def test_filter_skips_ambient_noise_without_any_llm_call(script, make_runt
     )
 
     assert session.status == SessionStatus.COMPLETE and session.steps == []
-    assert session.prefilter.skipped and session.prefilter.matters == 0.1 and session.prefilter.threshold == 0.3
+    decision = session.ambient_filter
+    assert decision.skipped and decision.matters == 0.1 and decision.threshold == 0.3
     assert "decide" not in script.prompts  # the LLM was never asked
     state = requests[0]["state"]
     assert state["event"] == {"kind": "message", "sender": "Sweetgreen", "content": "20% off fall bowls"}
@@ -183,14 +184,14 @@ async def test_filter_keeps_events_that_matter(script, make_runtime):
     script.on("capability:memory", memory_answer())
     runtime = make_runtime(script, jev_ambient_filter=jev_noul(0.9))
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "Mom: flight delayed to 4:40", source="ambient:sms"))
-    assert not session.prefilter.skipped
+    assert not session.ambient_filter.skipped
     assert [s.capability for s in session.steps] == ["memory"]
 
 
 async def test_filter_fails_open(script, make_runtime):
     runtime = make_runtime(script, jev_ambient_filter=jev_noul(0.0, status=500))
     session = await runtime.run(InputEvent(InputKind.LOCATION, "Arrived at SFO", source="persona"))
-    assert session.prefilter.error.startswith("HTTP 500") and not session.prefilter.skipped
+    assert session.ambient_filter.error.startswith("HTTP 500") and not session.ambient_filter.skipped
     assert len(script.prompts["decide"]) == 1  # ran as usual
 
 
@@ -199,7 +200,7 @@ async def test_filter_never_touches_what_the_user_says(script, make_runtime):
     runtime = make_runtime(script, jev_ambient_filter=jev_noul(0.0, requests))
     for source in ("user", "process:food_delivery", "persona:profile"):
         session = await runtime.run(InputEvent(InputKind.TEXT, "hi", source=source))
-        assert session.prefilter is None
+        assert session.ambient_filter is None
     assert requests == []
 
 
@@ -228,7 +229,7 @@ async def test_jev_preference_switches_both_deciders_off_and_on(script, make_run
     runtime.set_preferences(jev=False)
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off", source="ambient:email"))
     assert (
-        session.prefilter is None
+        session.ambient_filter is None
         and session.shadow_decisions == []
         and [s.capability for s in session.steps] == ["memory"]
     )
@@ -236,7 +237,7 @@ async def test_jev_preference_switches_both_deciders_off_and_on(script, make_run
 
     runtime.set_preferences(jev=True, jev_shadow=False)
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off", source="ambient:email"))
-    assert session.prefilter.skipped and fake.requests == []
+    assert session.ambient_filter.skipped and fake.requests == []
     assert runtime.jev_status() == {
         "available": True,
         "model": "jev-latest@jev.test",

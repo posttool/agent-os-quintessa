@@ -29,19 +29,19 @@ export function makeApi(user: string) {
     state: () => call<AgentState>("GET", "/api/state"),
     input: (content: string, kind = "text") => call<{ session_id: string }>("POST", "/api/input", { content, kind }),
     answer: (id: string, values: Record<string, string>, dismissed = false) =>
-      call("POST", `/api/ux/${encodeURIComponent(id)}`, { values, dismissed }),
+      call("POST", `/api/questions/${encodeURIComponent(id)}`, { values, dismissed }),
     /** Put a question aside for later; it keeps waiting, out of the stack. */
-    stash: (id: string) => call("POST", `/api/ux/${encodeURIComponent(id)}/stash`),
-    unstash: (id: string) => call("POST", `/api/ux/${encodeURIComponent(id)}/unstash`),
+    stash: (id: string) => call("POST", `/api/questions/${encodeURIComponent(id)}/stash`),
+    unstash: (id: string) => call("POST", `/api/questions/${encodeURIComponent(id)}/unstash`),
     /** section_ids null drops the user's choice so the agent's focus returns. */
     view: (document_id: string, section_ids: string[] | null, mode: ViewMode = "focused") =>
       call<DocView>("POST", "/api/view", { document_id, section_ids, mode }),
     /** The user tapped a brief card's action; the tap approves that call. */
-    briefAct: (itemId: string) => call<{ session_id: string }>("POST", `/api/brief/${encodeURIComponent(itemId)}/act`),
-    briefOpen: (itemId: string) => call("POST", `/api/brief/${encodeURIComponent(itemId)}/open`),
-    briefDismiss: (itemId: string) => call("POST", `/api/brief/${encodeURIComponent(itemId)}/dismiss`),
-    briefSnooze: (itemId: string, minutes = 60) =>
-      call("POST", `/api/brief/${encodeURIComponent(itemId)}/snooze?minutes=${minutes}`),
+    cardAct: (cardId: string) => call<{ session_id: string }>("POST", `/api/cards/${encodeURIComponent(cardId)}/act`),
+    cardOpen: (cardId: string) => call("POST", `/api/cards/${encodeURIComponent(cardId)}/open`),
+    cardDismiss: (cardId: string) => call("POST", `/api/cards/${encodeURIComponent(cardId)}/dismiss`),
+    cardSnooze: (cardId: string, minutes = 60) =>
+      call("POST", `/api/cards/${encodeURIComponent(cardId)}/snooze?minutes=${minutes}`),
     seen: (topicId: string) => call("POST", `/api/topics/${encodeURIComponent(topicId)}/seen`),
     clear: () => call("POST", "/api/clear"),
     restore: (text: string) => call("POST", "/api/restore", text),

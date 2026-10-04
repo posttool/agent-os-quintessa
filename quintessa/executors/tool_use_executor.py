@@ -7,15 +7,15 @@ from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
 from quintessa.llm import schema as s
 from quintessa.models import (
+    Answer,
+    FieldKind,
     OversightLevel,
+    Question,
+    QuestionField,
+    QuestionPurpose,
     Subscription,
     Tool,
     ToolFunction,
-    UXField,
-    UXFieldKind,
-    UXPurpose,
-    UXRequest,
-    UXResponse,
 )
 from quintessa.serde import to_dict
 from quintessa.tools.runner import run_tool
@@ -87,11 +87,11 @@ class ToolUseExecutor:
         if gate is False:
             return await execute()
 
-        request = UXRequest(
+        request = Question(
             session_id=ctx.session.id,
-            purpose=UXPurpose.PERMISSION,
+            purpose=QuestionPurpose.PERMISSION,
             prompt=call["permission_prompt"] or f"Allow {tool.name} to {function.name}?",
-            fields=[UXField("approve", UXFieldKind.CONFIRM, "Approve", [CONFIRM_YES, "no"])],
+            fields=[QuestionField("approve", FieldKind.CONFIRM, "Approve", [CONFIRM_YES, "no"])],
             document_id=call["document_id"],
             section_id=call["section_id"],
             tool=tool.name,
@@ -101,7 +101,7 @@ class ToolUseExecutor:
             arguments=args,
         )
 
-        async def on_answer(response: UXResponse) -> StepOutcome:
+        async def on_answer(response: Answer) -> StepOutcome:
             permission = record_permission(ctx, request, response)
             if permission and permission.granted:
                 return await execute()

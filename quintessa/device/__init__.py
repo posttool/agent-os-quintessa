@@ -1,4 +1,4 @@
-from quintessa.device.brief_item import BRIEF_SOURCE, BriefAction, BriefItem
+from quintessa.device.card import BRIEF_SOURCE, Card, CardAction
 from quintessa.device.device_state import DeviceState
 from quintessa.device.discovery_item import DiscoveryItem
 from quintessa.device.document_focus import FOCUSED, FULL, DocumentFocus
@@ -8,10 +8,10 @@ from quintessa.device.surface import DeviceSurface
 
 __all__ = [
     "BRIEF_SOURCE",
-    "BriefAction",
+    "CardAction",
     "FOCUSED",
     "FULL",
-    "BriefItem",
+    "Card",
     "DeviceState",
     "DeviceSurface",
     "DiscoveryItem",

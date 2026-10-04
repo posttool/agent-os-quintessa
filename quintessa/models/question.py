@@ -4,20 +4,20 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from quintessa.clock import new_id, now
-from quintessa.models.ux_field import UXField
-from quintessa.models.ux_purpose import UXPurpose
+from quintessa.models.question_field import QuestionField
+from quintessa.models.question_purpose import QuestionPurpose
 
 
 @dataclass
-class UXRequest:
+class Question:
     """Generated UI the reasoning loop waits on. It remembers the context that
     produced it so the answer returns to that context (a document section,
     a pending tool call) and so a brief card for its topic can show it."""
 
     session_id: str
-    purpose: UXPurpose
+    purpose: QuestionPurpose
     prompt: str
-    fields: list[UXField] = field(default_factory=list)
+    fields: list[QuestionField] = field(default_factory=list)
     document_id: str | None = None
     section_id: str | None = None
     tool: str | None = None
@@ -29,5 +29,5 @@ class UXRequest:
     # asked by a session the user started moments ago, so they are likely
     # looking at the screen; a skin may open the question at once
     user_waiting: bool = False
-    id: str = field(default_factory=lambda: new_id("ux"))
+    id: str = field(default_factory=lambda: new_id("q"))
     created_at: datetime = field(default_factory=now)

@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from quintessa.device.document_focus import FOCUSED, FULL, DocumentFocus
-from quintessa.models import Document, Topic, UXRequest
+from quintessa.models import Document, Question, Topic
 
 MAX_FOCUSED = 2
 COMPLETE_STATUSES = {"complete", "completed", "done"}
@@ -27,7 +27,7 @@ def is_stale(doc: Document, focus: DocumentFocus) -> bool:
     return any(s.updated_at > focus.updated_at for s in doc.sections if s.id not in focus.section_ids)
 
 
-def rule_sections(doc: Document, questions: list[UXRequest], changed: list[str]) -> list[str]:
+def rule_sections(doc: Document, questions: list[Question], changed: list[str]) -> list[str]:
     """When nobody chose: sections with a waiting question, then sections
     changed since the user last looked, then the first open section with a
     next step."""
@@ -49,7 +49,7 @@ def rule_sections(doc: Document, questions: list[UXRequest], changed: list[str])
 def resolve_view(
     doc: Document,
     focus: DocumentFocus | None,
-    questions: list[UXRequest],
+    questions: list[Question],
     topic: Topic | None,
 ) -> dict[str, Any]:
     """What Spaces shows for a document: the focused sections, the mode, why,

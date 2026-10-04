@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class UXFieldKind(str, Enum):
+class FieldKind(str, Enum):
     DISPLAY_TEXT = "display_text"
     FREE_TEXT = "free_text"
     OPTION = "option"

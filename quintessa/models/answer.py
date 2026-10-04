@@ -10,8 +10,8 @@ WITHDRAWN = "withdrawn: "
 
 
 @dataclass
-class UXResponse:
-    request_id: str
+class Answer:
+    question_id: str
     values: dict[str, str] = field(default_factory=dict)
     dismissed: bool = False
     surface_context: str = ""

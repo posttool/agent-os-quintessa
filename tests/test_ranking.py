@@ -6,7 +6,7 @@ from conftest import decide
 
 from quintessa.clock import now
 from quintessa.decide import CardScorer, SystemOneClient
-from quintessa.device import BriefItem
+from quintessa.device import Card
 from quintessa.device.salience import Salience, Suppression, proximity, suppression
 from quintessa.models import InputEvent, InputKind, Topic
 from quintessa.tools.builtin import _set_brief
@@ -14,7 +14,7 @@ from quintessa.tools.builtin import _set_brief
 
 def card(text, topic_id=None, urgency=None, relevance=0.5, affinity=0.5, due_in=None, label="normal"):
     due = now() + due_in if due_in is not None else None
-    return BriefItem(text, topic_id, urgency=label, due_at=due, salience=Salience(urgency, relevance, affinity))
+    return Card(text, topic_id, urgency=label, due_at=due, salience=Salience(urgency, relevance, affinity))
 
 
 def texts(runtime):
@@ -66,12 +66,12 @@ async def test_dismissing_pushes_a_topic_down_when_the_agent_brings_it_back(scri
     device.set_brief([card("Shoe sale ends today", "t-sale", urgency=0.6), card("Water the plants", urgency=0.4)])
     assert texts(runtime)[0] == "Shoe sale ends today"
 
-    device.dismiss_brief(device.state.brief[0].id)
+    device.dismiss_card(device.state.brief[0].id)
     assert texts(runtime) == ["Water the plants"]
 
     await _set_brief(
         {
-            "items": json.dumps(
+            "cards": json.dumps(
                 [
                     {"text": "Shoe sale: 10% more off", "topic_id": "t-sale", "salience": {"urgency": 0.6}},
                     {"text": "Water the plants", "salience": {"urgency": 0.4}},
@@ -90,7 +90,7 @@ async def test_snoozed_cards_come_back_later_ranked_lower(script, make_runtime):
     device = runtime.device
     device.set_brief([card("Call the bank", urgency=0.7)])
     first = device.state.brief[0]
-    device.snooze_brief(first.id, now() + timedelta(hours=1))
+    device.snooze_card(first.id, now() + timedelta(hours=1))
     assert device.state.brief == [] and device.state.snoozed == [first]
 
     device.prune_brief(now())
@@ -107,7 +107,7 @@ async def test_opening_a_card_stops_the_ignore_penalty(script, make_runtime):
     old.updated_at = now() - timedelta(hours=12)
     device.set_brief([old])
     assert device.state.brief[0].salience.suppression == -0.4
-    device.open_brief(old.id)
+    device.open_card(old.id)
     assert device.state.brief[0].salience.suppression == 0
 
 

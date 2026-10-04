@@ -7,15 +7,15 @@ from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
 from quintessa.llm import schema as s
 from quintessa.models import (
+    Answer,
+    FieldKind,
     OversightLevel,
     Permission,
-    UXField,
-    UXFieldKind,
-    UXPurpose,
-    UXRequest,
-    UXResponse,
+    Question,
+    QuestionField,
+    QuestionPurpose,
 )
-from quintessa.models.ux_response import WITHDRAWN
+from quintessa.models.answer import WITHDRAWN
 from quintessa.serde import to_dict
 
 if TYPE_CHECKING:
@@ -28,12 +28,12 @@ SCHEMA = s.obj(
     {
         "prompt": s.string("The question, in a few words."),
         "context": s.string("One short sentence on why you are asking, shown under the question."),
-        "purpose": s.enum_of(UXPurpose),
+        "purpose": s.enum_of(QuestionPurpose),
         "fields": s.array(
             s.obj(
                 {
                     "name": s.string(),
-                    "kind": s.enum_of(UXFieldKind),
+                    "kind": s.enum_of(FieldKind),
                     "label": s.string(),
                     "options": s.array(s.string()),
                 }
@@ -57,12 +57,12 @@ def question_topic(store: MemoryStore, topic_id: str | None, document_id: str | 
     return doc.topic_id if doc is not None else None
 
 
-def build_request(session_id: str, data: dict, store: MemoryStore) -> UXRequest:
-    return UXRequest(
+def build_request(session_id: str, data: dict, store: MemoryStore) -> Question:
+    return Question(
         session_id=session_id,
-        purpose=UXPurpose(data["purpose"]),
+        purpose=QuestionPurpose(data["purpose"]),
         prompt=data["prompt"],
-        fields=[UXField(f["name"], UXFieldKind(f["kind"]), f["label"], f["options"]) for f in data["fields"]],
+        fields=[QuestionField(f["name"], FieldKind(f["kind"]), f["label"], f["options"]) for f in data["fields"]],
         document_id=data["document_id"],
         section_id=data["section_id"],
         tool=data["tool"],
@@ -72,17 +72,17 @@ def build_request(session_id: str, data: dict, store: MemoryStore) -> UXRequest:
     )
 
 
-def is_approval(request: UXRequest, response: UXResponse) -> bool:
+def is_approval(request: Question, response: Answer) -> bool:
     if response.dismissed:
         return False
-    confirms = [f.name for f in request.fields if f.kind == UXFieldKind.CONFIRM]
+    confirms = [f.name for f in request.fields if f.kind == FieldKind.CONFIRM]
     return bool(confirms) and all(response.values.get(name) == CONFIRM_YES for name in confirms)
 
 
-def record_permission(ctx: StepContext, request: UXRequest, response: UXResponse) -> Permission | None:
+def record_permission(ctx: StepContext, request: Question, response: Answer) -> Permission | None:
     """A permission answer carries forward through this session, and is kept in
     memory when the function only needs confirming once."""
-    if request.purpose != UXPurpose.PERMISSION or not request.tool or not request.function:
+    if request.purpose != QuestionPurpose.PERMISSION or not request.tool or not request.function:
         return None
     granted = is_approval(request, response)
     permission = Permission(
@@ -92,7 +92,7 @@ def record_permission(ctx: StepContext, request: UXRequest, response: UXResponse
         scope="session",
         detail=request.prompt,
         session_id=ctx.session.id,
-        ux_request_id=request.id,
+        question_id=request.id,
     )
     ctx.session.permissions.append(permission)
     tool = ctx.runtime.store.tools.get(request.tool)
@@ -109,7 +109,7 @@ class GenerativeUIExecutor:
         result = await call_capability(ctx, SCHEMA)
         request = build_request(ctx.session.id, result.data, ctx.runtime.store)
 
-        async def on_answer(response: UXResponse) -> StepOutcome:
+        async def on_answer(response: Answer) -> StepOutcome:
             permission = record_permission(ctx, request, response)
             answer = "dismissed" if response.dismissed else response.values
             summary = f"Asked '{request.prompt}'; user answered {answer}"
@@ -128,6 +128,6 @@ class GenerativeUIExecutor:
             output={"request": to_dict(request)},
             summary=f"Asked '{request.prompt}'",
             model=result.model,
-            pending_ux=request,
+            question=request,
             on_answer=on_answer,
         )

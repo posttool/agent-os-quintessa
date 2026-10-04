@@ -1,16 +1,16 @@
 import { useState } from "react";
-import type { BriefItem, Salience, Topic, UXRequest } from "../types";
+import type { Card, Salience, Topic, Question } from "../types";
 import { WaitingRow } from "./QuestionDeck";
 import { ago } from "../format";
 
 /** A brief card that has no document to open: what it is about, its open
  * questions (each opens the question sheet) and the one thing it proposes,
  * over whatever screen is showing. */
-export default function CardSheet({ item, topic, questions, onQuestion, onAction, onAsk, onOpen, onSnooze, onDismiss, onClose }: {
-  item: BriefItem;
+export default function CardSheet({ card, topic, questions, onQuestion, onAction, onAsk, onOpen, onSnooze, onDismiss, onClose }: {
+  card: Card;
   topic: Topic | undefined;
-  questions: UXRequest[];
-  onQuestion: (r: UXRequest) => void;
+  questions: Question[];
+  onQuestion: (r: Question) => void;
   onAction: () => void;
   onAsk: () => void;
   onOpen?: () => void;
@@ -19,20 +19,20 @@ export default function CardSheet({ item, topic, questions, onQuestion, onAction
   onClose: () => void;
 }) {
   const [started, setStarted] = useState(false);
-  const action = item.action;
+  const action = card.action;
   const args = Object.entries(action?.arguments ?? {});
 
   return (
     <div className="sheet-scrim" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-label={item.text} onClick={(e) => e.stopPropagation()}>
+      <div className="sheet" role="dialog" aria-label={card.text} onClick={(e) => e.stopPropagation()}>
         <div className="grip" />
-        <div className="sheet-title">{item.text}</div>
-        {item.updated_at && <div className="sheet-age">Updated {ago(item.updated_at)}</div>}
-        {item.salience && <div className="sheet-age" title={`scored by ${item.salience.scored_by}`}>{whyRanked(item.salience)}</div>}
-        {item.detail && <p className="sheet-detail">{item.detail}</p>}
+        <div className="sheet-title">{card.text}</div>
+        {card.updated_at && <div className="sheet-age">Updated {ago(card.updated_at)}</div>}
+        {card.salience && <div className="sheet-age" title={`scored by ${card.salience.scored_by}`}>{whyRanked(card.salience)}</div>}
+        {card.detail && <p className="sheet-detail">{card.detail}</p>}
         {topic && (
           <div className="sheet-topic">
-            {topic.title !== item.text && <div className="sheet-topic-title">{topic.title}</div>}
+            {topic.title !== card.text && <div className="sheet-topic-title">{topic.title}</div>}
             {topic.summary && <p>{topic.summary}</p>}
             {topic.new_info && <p className="new-info">{topic.new_info}</p>}
             <div>

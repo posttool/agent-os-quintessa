@@ -4,7 +4,7 @@ from conftest import decide, until
 from test_memory import doc_op, node_op, section_op, topic_op
 
 from quintessa.llm import FatalLLMError
-from quintessa.models import InputEvent, InputKind, SessionStatus, UXResponse
+from quintessa.models import Answer, InputEvent, InputKind, SessionStatus
 
 
 def memory_answer(*ops, summary="saved"):
@@ -63,17 +63,17 @@ async def test_disambiguation_pauses_and_returns_to_the_document(script, make_ru
     session = runtime.submit(InputEvent(InputKind.TEXT, "plan dinner with Jane"))
 
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
-    request = next(iter(runtime.ux.pending.values()))
-    assert runtime.device.state.open_ux_ids == [request.id]
+    request = next(iter(runtime.questions.pending.values()))
+    assert runtime.device.state.open_question_ids == [request.id]
     assert runtime.device.state.island.words == "Waiting for you"
 
-    assert runtime.answer(UXResponse(request.id, {"night": "Wednesday"}))
+    assert runtime.answer(Answer(request.id, {"night": "Wednesday"}))
     await runtime.wait_idle()
 
     assert session.status == SessionStatus.COMPLETE
     assert "Wednesday" in session.steps[1].summary
     assert "Wednesday" in session.steps[2].summary
-    assert runtime.device.state.open_ux_ids == []
+    assert runtime.device.state.open_question_ids == []
     assert runtime.device.state.focused_document_id == "doc-dinner"
     assert runtime.on_screen()["section_ids"] == ["sec-time"]
     assert runtime.on_screen()["set_by"] == "agent"
@@ -105,7 +105,7 @@ async def test_loops_run_concurrently_over_shared_memory(script, make_runtime):
 
     assert waiting.status == SessionStatus.WAITING_FOR_USER
     assert "pref-color" in runtime.store.nodes
-    runtime.answer(UXResponse(waiting.pending_ux_id, {"c": "blue"}))
+    runtime.answer(Answer(waiting.pending_question_id, {"c": "blue"}))
     await runtime.wait_idle()
     assert waiting.status == SessionStatus.COMPLETE
 
@@ -147,7 +147,7 @@ async def test_clear_resets_memory_traces_and_device(script, make_runtime):
     session = runtime.submit(InputEvent(InputKind.TEXT, "x"))
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
     await runtime.clear()
-    assert runtime.store.sessions == {} and runtime.store.events == [] and runtime.ux.pending == {}
-    assert runtime.device.state.open_ux_ids == []
+    assert runtime.store.sessions == {} and runtime.store.events == [] and runtime.questions.pending == {}
+    assert runtime.device.state.open_question_ids == []
     assert set(runtime.store.tools) == {"web", "device"}
     await asyncio.sleep(0)

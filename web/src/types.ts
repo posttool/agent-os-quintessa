@@ -44,7 +44,7 @@ export interface Tool {
 }
 export interface Permission {
   tool: string; function: string; granted: boolean; scope: string; detail: string;
-  session_id: string | null; ux_request_id: string | null; granted_at: string;
+  session_id: string | null; question_id: string | null; granted_at: string;
 }
 export interface Subscription {
   id: string; tool: string; function: string; description: string; stages: string[]; next_stage: number;
@@ -62,18 +62,18 @@ export interface ShadowDecision {
   step_index: number; llm_choice: string; choice: string; probabilities: Record<string, number>;
   confidence: number; model: string; latency_ms: number; error: string; drove?: boolean;
 }
-export interface PrefilterDecision {
+export interface AmbientFilterDecision {
   matters: number; threshold: number; skipped: boolean; model: string; latency_ms: number; error: string;
 }
 export interface Session {
   id: string; trigger: InputEvent; status: "running" | "waiting_for_user" | "complete" | "failed" | "stopped";
-  steps: TraceStep[]; permissions: Permission[]; shadow_decisions?: ShadowDecision[]; prefilter?: PrefilterDecision | null;
-  pending_ux_id: string | null; started_at: string; ended_at: string | null;
+  steps: TraceStep[]; permissions: Permission[]; shadow_decisions?: ShadowDecision[]; ambient_filter?: AmbientFilterDecision | null;
+  pending_question_id: string | null; started_at: string; ended_at: string | null;
 }
-export interface UXField { name: string; kind: string; label: string; options: string[] }
-export interface UXRequest {
+export interface QuestionField { name: string; kind: string; label: string; options: string[] }
+export interface Question {
   id: string; session_id: string; purpose: "disambiguation" | "permission" | "information"; prompt: string;
-  fields: UXField[]; document_id: string | null; section_id: string | null; tool: string | null; function: string | null;
+  fields: QuestionField[]; document_id: string | null; section_id: string | null; tool: string | null; function: string | null;
   topic_id: string | null; created_at: string;
   /** why the agent asks; for an approval, the arguments of the call it runs */
   context: string; arguments: Record<string, string>;
@@ -81,14 +81,14 @@ export interface UXRequest {
   user_waiting: boolean;
 }
 /** A waiting question the user put aside; its session still waits on it. */
-export interface StashedQuestion { ux_request_id: string; topic_id: string | null; stashed_at: string }
+export interface StashedQuestion { question_id: string; topic_id: string | null; stashed_at: string }
 /** One tap starts it; the tap is the user's approval for this tool function. */
-export interface BriefAction {
+export interface CardAction {
   tool: string; function: string; label: string; arguments: Record<string, string>;
 }
-export interface BriefItem {
+export interface Card {
   id: string; text: string; topic_id: string | null; document_id: string | null; section_id: string | null;
-  ux_request_id: string | null; urgency: string; detail: string; action: BriefAction | null;
+  question_id: string | null; urgency: string; detail: string; action: CardAction | null;
   /** when the card stops applying; when it was written; the event behind it (agent cards only) */
   expires_at?: string | null; created_at?: string; updated_at?: string; source_event_id?: string | null;
   due_at?: string | null; salience?: Salience;
@@ -111,10 +111,10 @@ export interface DocView {
 }
 export interface DeviceState {
   island: { active: boolean; words: string };
-  brief: BriefItem[];
-  snoozed: BriefItem[];
+  brief: Card[];
+  snoozed: Card[];
   suppressions: Suppression[];
-  open_ux_ids: string[];
+  open_question_ids: string[];
   stashed: StashedQuestion[];
   space_document_ids: string[];
   focused_document_id: string | null;
@@ -145,7 +145,7 @@ export interface AgentState {
   };
   device: DeviceState;
   views: Record<string, DocView>;
-  pending_ux: UXRequest[];
+  questions: Question[];
   ambient: { enabled: boolean; sources: AmbientSource[] };
   persona: { profile: PersonaProfile; date: string | null; running: boolean } | null;
   settings: ModelSettings;

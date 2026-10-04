@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from quintessa.clock import now
 from quintessa.decide.system_one import SystemOneClient, SystemOneError
-from quintessa.device import BriefItem
+from quintessa.device import Card
 from quintessa.models import InputKind
 
 if TYPE_CHECKING:
@@ -71,7 +71,7 @@ class CardScorer:
         self.client = client
 
     @staticmethod
-    def state(runtime: AgentRuntime, card: BriefItem) -> dict[str, Any]:
+    def state(runtime: AgentRuntime, card: Card) -> dict[str, Any]:
         """The card, its topic, and the user's context: the time, where they
         last were, and the latest things that happened."""
         store = runtime.store
@@ -93,12 +93,12 @@ class CardScorer:
             "people": [n.title for n in store.nodes.values() if n.type.value == "person"],
         }
 
-    async def score(self, runtime: AgentRuntime, cards: list[BriefItem]) -> list[str]:
+    async def score(self, runtime: AgentRuntime, cards: list[Card]) -> list[str]:
         """Score the cards side by side and write the scores onto them.
         Never raises; returns one line per card for the trace."""
         started = time.perf_counter()
 
-        async def one(card: BriefItem) -> str:
+        async def one(card: Card) -> str:
             try:
                 answers, model = await self.client.ask(self.state(runtime, card), QUESTIONS)
                 s = card.salience

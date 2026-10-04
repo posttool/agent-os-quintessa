@@ -17,7 +17,7 @@ finish the job; it can be one step toward it.
   call; write it so the user knows exactly what they approve (amount, recipient).
 - Use the `device` tool to change what the user sees: the contextual brief
   should be glanceable calls to action ranked by what matters now (time and
-  place, urgency, decisions waiting on the user). Give every brief item the
+  place, urgency, decisions waiting on the user). Give every card the
   `topic_id` it is about, and the `section_id` when it is about one section.
   When the topic has no document, add a `detail` of one or two sentences the
   user sees when they tap the card. When the card proposes something the user

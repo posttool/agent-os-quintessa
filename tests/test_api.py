@@ -68,13 +68,13 @@ async def test_answering_a_question(api, script):
     )
     await api.post("/api/input?user=maya", json={"content": "dinner"})
     agent = await api.host.agent("maya")
-    await until(lambda: bool(agent.ux.pending))
-    pending = (await api.get("/api/state?user=maya")).json()["pending_ux"]
+    await until(lambda: bool(agent.questions.pending))
+    pending = (await api.get("/api/state?user=maya")).json()["questions"]
     assert pending[0]["prompt"] == "Which night?"
 
-    assert (await api.post(f"/api/ux/{pending[0]['id']}?user=tunde", json={"values": {}})).status_code == 404
+    assert (await api.post(f"/api/questions/{pending[0]['id']}?user=tunde", json={"values": {}})).status_code == 404
     assert (
-        await api.post(f"/api/ux/{pending[0]['id']}?user=maya", json={"values": {"night": "Wed"}})
+        await api.post(f"/api/questions/{pending[0]['id']}?user=maya", json={"values": {"night": "Wed"}})
     ).status_code == 200
     await agent.wait_idle()
     session = next(iter(agent.store.sessions.values()))
@@ -251,7 +251,7 @@ async def test_model_catalog_groups_claude_and_gemini(api):
 
 
 async def test_tapping_a_brief_action_starts_a_session(api, script):
-    from quintessa.device import BriefAction, BriefItem
+    from quintessa.device import Card, CardAction
 
     script.on("decide", decide("tool_use"))
     script.on(
@@ -270,33 +270,33 @@ async def test_tapping_a_brief_action_starts_a_session(api, script):
         },
     )
     agent = await api.host.agent("maya")
-    agent.device.set_brief([BriefItem("Say hi", action=BriefAction("device", "notify", "Say hi", {"text": "hi"}))])
+    agent.device.set_brief([Card("Say hi", action=CardAction("device", "notify", "Say hi", {"text": "hi"}))])
     card = agent.device.state.brief[0]
 
-    r = await api.post(f"/api/brief/{card.id}/act?user=maya")
+    r = await api.post(f"/api/cards/{card.id}/act?user=maya")
     await agent.wait_idle()
     session = agent.store.sessions[r.json()["session_id"]]
     assert session.permissions[0].function == "notify"
     assert agent.device.state.notifications == ["hi"]
-    assert (await api.post("/api/brief/brf-gone/act?user=maya")).status_code == 404
+    assert (await api.post("/api/cards/brf-gone/act?user=maya")).status_code == 404
 
 
 async def test_cards_can_be_opened_snoozed_and_dismissed(api):
-    from quintessa.device import BriefItem
+    from quintessa.device import Card
 
     agent = await api.host.agent("maya")
-    agent.device.set_brief([BriefItem("Call the bank"), BriefItem("Renew passport")])
+    agent.device.set_brief([Card("Call the bank"), Card("Renew passport")])
     bank, passport = agent.device.state.brief
 
-    assert (await api.post(f"/api/brief/{bank.id}/open?user=maya")).json() == {"ok": True}
+    assert (await api.post(f"/api/cards/{bank.id}/open?user=maya")).json() == {"ok": True}
     assert bank.opened_at is not None
-    r = await api.post(f"/api/brief/{bank.id}/snooze?user=maya&minutes=30")
+    r = await api.post(f"/api/cards/{bank.id}/snooze?user=maya&minutes=30")
     assert r.status_code == 200 and r.json()["until"]
-    assert (await api.post(f"/api/brief/{passport.id}/dismiss?user=maya")).status_code == 200
+    assert (await api.post(f"/api/cards/{passport.id}/dismiss?user=maya")).status_code == 200
     state = (await api.get("/api/state?user=maya")).json()["device"]
     assert state["brief"] == [] and [c["text"] for c in state["snoozed"]] == ["Call the bank"]
     assert [s["kind"] for s in state["suppressions"]] == ["snoozed", "dismissed"]
-    assert (await api.post(f"/api/brief/{passport.id}/dismiss?user=maya")).status_code == 404
+    assert (await api.post(f"/api/cards/{passport.id}/dismiss?user=maya")).status_code == 404
 
 
 async def test_stashing_a_question(api, script):
@@ -318,15 +318,15 @@ async def test_stashing_a_question(api, script):
     )
     await api.post("/api/input?user=maya", json={"content": "dinner"})
     agent = await api.host.agent("maya")
-    await until(lambda: bool(agent.ux.pending))
-    question = (await api.get("/api/state?user=maya")).json()["pending_ux"][0]
+    await until(lambda: bool(agent.questions.pending))
+    question = (await api.get("/api/state?user=maya")).json()["questions"][0]
     assert question["context"] == "So I can book a table." and question["user_waiting"] is True
 
-    assert (await api.post("/api/ux/nope/stash?user=maya")).status_code == 404
-    assert (await api.post(f"/api/ux/{question['id']}/stash?user=maya")).status_code == 200
+    assert (await api.post("/api/questions/nope/stash?user=maya")).status_code == 404
+    assert (await api.post(f"/api/questions/{question['id']}/stash?user=maya")).status_code == 200
     state = (await api.get("/api/state?user=maya")).json()
-    assert [q["ux_request_id"] for q in state["device"]["stashed"]] == [question["id"]]
-    assert [q["id"] for q in state["pending_ux"]] == [question["id"]]  # still waiting
+    assert [q["question_id"] for q in state["device"]["stashed"]] == [question["id"]]
+    assert [q["id"] for q in state["questions"]] == [question["id"]]  # still waiting
     from quintessa.device.freshness import brief_context
 
     assert brief_context(agent)["questions_waiting"][0]["stashed"] is True
@@ -336,10 +336,10 @@ async def test_stashing_a_question(api, script):
     agent.store.upsert_topic(topic)
     assert (await api.get("/api/state?user=maya")).json()["device"]["stashed"] == []
 
-    await api.post(f"/api/ux/{question['id']}/stash?user=maya")
-    assert (await api.post(f"/api/ux/{question['id']}/unstash?user=maya")).json() == {"ok": True}
-    await api.post(f"/api/ux/{question['id']}/stash?user=maya")
+    await api.post(f"/api/questions/{question['id']}/stash?user=maya")
+    assert (await api.post(f"/api/questions/{question['id']}/unstash?user=maya")).json() == {"ok": True}
+    await api.post(f"/api/questions/{question['id']}/stash?user=maya")
     # answering it clears it from the stash
-    await api.post(f"/api/ux/{question['id']}?user=maya", json={"values": {"night": "Wed"}})
+    await api.post(f"/api/questions/{question['id']}?user=maya", json={"values": {"night": "Wed"}})
     await agent.wait_idle()
     assert (await api.get("/api/state?user=maya")).json()["device"]["stashed"] == []
