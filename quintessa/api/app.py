@@ -32,6 +32,7 @@ from quintessa.llm.factory import build_llm
 from quintessa.loop.runtime import AgentRuntime
 from quintessa.models import (
     AmbientSource,
+    Answer,
     AppListing,
     InputEvent,
     InputKind,
@@ -40,7 +41,6 @@ from quintessa.models import (
     ToolFunction,
     ToolKind,
     ToolParameter,
-    UXResponse,
 )
 from quintessa.persona import AuraPersonaClient, PersonaSimulation
 from quintessa.serde import to_dict
@@ -211,7 +211,7 @@ def create_app(
             "memory": agent.store.to_data(),
             "device": to_dict(agent.device.state),
             "views": agent.document_views(),
-            "pending_ux": [to_dict(r) for r in agent.ux.pending.values()],
+            "questions": [to_dict(r) for r in agent.questions.pending.values()],
             "ambient": {
                 "enabled": agent.ambient.enabled,
                 "sources": [
@@ -264,51 +264,51 @@ def create_app(
         )
         return {"session_id": session.id}
 
-    @app.post("/api/ux/{request_id}")
-    async def answer(request_id: str, body: AnswerBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
-        response = UXResponse(request_id, body.values, body.dismissed, body.surface_context)
+    @app.post("/api/questions/{question_id}")
+    async def answer(question_id: str, body: AnswerBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        response = Answer(question_id, body.values, body.dismissed, body.surface_context)
         if not agent.answer(response):
             raise HTTPException(404, "that question is no longer waiting for an answer")
         return {"ok": True}
 
-    @app.post("/api/ux/{request_id}/stash")
-    async def stash(request_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+    @app.post("/api/questions/{question_id}/stash")
+    async def stash(question_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
         """Put a question aside for later. It keeps waiting, out of the stack."""
-        if not agent.stash_question(request_id):
+        if not agent.stash_question(question_id):
             raise HTTPException(404, "that question is no longer waiting for an answer")
         return {"ok": True}
 
-    @app.post("/api/ux/{request_id}/unstash")
-    async def unstash(request_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+    @app.post("/api/questions/{question_id}/unstash")
+    async def unstash(question_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
         """Back to the needs-you stack."""
-        return {"ok": bool(agent.device.unstash([request_id]))}
+        return {"ok": bool(agent.device.unstash([question_id]))}
 
-    @app.post("/api/brief/{item_id}/open")
-    async def brief_open(item_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+    @app.post("/api/cards/{card_id}/open")
+    async def brief_open(card_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
         """The user opened a card, so it is not being ignored."""
-        return {"ok": agent.device.open_brief(item_id)}
+        return {"ok": agent.device.open_card(card_id)}
 
-    @app.post("/api/brief/{item_id}/dismiss")
-    async def brief_dismiss(item_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+    @app.post("/api/cards/{card_id}/dismiss")
+    async def brief_dismiss(card_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
         """Swiped away: gone, and its topic ranks lower for a while."""
-        if agent.device.dismiss_brief(item_id) is None:
+        if agent.device.dismiss_card(card_id) is None:
             raise HTTPException(404, "that card is no longer in the brief")
         return {"ok": True}
 
-    @app.post("/api/brief/{item_id}/snooze")
+    @app.post("/api/cards/{card_id}/snooze")
     async def brief_snooze(
-        item_id: str, minutes: int = Query(60, ge=1, le=7 * 24 * 60), agent: AgentRuntime = Agent
+        card_id: str, minutes: int = Query(60, ge=1, le=7 * 24 * 60), agent: AgentRuntime = Agent
     ) -> dict[str, Any]:
         """ "Not now": back in the brief after `minutes`, ranked a little lower."""
-        card = agent.device.snooze_brief(item_id, now() + timedelta(minutes=minutes))
+        card = agent.device.snooze_card(card_id, now() + timedelta(minutes=minutes))
         if card is None:
             raise HTTPException(404, "that card is no longer in the brief")
         return {"ok": True, "until": card.snoozed_until}
 
-    @app.post("/api/brief/{item_id}/act")
-    async def brief_act(item_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+    @app.post("/api/cards/{card_id}/act")
+    async def brief_act(card_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
         """The user tapped a brief card's action; the tap is their approval."""
-        session = agent.start_brief_action(item_id)
+        session = agent.start_card_action(card_id)
         if session is None:
             raise HTTPException(404, "that card or its action is no longer in the brief")
         return {"session_id": session.id}

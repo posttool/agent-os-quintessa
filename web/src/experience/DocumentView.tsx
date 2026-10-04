@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Doc, DocumentSection, DocView, UXRequest, ViewMode } from "../types";
+import type { Doc, DocumentSection, DocView, Question, ViewMode } from "../types";
 import { WaitingRow } from "./QuestionDeck";
 
 /** A document in Spaces. Only the sections that matter now are expanded;
@@ -9,9 +9,9 @@ import { WaitingRow } from "./QuestionDeck";
 export default function DocumentView({ doc, view, questions, stashedIds, onQuestion, onView }: {
   doc: Doc;
   view: DocView | undefined;
-  questions: UXRequest[];
+  questions: Question[];
   stashedIds: Set<string>;
-  onQuestion: (r: UXRequest) => void;
+  onQuestion: (r: Question) => void;
   onView: (sectionIds: string[] | null, mode?: ViewMode) => void;
 }) {
   const serverOpen = view?.section_ids ?? doc.sections.map((s) => s.id);

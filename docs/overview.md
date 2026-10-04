@@ -118,8 +118,8 @@ ReasoningSession {
   steps: TraceStep[]
   permissions: Permission[]  // grants given in this session; they carry forward to later steps
   shadow_decisions: ShadowDecision[]   // Jev's picks beside the LLM's (see Jev)
-  prefilter: PrefilterDecision | null  // Jev's "does this matter?" for ambient events
-  pending_ux_id: string | null         // the question this session is waiting on
+  ambient_filter: AmbientFilterDecision | null  // Jev's "does this matter?" for ambient events
+  pending_question_id: string | null   // the question this session is waiting on
   started_at: string
   ended_at: string | null
 }
@@ -162,7 +162,7 @@ The four capabilities today:
 | Capability | What it does | Executor result |
 |---|---|---|
 | `memory` | Merges what the trigger means into the graph, topics and documents; deletes what is out of date; retrieves facts a task needs. | A list of memory operations (see below) and a summary. |
-| `generative_ui` | Asks the user one clear question with generated UI, then the session waits. | A question (`UXRequest`); the answer resumes the step. |
+| `generative_ui` | Asks the user one clear question with generated UI, then the session waits. | A question (`Question`); the answer resumes the step. |
 | `tool_discovery` | Equips the agent: reuses an installed tool, or searches an app store and installs an app, or defines a tool when no app fits. Two model calls: plan (queries), then choose (from store candidates). | Installed apps, defined tools, uninstalled apps. |
 | `tool_use` | Calls exactly one function of one tool, gated by its oversight level; can start a process. | The call, its result and any process subscription. |
 
@@ -322,12 +322,12 @@ There are three kinds, by `purpose`:
 - `permission`: a tool function needs the user's approval (spending money, messaging someone). This kind is also called a **permission prompt**; `tool_use` creates one automatically when a function's oversight level requires it.
 
 ```ts
-UXRequest {                  // a question
-  id: string                 // "ux_..."
+Question {                   // a question
+  id: string                 // "q_..."
   session_id: string         // the session waiting on it
   purpose: "disambiguation" | "permission" | "information"
   prompt: string
-  fields: UXField[]
+  fields: QuestionField[]
   document_id: string | null // the context it returns to
   section_id: string | null
   tool: string | null        // for a permission: the function it authorizes
@@ -339,7 +339,7 @@ UXRequest {                  // a question
   created_at: string
 }
 
-UXField {                    // design-system-agnostic; the skin decides how to draw it
+QuestionField {              // design-system-agnostic; the skin decides how to draw it
   name: string
   kind: "display_text" | "free_text" | "option" | "suggestion" | "number"
       | "location" | "confirm" | "button"
@@ -347,8 +347,8 @@ UXField {                    // design-system-agnostic; the skin decides how to 
   options: string[]
 }
 
-UXResponse {                 // the answer
-  request_id: string
+Answer {                             // the answer
+  question_id: string
   values: { [field name]: string }   // a confirm field sends "yes" to approve
   dismissed: boolean                 // the user chose "Skip"; the session goes on without it
   surface_context: string            // where it was answered; "withdrawn: <reason>" when the agent took it back
@@ -359,7 +359,7 @@ UXResponse {                 // the answer
 What happens when a question is asked and answered:
 
 1. The session's status becomes `waiting_for_user`, the island says "Waiting for you", and the question joins the stack at the top of the brief. Where it belongs to a document, Spaces shows a "Waiting on you" row in its place.
-2. The user answers in the question sheet (`POST /api/ux/{id}`). The waiting session resumes with the values, and the device closes the form and returns to the document section the question came from.
+2. The user answers in the question sheet (`POST /api/questions/{id}`). The waiting session resumes with the values, and the device closes the form and returns to the document section the question came from.
 3. If the session asks another question, the same thing happens again, until the session is done.
 
 A question can also be **withdrawn**: when a later session changes the question's topic, the brief refresh may decide the news already answers it. The waiting session then resumes as if the question were dismissed, and is told why.
@@ -374,7 +374,7 @@ Permission {
   scope: "session" | "persistent"
   detail: string             // what the user approved, e.g. the prompt
   session_id: string | null
-  ux_request_id: string | null
+  question_id: string | null
   granted_at: string
 }
 ```
@@ -391,7 +391,7 @@ Every question is answered in one place, the **question sheet**: a bottom sheet 
 - **Stash** puts a question aside: it stays unanswered and its session keeps waiting, but it leaves the stack for an "N stashed questions" chip at the end of the brief, and the agent does not ask it again. A stashed question comes back to the stack when its topic changes after it was stashed.
 
 ```ts
-StashedQuestion { ux_request_id: string, topic_id: string | null, stashed_at: string }
+StashedQuestion { question_id: string, topic_id: string | null, stashed_at: string }
 ```
 
 The prompts tell the agent never to ask in a notification, a card's text or a Discover item, where the user cannot answer.
@@ -499,10 +499,10 @@ The **device** (`DeviceSurface`) is the phone the agent inhabits and one of its 
 ```ts
 DeviceState {
   island: { active: boolean, words: string }    // the dynamic island
-  brief: BriefItem[]                 // the contextual brief, highest salience first
-  snoozed: BriefItem[]               // cards back in the brief at their snoozed_until
+  brief: Card[]                      // the contextual brief, highest salience first
+  snoozed: Card[]                    // cards back in the brief at their snoozed_until
   suppressions: Suppression[]        // topics the user pushed away (see salience)
-  open_ux_ids: string[]              // questions on screen now
+  open_question_ids: string[]        // questions on screen now
   stashed: StashedQuestion[]         // questions the user put aside, still waiting
   space_document_ids: string[]       // documents opened in Spaces
   focused_document_id: string | null // the document Spaces shows now
@@ -528,16 +528,16 @@ Two bottom sheets open over the current screen: the **card sheet**, when the use
 The **brief** is a short ranked list of glanceable **cards**: calls to action, not details. The stack of questions waiting on the user leads it, then the agent's cards ordered by salience, then a chip for stashed questions. Tapping a card opens its topic's document in Spaces, focused on the section it is about; a card with no document opens the card sheet with its detail, its topic's summary, its open questions and its action.
 
 ```ts
-BriefItem {                  // a brief card
+Card {                       // a brief card
   id: string                 // "brf_..."
   text: string               // "Leave by 3pm for the dentist"
   topic_id: string | null    // a topic has at most one card
   document_id: string | null
   section_id: string | null
-  ux_request_id: string | null
+  question_id: string | null
   urgency: string            // "urgent" | "high" | "normal" | "low"
   detail: string             // one or two sentences, for cards without a document
-  action: BriefAction | null // a one-tap action
+  action: CardAction | null  // a one-tap action
   expires_at: string | null  // the device drops the card then
   due_at: string | null      // when the thing it is about happens; drives proximity
   salience: Salience
@@ -548,7 +548,7 @@ BriefItem {                  // a brief card
   updated_at: string         // when it was written; the card is stale once its topic changes after this
 }
 
-BriefAction {                // e.g. "Call Mom"
+CardAction {                 // e.g. "Call Mom"
   tool: string
   function: string
   label: string
@@ -641,7 +641,7 @@ ShadowDecision {             // one next-step decision by Jev
   drove: boolean             // Jev's choice was followed
 }
 
-PrefilterDecision {          // the ambient filter's answer
+AmbientFilterDecision {      // the ambient filter's answer
   matters: number            // P(yes)
   threshold: number
   skipped: boolean
@@ -693,7 +693,7 @@ The whole state of one user's agent has one portable form, used both for storage
 ```ts
 AgentStateSnapshot {
   format: "quintessa.agent-state"
-  version: 1
+  version: 2
   user_id: string
   saved_at: string
   memory: {
@@ -707,7 +707,7 @@ AgentStateSnapshot {
 }
 ```
 
-State is saved shortly after anything changes. By default it lives in SQLite at `data/quintessa.db` (`SqlStateBackend`): every table is keyed by user id, each memory item is one row, and a save writes only the rows that changed, in one transaction. `QUINTESSA_DATABASE_URL` points at another database such as Postgres (not yet tested), and `QUINTESSA_STATE=file` keeps one JSON file per user. After a restart, sessions that were mid-flight are marked `stopped` with a note in their trace, and running processes resume. A restore is fully validated before anything is replaced, and a state can be restored under another user id.
+State is saved shortly after anything changes. By default it lives in SQLite at `data/quintessa.db` (`SqlStateBackend`): every table is keyed by user id, each memory item is one row, and a save writes only the rows that changed, in one transaction. `QUINTESSA_DATABASE_URL` points at another database such as Postgres (not yet tested), and `QUINTESSA_STATE=file` keeps one JSON file per user. After a restart, sessions that were mid-flight are marked `stopped` with a note in their trace, and running processes resume. A restore is fully validated before anything is replaced, and a state can be restored under another user id. Version 1 states (saved before questions and cards had those names) are upgraded as they load.
 
 ### The API
 
@@ -717,8 +717,8 @@ The FastAPI app (`quintessa/api/app.py`) serves the web app and a per-user HTTP 
 |---|---|
 | State | `GET /api/state` (everything a surface draws), `GET /api/stream` (server-sent `change` events) |
 | Input | `POST /api/input` `{ kind, content, sender, device }` starts a session |
-| Questions | `POST /api/ux/{id}` answers or skips one; `POST /api/ux/{id}/stash`, `/unstash` |
-| Brief | `POST /api/brief/{id}/open`, `/dismiss`, `/snooze`, `/act` |
+| Questions | `POST /api/questions/{id}` answers or skips one; `POST /api/questions/{id}/stash`, `/unstash` |
+| Brief | `POST /api/cards/{id}/open`, `/dismiss`, `/snooze`, `/act` |
 | Spaces | `POST /api/view` (the user's focus), `POST /api/topics/{id}/seen` |
 | Tools and apps | `POST /api/tools`, `DELETE /api/tools/{name}`, `GET /api/apps/search`, `POST /api/apps/install`, `DELETE /api/apps/{app_id}` |
 | Ambient | templates, global on/off, sources from a template or plain words, per-source speed |
@@ -734,7 +734,7 @@ AgentState {
   memory: AgentStateSnapshot["memory"]
   device: DeviceState
   views: { [document_id]: DocumentView }   // resolved focus for every live document
-  pending_ux: UXRequest[]                  // questions waiting on the user
+  questions: Question[]                    // questions waiting on the user
   ambient: { enabled: boolean, sources: (AmbientSource & { done: boolean })[] }
   persona: { profile, date, running } | null
   settings: { chain: string[], retries: number, base_delay: number, status: string }
@@ -790,7 +790,7 @@ One term per idea. The right-hand column lists words used for the same thing in 
 | **topic** | An entry in the topic index, with trigger rules, summary, progress and due date. | card (in the first brief), wiki entry, category entry |
 | **topic index** | All of a user's topics, organized by category and nesting. | index, wiki, personal wiki, graph of topics |
 | **document** | The progressively built record of a topic's lifecycle, made of sections. | page, personal document, card (when growing) |
-| **question** | Generated UI the session waits on (`UXRequest`), of purpose disambiguation, information or permission. | disambiguation, ux_disambiguation, form, generative UX |
+| **question** | Generated UI the session waits on (`Question`), of purpose disambiguation, information or permission. | disambiguation, ux_disambiguation, form, generative UX, UX request (`UXRequest` before agent state v2) |
 | **permission prompt** | A question with purpose `permission`, asking to approve one tool function. | use gate, decision boundary |
 | **permission** | A recorded answer to a permission prompt, scoped to a session or persistent. | grant |
 | **tool** | A group of typed functions with oversight levels. | |
@@ -803,7 +803,7 @@ One term per idea. The right-hand column lists words used for the same thing in 
 | **skin** | One stylesheet that draws the device. | design system (in the device sense) |
 | **dynamic island** | The status pill at the top of the device. | |
 | **brief** | The contextual brief: the ranked list of cards and waiting questions. | contextual brief, dashboard |
-| **card** | One item in the brief (`BriefItem`). Not a topic. | indicator, brief item |
+| **card** | One item in the brief (`Card`). Not a topic. | indicator, brief item (`BriefItem` before agent state v2) |
 | **card sheet** | The bottom sheet a card opens when it has no document or has an action. | sheet |
 | **question sheet** | The bottom sheet where every question is answered, as a deck. | disambiguation sheet, form |
 | **stash** | Questions the user put aside; still waiting, out of the stack. | |

@@ -5,9 +5,9 @@ from conftest import decide, until
 from test_memory import doc_op, node_op, topic_op
 from test_tools import call, delivery_tool
 
-from quintessa.models import InputEvent, InputKind, OversightLevel, SessionStatus, UXResponse
+from quintessa.models import Answer, InputEvent, InputKind, OversightLevel, SessionStatus
 from quintessa.state import FileStateBackend, InMemoryStateBackend, StateFormatError
-from quintessa.state.snapshot import INTERRUPTED
+from quintessa.state.snapshot import INTERRUPTED, upgrade_snapshot
 
 
 def remember(*ops):
@@ -108,7 +108,7 @@ async def test_restart_stops_interrupted_sessions_and_resumes_processes(script, 
     agent = await restarted.agent("maya")
     stopped = agent.store.sessions[session.id]
     assert stopped.status == SessionStatus.STOPPED and stopped.steps[-1].error == INTERRUPTED
-    assert agent.device.state.open_ux_ids == [] and not agent.device.state.island.active
+    assert agent.device.state.open_question_ids == [] and not agent.device.state.island.active
     subscription = next(iter(agent.store.subscriptions.values()))
     await until(lambda: subscription.archived)
     await agent.wait_idle()
@@ -128,7 +128,7 @@ async def test_download_and_restore(script, make_host, make_backend):
     await host.run("maya", InputEvent(InputKind.TEXT, "I love Thai"))
 
     download = json.loads(json.dumps(await host.export_state("maya")))  # survives a trip through a file
-    assert download["format"] == "quintessa.agent-state" and download["version"] == 1
+    assert download["format"] == "quintessa.agent-state" and download["version"] == 2
     assert download["user_id"] == "maya"
 
     await host.run("maya", InputEvent(InputKind.TEXT, "something new"))
@@ -210,7 +210,27 @@ async def test_answers_go_to_the_right_user(script, make_host):
     host = make_host(script, InMemoryStateBackend())
     session = await host.submit("maya", InputEvent(InputKind.TEXT, "x"))
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
-    assert not await host.answer("tunde", UXResponse(session.pending_ux_id, {}))
-    assert await host.answer("maya", UXResponse(session.pending_ux_id, {}))
+    assert not await host.answer("tunde", Answer(session.pending_question_id, {}))
+    assert await host.answer("maya", Answer(session.pending_question_id, {}))
     await (await host.agent("maya")).wait_idle()
     assert session.status == SessionStatus.COMPLETE
+
+
+def test_version_1_states_read_with_the_new_names():
+    v1 = {
+        "format": "quintessa.agent-state",
+        "version": 1,
+        "memory": {"sessions": [{"id": "s1", "pending_ux_id": "ux_1", "prefilter": {"matters": 0.9}}]},
+        "device": {
+            "brief": [{"text": "Call Mom", "ux_request_id": "ux_1"}],
+            "stashed": [{"ux_request_id": "ux_2"}],
+            "open_ux_ids": ["ux_1"],
+        },
+    }
+    v2 = upgrade_snapshot(v1)
+    assert v2["version"] == 2 and v1["version"] == 1  # the original is left alone
+    session = v2["memory"]["sessions"][0]
+    assert session == {"id": "s1", "pending_question_id": "ux_1", "ambient_filter": {"matters": 0.9}}
+    assert v2["device"]["brief"][0]["question_id"] == "ux_1"
+    assert v2["device"]["stashed"] == [{"question_id": "ux_2"}]
+    assert v2["device"]["open_question_ids"] == ["ux_1"]

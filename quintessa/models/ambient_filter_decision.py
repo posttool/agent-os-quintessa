@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class PrefilterDecision:
+class AmbientFilterDecision:
     """A System One model's answer to "does this ambient event matter?",
     asked before a session spends any LLM calls. `matters` is P(yes); below
     the threshold the session ends at once with no steps. A failed call

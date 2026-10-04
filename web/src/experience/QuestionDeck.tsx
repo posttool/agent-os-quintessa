@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { Doc, Topic, UXRequest } from "../types";
-import UXForm from "./UXForm";
+import type { Doc, Topic, Question } from "../types";
+import QuestionForm from "./QuestionForm";
 
 /** The one place the agent's questions are answered: a sheet holding a deck
  * of them. The top question is full size with the next two peeking out
@@ -8,14 +8,14 @@ import UXForm from "./UXForm";
  * sideways swipe moves through the deck without answering. `stash` decks
  * hold the questions the user put aside. */
 export default function QuestionDeck({ questions, stash, topics, docs, onAnswer, onSkip, onStash, onUnstash, onOpen, onClose }: {
-  questions: UXRequest[];
+  questions: Question[];
   stash: boolean;
   topics: Map<string, Topic>;
   docs: Doc[];
-  onAnswer: (r: UXRequest, values: Record<string, string>) => void;
-  onSkip: (r: UXRequest) => void;
-  onStash: (rs: UXRequest[]) => void;
-  onUnstash: (r: UXRequest) => void;
+  onAnswer: (r: Question, values: Record<string, string>) => void;
+  onSkip: (r: Question) => void;
+  onStash: (rs: Question[]) => void;
+  onUnstash: (r: Question) => void;
   onOpen: (documentId: string, sectionId: string | null) => void;
   onClose: () => void;
 }) {
@@ -32,7 +32,7 @@ export default function QuestionDeck({ questions, stash, topics, docs, onAnswer,
   const touch = useRef<number | null>(null);
   if (!top) return null;
 
-  function done(rs: UXRequest[]) {
+  function done(rs: Question[]) {
     setGone((g) => new Set([...g, ...rs.map((r) => r.id)]));
   }
   const step = (by: number) => setPos(Math.min(Math.max(at + by, 0), deck.length - 1));
@@ -83,7 +83,7 @@ export default function QuestionDeck({ questions, stash, topics, docs, onAnswer,
                 {args.map(([k, v]) => <div key={k}>{k}: {v}</div>)}
               </div>
             )}
-            <UXForm key={top.id} request={top} onAnswer={(values) => { done([top]); onAnswer(top, values); }} />
+            <QuestionForm key={top.id} request={top} onAnswer={(values) => { done([top]); onAnswer(top, values); }} />
           </div>
         </div>
         <div className="sheet-buttons">
@@ -106,7 +106,7 @@ export default function QuestionDeck({ questions, stash, topics, docs, onAnswer,
 
 /** The agent waits on the user: a stack of the questions waiting, with the
  * oldest on top, that opens the deck. */
-export function QuestionStack({ questions, onOpen }: { questions: UXRequest[]; onOpen: () => void }) {
+export function QuestionStack({ questions, onOpen }: { questions: Question[]; onOpen: () => void }) {
   if (questions.length === 0) return null;
   const many = questions.length > 1;
   return (
@@ -123,7 +123,7 @@ export function QuestionStack({ questions, onOpen }: { questions: UXRequest[]; o
 }
 
 /** Where a question used to be drawn inline: one row that opens it. */
-export function WaitingRow({ request, stashed = false, onOpen }: { request: UXRequest; stashed?: boolean; onOpen: () => void }) {
+export function WaitingRow({ request, stashed = false, onOpen }: { request: Question; stashed?: boolean; onOpen: () => void }) {
   return (
     <button className={`waiting-row ${stashed ? "stashed" : ""}`} onClick={onOpen}>
       <span className="kind">{stashed ? "Stashed" : "Waiting on you"}</span>
@@ -135,7 +135,7 @@ export function WaitingRow({ request, stashed = false, onOpen }: { request: UXRe
 
 /** The deck's order: the question tapped first, then the rest of its topic,
  * then the others oldest first. */
-export function deckOrder(questions: UXRequest[], firstId: string | null): UXRequest[] {
+export function deckOrder(questions: Question[], firstId: string | null): Question[] {
   const first = questions.find((q) => q.id === firstId);
   if (!first) return questions;
   const same = questions.filter((q) => q !== first && first.topic_id !== null && q.topic_id === first.topic_id);

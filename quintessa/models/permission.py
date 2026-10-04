@@ -18,5 +18,5 @@ class Permission:
     scope: str
     detail: str = ""
     session_id: str | None = None
-    ux_request_id: str | None = None
+    question_id: str | None = None
     granted_at: datetime = field(default_factory=now)

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from quintessa.decide.card_scorer import CardScorer
 from quintessa.decide.next_step import NextStepDecider
 from quintessa.decide.system_one import SystemOneClient, SystemOneError, client_from_env
-from quintessa.models import InputEvent, PrefilterDecision
+from quintessa.models import AmbientFilterDecision, InputEvent
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
@@ -58,9 +58,9 @@ class AmbientFilter:
             "people": [n.title for n in store.nodes.values() if n.type.value == "person"],
         }
 
-    async def check(self, runtime: AgentRuntime, event: InputEvent) -> PrefilterDecision:
+    async def check(self, runtime: AgentRuntime, event: InputEvent) -> AmbientFilterDecision:
         """Never raises; a failed call keeps the event."""
-        decision = PrefilterDecision(matters=1.0, threshold=self.threshold, skipped=False, model=self.client.label)
+        decision = AmbientFilterDecision(matters=1.0, threshold=self.threshold, skipped=False, model=self.client.label)
         started = time.perf_counter()
         try:
             answers, model = await self.client.ask(self.state(runtime, event), {QUESTION: NOUL})

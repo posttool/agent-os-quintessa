@@ -13,7 +13,7 @@ BRIEF_SOURCE: ContextVar[str | None] = ContextVar("brief_source", default=None)
 
 
 @dataclass
-class BriefAction:
+class CardAction:
     """Something the user can start from a brief card with one tap, like
     "Call Mom". The tap starts a reasoning session that already holds the
     user's approval for this one tool function."""
@@ -25,7 +25,7 @@ class BriefAction:
 
 
 @dataclass
-class BriefItem:
+class Card:
     """One glanceable call to action in the contextual brief. Tapping it opens
     the topic's document (or pending question) in Spaces, focused on the
     section it is about. A card with no document opens a sheet with its
@@ -41,10 +41,10 @@ class BriefItem:
     topic_id: str | None = None
     document_id: str | None = None
     section_id: str | None = None
-    ux_request_id: str | None = None
+    question_id: str | None = None
     urgency: str = "normal"
     detail: str = ""
-    action: BriefAction | None = None
+    action: CardAction | None = None
     expires_at: datetime | None = None
     due_at: datetime | None = None
     salience: Salience = field(default_factory=Salience)
@@ -53,7 +53,7 @@ class BriefItem:
     source_event_id: str | None = field(default_factory=BRIEF_SOURCE.get)
     created_at: datetime = field(default_factory=now)
     updated_at: datetime = field(default_factory=now)
-    id: str = field(default_factory=lambda: new_id("brf"))
+    id: str = field(default_factory=lambda: new_id("card"))
 
     def expired(self, at: datetime) -> bool:
         return self.expires_at is not None and self.expires_at <= at

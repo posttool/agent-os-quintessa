@@ -16,7 +16,7 @@ from quintessa.llm import LLMError
 from quintessa.llm.factory import build_llm
 from quintessa.loop import AgentRuntime
 from quintessa.memory import MemoryStore
-from quintessa.models import InputEvent, InputKind, UXFieldKind, UXRequest, UXResponse
+from quintessa.models import Answer, FieldKind, InputEvent, InputKind, Question
 from quintessa.persona import AuraPersonaClient, PersonaSimulation
 from quintessa.serde import to_dict
 from quintessa.state import StateFormatError, state_backend_from_env
@@ -24,17 +24,17 @@ from quintessa.tools.search import search_backend_from_env
 
 
 def _answer_in_terminal(runtime: AgentRuntime):
-    async def ask(request: UXRequest) -> None:
+    async def ask(request: Question) -> None:
         print(f"\n? {request.prompt}")
         values = {}
         for field in request.fields:
-            if field.kind in (UXFieldKind.DISPLAY_TEXT, UXFieldKind.BUTTON):
+            if field.kind in (FieldKind.DISPLAY_TEXT, FieldKind.BUTTON):
                 continue
             hint = f" {field.options}" if field.options else ""
             values[field.name] = await asyncio.to_thread(input, f"  {field.label or field.name}{hint}: ")
-        runtime.answer(UXResponse(request.id, values))
+        runtime.answer(Answer(request.id, values))
 
-    runtime.ux.on_request(lambda r: asyncio.get_running_loop().create_task(ask(r)))
+    runtime.questions.on_request(lambda r: asyncio.get_running_loop().create_task(ask(r)))
 
 
 def _print_session(session) -> None:

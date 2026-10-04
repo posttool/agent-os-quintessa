@@ -186,7 +186,7 @@ async def test_installing_never_asks(script, make_runtime):
     runtime = make_runtime(script)
     runtime.preferences = from_dict(Preferences, {"ask_before_install": True})
     asked = []
-    runtime.ux.on_request(asked.append)
+    runtime.questions.on_request(asked.append)
 
     session = await runtime.run(InputEvent(InputKind.TEXT, "get me a ride"))
     assert not asked and runtime.store.tools["uber"].kind == ToolKind.APP

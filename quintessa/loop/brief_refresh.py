@@ -11,12 +11,12 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from quintessa.clock import now
-from quintessa.device import BriefItem
+from quintessa.device import Card
 from quintessa.device.freshness import staleness
 from quintessa.device.salience import Salience, clamp
 from quintessa.executors.common import JSON_INSTRUCTION
 from quintessa.llm import schema as s
-from quintessa.models import InputKind, ReasoningSession, TraceStep, UXRequest
+from quintessa.models import InputKind, Question, ReasoningSession, TraceStep
 from quintessa.tools.builtin import parse_time
 
 if TYPE_CHECKING:
@@ -70,10 +70,10 @@ SCHEMA = s.obj(
 )
 
 
-def _stale_questions(runtime: AgentRuntime) -> list[UXRequest]:
+def _stale_questions(runtime: AgentRuntime) -> list[Question]:
     store = runtime.store
     stale = []
-    for request in runtime.ux.pending.values():
+    for request in runtime.questions.pending.values():
         topic = store.topics.get(request.topic_id) if request.topic_id else None
         if topic is not None and topic.updated_at > request.created_at:
             stale.append(request)
@@ -88,7 +88,7 @@ async def refresh_brief(runtime: AgentRuntime, session: ReasoningSession) -> Tra
     device.prune_brief(now())
     gone = [b for b in device.state.brief if staleness(runtime, b) in ("its topic is gone", "its document is gone")]
     lines = [f"removed {b.id} ({b.text}): {staleness(runtime, b)}" for b in gone]
-    device.remove_brief([b.id for b in gone])
+    device.remove_cards([b.id for b in gone])
 
     cards = [b for b in device.state.brief if staleness(runtime, b)]
     questions = _stale_questions(runtime)
@@ -137,7 +137,7 @@ def _apply_cards(runtime: AgentRuntime, verdicts: list[dict[str, Any]], seen: di
         if card is None or v["id"] not in seen or card.updated_at != seen[v["id"]]:
             continue  # not asked about, or another session changed it meanwhile
         if v["verdict"] == "remove":
-            device.remove_brief([card.id])
+            device.remove_cards([card.id])
             lines.append(f"removed {card.id} ({card.text}): {v['reason']}")
             continue
         if v["verdict"] == "rewrite":
@@ -165,7 +165,7 @@ def _apply_cards(runtime: AgentRuntime, verdicts: list[dict[str, Any]], seen: di
 def _apply_questions(runtime: AgentRuntime, verdicts: list[dict[str, Any]], asked: set[str]) -> list[str]:
     lines = []
     for v in verdicts:
-        if v["withdraw"] and v["id"] in asked and runtime.ux.withdraw(v["id"], v["reason"]):
+        if v["withdraw"] and v["id"] in asked and runtime.questions.withdraw(v["id"], v["reason"]):
             lines.append(f"withdrew question {v['id']}: {v['reason']}")
     return lines
 
@@ -180,7 +180,7 @@ def _step(session: ReasoningSession, lines: list[str]) -> TraceStep:
     return step
 
 
-def _card(b: BriefItem) -> dict[str, Any]:
+def _card(b: Card) -> dict[str, Any]:
     return {
         "id": b.id,
         "text": b.text,

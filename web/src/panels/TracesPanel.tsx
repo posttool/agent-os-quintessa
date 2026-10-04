@@ -44,12 +44,12 @@ function SessionTrace({ session }: { session: Session }) {
             {t.content}
           </span>
           <span className="faint small">{session.steps.length} steps{duration && ` · ${duration}s`}</span>
-          {session.prefilter && !session.prefilter.error && (
-            <span className="badge" title={`${session.prefilter.model || "Jev"}: P(this matters), threshold ${session.prefilter.threshold}`}>
-              Jev p {session.prefilter.matters.toFixed(2)}
+          {session.ambient_filter && !session.ambient_filter.error && (
+            <span className="badge" title={`${session.ambient_filter.model || "Jev"}: P(this matters), threshold ${session.ambient_filter.threshold}`}>
+              Jev p {session.ambient_filter.matters.toFixed(2)}
             </span>
           )}
-          {session.prefilter?.skipped
+          {session.ambient_filter?.skipped
             ? <span className="badge">skipped</span>
             : <span className={`badge ${STATUS_TONE[session.status]}`}>{label(session.status)}</span>}
         </div>
@@ -58,7 +58,7 @@ function SessionTrace({ session }: { session: Session }) {
         <div className="faint small" style={{ marginBottom: 8 }}>
           trigger <code>{t.id}</code> from {t.source}{t.device && ` on ${t.device}`} · session <code>{session.id}</code>
         </div>
-        {session.prefilter && <Prefilter decision={session.prefilter} />}
+        {session.ambient_filter && <AmbientFilterDetail decision={session.ambient_filter} />}
         {session.steps.map((step) => (
           <div key={step.index} className={`step ${step.error ? "err" : ""}`}>
             <div className="row">
@@ -140,7 +140,7 @@ function Shadow({ decision: d }: { decision?: ShadowDecision }) {
 }
 
 /** Whether the ambient filter thought this event mattered, before any LLM call. */
-function Prefilter({ decision: d }: { decision: NonNullable<Session["prefilter"]> }) {
+function AmbientFilterDetail({ decision: d }: { decision: NonNullable<Session["ambient_filter"]> }) {
   if (d.error) return <div className="small" style={{ color: "var(--bad)", marginBottom: 6 }}>{d.model || "Jev"} filter failed, ran anyway: {d.error}</div>;
   return (
     <div className="small" style={{ marginBottom: 6 }}>

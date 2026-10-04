@@ -96,8 +96,8 @@ class AgentReasoningLoop:
         BRIEF_SOURCE.set(session.trigger.id)  # cards written in this session remember their cause
         try:
             if runtime.active_ambient_filter is not None and is_ambient(session.trigger):
-                session.prefilter = await runtime.active_ambient_filter.check(runtime, session.trigger)
-                if session.prefilter.skipped:  # nothing worth a step; no LLM call is made
+                session.ambient_filter = await runtime.active_ambient_filter.check(runtime, session.trigger)
+                if session.ambient_filter.skipped:  # nothing worth a step; no LLM call is made
                     session.status = SessionStatus.COMPLETE
                     return session
             for index in range(runtime.max_steps):
@@ -111,7 +111,7 @@ class AgentReasoningLoop:
                 session.steps.append(step)
                 capability = runtime.capabilities[decision.capability]
                 outcome = await EXECUTORS[capability.executor].run(StepContext(runtime, session, capability, decision))
-                if outcome.pending_ux is not None and outcome.on_answer is not None:
+                if outcome.question is not None and outcome.on_answer is not None:
                     step.output, step.summary = outcome.output, outcome.summary
                     outcome = await self._wait_for_user(outcome)
                 step.output, step.summary, step.model = outcome.output, outcome.summary, outcome.model or model
@@ -134,19 +134,19 @@ class AgentReasoningLoop:
 
     async def _wait_for_user(self, outcome):
         runtime, session = self.runtime, self.session
-        request = outcome.pending_ux
+        request = outcome.question
         request.user_waiting = (
             session.trigger.source == "user" and (now() - session.started_at).total_seconds() <= USER_WAITING_SECONDS
         )
         session.status = SessionStatus.WAITING_FOR_USER
-        session.pending_ux_id = request.id
+        session.pending_question_id = request.id
         runtime.store.put_session(session)
-        runtime.device.show_ux(request.id)
+        runtime.device.show_question(request.id)
         runtime.device.session_activity(session.id, "Waiting for you")
-        response = await runtime.ux.ask(request)
-        runtime.device.close_ux(request.id, request.document_id, request.section_id)
+        response = await runtime.questions.ask(request)
+        runtime.device.close_question(request.id, request.document_id, request.section_id)
         session.status = SessionStatus.RUNNING
-        session.pending_ux_id = None
+        session.pending_question_id = None
         runtime.store.put_session(session)
         return await outcome.on_answer(response)
 

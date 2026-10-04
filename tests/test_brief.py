@@ -3,7 +3,7 @@ import json
 from conftest import decide, until
 from test_tools import call, delivery_tool, permission_ui
 
-from quintessa.device import BriefAction, BriefItem
+from quintessa.device import Card, CardAction
 from quintessa.models import (
     Document,
     DocumentSection,
@@ -38,7 +38,7 @@ async def test_brief_cards_keep_only_links_that_lead_somewhere(script, make_runt
         {"text": "Made up", "topic_id": "topic-nope", "document_id": "doc-nope"},
         {"urgency": "high"},
     ]
-    result = await _set_brief({"items": json.dumps(items)}, runtime)
+    result = await _set_brief({"cards": json.dumps(items)}, runtime)
 
     brief = runtime.device.state.brief
     assert [(b.topic_id, b.document_id, b.section_id) for b in brief] == [
@@ -50,10 +50,10 @@ async def test_brief_cards_keep_only_links_that_lead_somewhere(script, make_runt
     assert brief[1].detail == "Tonight after dinner"
     assert len({b.id for b in brief}) == 4
     assert result.status == "done"
-    assert "item 3: no open document doc-old, kept as a card" in result.result
-    assert "item 3: no section sec-x" in result.result
-    assert "item 4: no topic topic-nope" in result.result
-    assert "item 5: skipped, it has no text" in result.result
+    assert "card 3: no open document doc-old, kept as a card" in result.result
+    assert "card 3: no section sec-x" in result.result
+    assert "card 4: no topic topic-nope" in result.result
+    assert "card 5: skipped, it has no text" in result.result
 
 
 async def test_brief_actions_must_name_an_installed_function(script, make_runtime):
@@ -72,13 +72,13 @@ async def test_brief_actions_must_name_an_installed_function(script, make_runtim
         {"text": "Call Mom", "action": {"tool": "phone", "function": "call", "label": "Call"}},
         {"text": "Pay", "action": {"tool": "food_delivery", "function": "refund"}},
     ]
-    result = await _set_brief({"items": json.dumps(items)}, runtime)
+    result = await _set_brief({"cards": json.dumps(items)}, runtime)
 
     brief = runtime.device.state.brief
-    assert brief[0].action == BriefAction("food_delivery", "checkout", "Order", {"total": "32", "dish": "pad thai"})
+    assert brief[0].action == CardAction("food_delivery", "checkout", "Order", {"total": "32", "dish": "pad thai"})
     assert brief[1].action is None and brief[2].action is None
-    assert "item 2: action dropped: 'phone' is not installed" in result.result
-    assert "item 3: action dropped: food_delivery has no function 'refund'" in result.result
+    assert "card 2: action dropped: 'phone' is not installed" in result.result
+    assert "card 3: action dropped: food_delivery has no function 'refund'" in result.result
 
 
 async def test_a_tapped_action_carries_its_approval(script, make_runtime):
@@ -93,12 +93,12 @@ async def test_a_tapped_action_carries_its_approval(script, make_runtime):
     groceries = delivery_tool()
     groceries.name = "groceries"
     runtime.store.put_tool(groceries)
-    action = BriefAction("food_delivery", "checkout", "Order pad thai", {"total": "32"})
-    runtime.device.set_brief([BriefItem("Dinner?", action=action)])
+    action = CardAction("food_delivery", "checkout", "Order pad thai", {"total": "32"})
+    runtime.device.set_brief([Card("Dinner?", action=action)])
     asked = []
-    runtime.ux.on_request(asked.append)
+    runtime.questions.on_request(asked.append)
 
-    session = runtime.start_brief_action(runtime.device.state.brief[0].id)
+    session = runtime.start_card_action(runtime.device.state.brief[0].id)
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
 
     assert session.steps[0].summary == "food_delivery.checkout -> done: order placed"
@@ -110,9 +110,9 @@ async def test_a_tapped_action_carries_its_approval(script, make_runtime):
 
 async def test_tapping_a_card_without_an_action_starts_nothing(script, make_runtime):
     runtime = make_runtime(script)
-    runtime.device.set_brief([BriefItem("Bring an umbrella")])
-    assert runtime.start_brief_action(runtime.device.state.brief[0].id) is None
-    assert runtime.start_brief_action("brf-gone") is None
+    runtime.device.set_brief([Card("Bring an umbrella")])
+    assert runtime.start_card_action(runtime.device.state.brief[0].id) is None
+    assert runtime.start_card_action("brf-gone") is None
 
 
 async def test_questions_know_their_topic(script, make_runtime):
@@ -124,7 +124,7 @@ async def test_questions_know_their_topic(script, make_runtime):
     runtime = make_runtime(script)
     seed(runtime)
     asked = []
-    runtime.ux.on_request(asked.append)
+    runtime.questions.on_request(asked.append)
     session = runtime.submit(InputEvent(InputKind.TEXT, "the dentist called"))
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
     assert asked[0].topic_id == "topic-dentist"  # taken from its document
@@ -165,7 +165,7 @@ def refresh(*cards, questions=()):
 async def test_a_topic_has_one_card(script, make_runtime):
     runtime = make_runtime(script)
     seed(runtime)
-    await _set_brief({"items": json.dumps([{"text": "Call Mom", "topic_id": "topic-mom"}])}, runtime)
+    await _set_brief({"cards": json.dumps([{"text": "Call Mom", "topic_id": "topic-mom"}])}, runtime)
     first = runtime.device.state.brief[0]
 
     result = await _update_brief(
@@ -192,7 +192,7 @@ async def test_a_topic_has_one_card(script, make_runtime):
     dentist = runtime.device.state.brief[0].id
     result = await _set_brief(
         {
-            "items": json.dumps(
+            "cards": json.dumps(
                 [
                     {"text": "Dentist at 3", "topic_id": "topic-dentist"},
                     {"text": "Dentist at 4", "topic_id": "topic-dentist"},
@@ -202,7 +202,7 @@ async def test_a_topic_has_one_card(script, make_runtime):
         runtime,
     )
     assert [(b.id, b.text) for b in runtime.device.state.brief] == [(dentist, "Dentist at 4")]
-    assert "item 2: replaces item 1" in result.result
+    assert "card 2: replaces card 1" in result.result
 
 
 async def test_cards_expire(script, make_runtime):
@@ -210,7 +210,7 @@ async def test_cards_expire(script, make_runtime):
     past, future = (now() - timedelta(minutes=5)).isoformat(), (now() + timedelta(hours=1)).isoformat()
     result = await _set_brief(
         {
-            "items": json.dumps(
+            "cards": json.dumps(
                 [
                     {"text": "Leave by 3pm", "expires_at": past},
                     {"text": "Umbrella", "expires_at": future},
@@ -220,7 +220,7 @@ async def test_cards_expire(script, make_runtime):
         },
         runtime,
     )
-    assert "item 3: expires_at dropped: 'after lunch' is not an ISO time" in result.result
+    assert "card 3: expires_at dropped: 'after lunch' is not an ISO time" in result.result
     assert [c["text"] for c in brief_context(runtime)["brief"]] == ["Umbrella", "Soon"]
     assert [b.text for b in runtime.device.state.brief] == ["Umbrella", "Soon"]
 
@@ -228,7 +228,7 @@ async def test_cards_expire(script, make_runtime):
 async def test_the_agent_sees_the_brief_and_what_went_stale(script, make_runtime):
     runtime = make_runtime(script)
     seed(runtime)
-    runtime.device.set_brief([BriefItem("Call Mom", "topic-mom"), BriefItem("Confirm the dentist", "topic-dentist")])
+    runtime.device.set_brief([Card("Call Mom", "topic-mom"), Card("Confirm the dentist", "topic-dentist")])
     runtime.store.upsert_topic(Topic("topic-mom", "Call Mom tonight", summary="She called back"))
     script.on("brief_refresh", refresh())
     await runtime.run(InputEvent(InputKind.TEXT, "hi"))
@@ -246,9 +246,7 @@ async def test_a_location_change_rewrites_the_card_it_changes(script, make_runti
     the topic, and the end-of-session refresh rewrites only that topic's card."""
     runtime = make_runtime(script)
     seed(runtime)
-    runtime.device.set_brief(
-        [BriefItem("Leave by 2:30 for the dentist", "topic-dentist"), BriefItem("Call Mom", "topic-mom")]
-    )
+    runtime.device.set_brief([Card("Leave by 2:30 for the dentist", "topic-dentist"), Card("Call Mom", "topic-mom")])
     card, other = runtime.device.state.brief
     script.on("decide", decide("memory"))
     script.on(
@@ -286,10 +284,10 @@ async def test_news_that_settles_a_topic_clears_its_card_and_question(script, ma
     )
     runtime = make_runtime(script)
     seed(runtime)
-    runtime.device.set_brief([BriefItem("Call Mom", "topic-mom")])
+    runtime.device.set_brief([Card("Call Mom", "topic-mom")])
     asking = runtime.submit(InputEvent(InputKind.TEXT, "remind me to call mom"))
     await until(lambda: asking.status == SessionStatus.WAITING_FOR_USER)
-    question = next(iter(runtime.ux.pending))
+    question = next(iter(runtime.questions.pending))
 
     script.on("decide", decide("memory"))
     script.on("capability:memory", {"summary": "done", "operations": [topic_op("topic-mom", "Mom: talked already")]})
@@ -300,7 +298,7 @@ async def test_news_that_settles_a_topic_clears_its_card_and_question(script, ma
     await until(lambda: texted.status == SessionStatus.COMPLETE and asking.status == SessionStatus.COMPLETE)
 
     assert runtime.device.state.brief == []
-    assert runtime.ux.pending == {}
+    assert runtime.questions.pending == {}
     assert f"withdrew question {question}" in texted.steps[-1].summary
     assert "withdrew it before the user answered (Mom texted)" in asking.steps[0].summary
 
@@ -328,6 +326,6 @@ async def test_seeing_a_topic_does_not_make_its_card_stale(script, make_runtime)
 
     runtime = make_runtime(script)
     seed(runtime)
-    runtime.device.set_brief([BriefItem("Call Mom", "topic-mom")])
+    runtime.device.set_brief([Card("Call Mom", "topic-mom")])
     apply_operations(runtime.store, [{"op": "mark_topic_seen", "id": "topic-mom"}], None)
     assert brief_context(runtime)["brief"][0]["stale"] == ""

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
 
 FORMAT = "quintessa.agent-state"
-VERSION = 1
+VERSION = 2
 INTERRUPTED = "interrupted: the platform restarted while this session was running"
 
 
@@ -39,6 +39,30 @@ def take_snapshot(runtime: AgentRuntime) -> dict[str, Any]:
     }
 
 
+def upgrade_snapshot(data: dict[str, Any]) -> dict[str, Any]:
+    """Bring an older snapshot up to VERSION. Version 1 called questions
+    "UX requests", cards "brief items" and the ambient filter "prefilter"."""
+    if data.get("version") != 1:
+        return data
+    data = {**data, "version": 2}
+    memory, device = data.get("memory"), data.get("device")
+    if isinstance(memory, dict) and isinstance(memory.get("sessions"), list):
+        names = {"pending_ux_id": "pending_question_id", "prefilter": "ambient_filter"}
+        sessions = [_renamed(s, **names) for s in memory["sessions"]]
+        data["memory"] = {**memory, "sessions": sessions}
+    if isinstance(device, dict):
+        device = _renamed(device, open_ux_ids="open_question_ids")
+        for key in ("brief", "snoozed", "stashed"):
+            if isinstance(device.get(key), list):
+                device[key] = [_renamed(c, ux_request_id="question_id") for c in device[key]]
+        data["device"] = device
+    return data
+
+
+def _renamed(item: Any, **names: str) -> Any:
+    return {names.get(k, k): v for k, v in item.items()} if isinstance(item, dict) else item
+
+
 def check_snapshot(data: Any) -> None:
     if not isinstance(data, dict) or data.get("format") != FORMAT:
         raise StateFormatError("not a Quintessa agent state")
@@ -52,6 +76,8 @@ def check_snapshot(data: Any) -> None:
 def validate_snapshot(data: Any) -> None:
     """Fully check a snapshot (by loading it into scratch memory) without
     touching any agent, so a bad upload never wipes good state."""
+    if isinstance(data, dict) and data.get("format") == FORMAT:
+        data = upgrade_snapshot(data)
     check_snapshot(data)
     try:
         MemoryStore().load_data(data["memory"])
@@ -65,10 +91,11 @@ def apply_snapshot(runtime: AgentRuntime, data: dict[str, Any]) -> None:
     """Load a snapshot into an idle runtime. Sessions that were mid-flight
     when it was taken are marked stopped (their in-memory continuation is
     gone); process subscriptions that were still running resume."""
+    data = upgrade_snapshot(data)
     validate_snapshot(data)
     runtime.store.load_data(data["memory"])
     device = from_dict(DeviceState, data["device"])
-    device.open_ux_ids = []
+    device.open_question_ids = []
     device.island.active, device.island.words = False, ""
     runtime.device.load_state(device)
     if data.get("preferences"):  # states saved before preferences existed keep the current ones
@@ -78,7 +105,7 @@ def apply_snapshot(runtime: AgentRuntime, data: dict[str, Any]) -> None:
     for session in runtime.store.sessions.values():
         if session.status in (SessionStatus.RUNNING, SessionStatus.WAITING_FOR_USER):
             session.status = SessionStatus.STOPPED
-            session.pending_ux_id = None
+            session.pending_question_id = None
             session.ended_at = now()
             session.steps.append(TraceStep(len(session.steps), "", "", "", error=INTERRUPTED, ended_at=now()))
     for subscription in runtime.store.subscriptions.values():

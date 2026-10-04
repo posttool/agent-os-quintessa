@@ -10,7 +10,7 @@ from quintessa.device import FULL, DocumentFocus
 from quintessa.device.focus import resolve_view
 from quintessa.memory import MemoryStore
 from quintessa.memory.apply import apply_operations
-from quintessa.models import Document, DocumentSection, InputEvent, InputKind, Topic, UXPurpose, UXRequest
+from quintessa.models import Document, DocumentSection, InputEvent, InputKind, Question, QuestionPurpose, Topic
 
 T0 = datetime(2026, 10, 1, 12, tzinfo=UTC)
 
@@ -28,7 +28,7 @@ def trip(*sections):
 
 
 def question(section_id):
-    return UXRequest("s1", UXPurpose.DISAMBIGUATION, "?", document_id="doc-trip", section_id=section_id)
+    return Question("s1", QuestionPurpose.DISAMBIGUATION, "?", document_id="doc-trip", section_id=section_id)
 
 
 def test_rule_shows_the_first_open_section_with_a_next_step():

@@ -5,6 +5,7 @@ from conftest import decide, until
 from test_memory import doc_op, section_op, topic_op
 
 from quintessa.models import (
+    Answer,
     InputEvent,
     InputKind,
     OversightLevel,
@@ -12,7 +13,6 @@ from quintessa.models import (
     Tool,
     ToolFunction,
     ToolKind,
-    UXResponse,
 )
 from quintessa.tools import BUILTIN_TOOLS, runner
 
@@ -92,11 +92,11 @@ async def test_grant_from_earlier_disambiguation_carries_forward(script, make_ru
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool())
     asked = []
-    runtime.ux.on_request(asked.append)
+    runtime.questions.on_request(asked.append)
 
     session = runtime.submit(InputEvent(InputKind.TEXT, "order my usual"))
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
-    runtime.answer(UXResponse(asked[0].id, {"ok": "yes"}))
+    runtime.answer(Answer(asked[0].id, {"ok": "yes"}))
     await until(lambda: session.status == SessionStatus.COMPLETE)
 
     assert len(asked) == 1
@@ -127,7 +127,7 @@ async def test_tool_use_asks_and_respects_a_decline(script, make_runtime):
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool())
     asked = []
-    runtime.ux.on_request(asked.append)
+    runtime.questions.on_request(asked.append)
 
     session = runtime.submit(InputEvent(InputKind.TEXT, "order"))
     await until(lambda: bool(asked))
@@ -135,7 +135,7 @@ async def test_tool_use_asks_and_respects_a_decline(script, make_runtime):
     # the sheet shows what the approval runs and why
     assert asked[0].arguments == {"total": "$32"} and asked[0].context == "test"
     assert asked[0].user_waiting  # the user just asked for this
-    runtime.answer(UXResponse(asked[0].id, {"approve": "no"}))
+    runtime.answer(Answer(asked[0].id, {"approve": "no"}))
     await runtime.wait_idle()
 
     assert session.steps[0].summary == "User declined food_delivery.checkout"
@@ -150,7 +150,7 @@ async def test_confirm_once_is_remembered_across_sessions(script, make_runtime):
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool(OversightLevel.CONFIRM_ONCE))
     asked = []
-    runtime.ux.on_request(lambda r: (asked.append(r), runtime.answer(UXResponse(r.id, {"approve": "yes"}))))
+    runtime.questions.on_request(lambda r: (asked.append(r), runtime.answer(Answer(r.id, {"approve": "yes"}))))
 
     await runtime.run(InputEvent(InputKind.TEXT, "first"))
     await runtime.run(InputEvent(InputKind.TEXT, "second"))
@@ -227,7 +227,7 @@ async def test_device_tool_updates_the_brief_and_spaces(script, make_runtime):
     script.on("capability:memory", {"summary": "", "operations": [doc_op("doc-groceries", None)]})
     script.on(
         "capability:tool_use",
-        call("device", "set_brief", {"items": json.dumps(items)}),
+        call("device", "set_brief", {"cards": json.dumps(items)}),
         call("device", "show_document", {"document_id": "doc-groceries"}),
     )
     runtime = make_runtime(script)

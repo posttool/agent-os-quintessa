@@ -1,6 +1,8 @@
 """Data structures. One dataclass or enum per file."""
 
+from quintessa.models.ambient_filter_decision import AmbientFilterDecision
 from quintessa.models.ambient_source import AmbientSource
+from quintessa.models.answer import Answer
 from quintessa.models.app_listing import AppListing
 from quintessa.models.auth_kind import AuthKind
 from quintessa.models.auth_requirement import AuthRequirement
@@ -10,6 +12,7 @@ from quintessa.models.document import Document
 from quintessa.models.document_section import DocumentSection
 from quintessa.models.document_status import DocumentStatus
 from quintessa.models.edge_type import EdgeType
+from quintessa.models.field_kind import FieldKind
 from quintessa.models.input_event import InputEvent
 from quintessa.models.input_kind import InputKind
 from quintessa.models.key_date import KeyDate
@@ -19,7 +22,9 @@ from quintessa.models.node_type import NodeType
 from quintessa.models.oversight_level import OversightLevel
 from quintessa.models.permission import Permission
 from quintessa.models.preferences import Preferences
-from quintessa.models.prefilter_decision import PrefilterDecision
+from quintessa.models.question import Question
+from quintessa.models.question_field import QuestionField
+from quintessa.models.question_purpose import QuestionPurpose
 from quintessa.models.reasoning_session import ReasoningSession
 from quintessa.models.session_status import SessionStatus
 from quintessa.models.shadow_decision import ShadowDecision
@@ -35,11 +40,6 @@ from quintessa.models.topic import Topic
 from quintessa.models.trace_step import TraceStep
 from quintessa.models.trigger_spec import TriggerSpec
 from quintessa.models.trigger_type import TriggerType
-from quintessa.models.ux_field import UXField
-from quintessa.models.ux_field_kind import UXFieldKind
-from quintessa.models.ux_purpose import UXPurpose
-from quintessa.models.ux_request import UXRequest
-from quintessa.models.ux_response import UXResponse
 
 __all__ = [
     "DONE",
@@ -62,7 +62,7 @@ __all__ = [
     "OversightLevel",
     "Permission",
     "Preferences",
-    "PrefilterDecision",
+    "AmbientFilterDecision",
     "ReasoningSession",
     "SessionStatus",
     "ShadowDecision",
@@ -78,9 +78,9 @@ __all__ = [
     "TraceStep",
     "TriggerSpec",
     "TriggerType",
-    "UXField",
-    "UXFieldKind",
-    "UXPurpose",
-    "UXRequest",
-    "UXResponse",
+    "QuestionField",
+    "FieldKind",
+    "QuestionPurpose",
+    "Question",
+    "Answer",
 ]

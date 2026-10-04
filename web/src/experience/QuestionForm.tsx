@@ -1,11 +1,11 @@
 import { useState } from "react";
-import type { UXRequest } from "../types";
+import type { Question } from "../types";
 
 /** The fields and answer buttons of a question from the agent, drawn by the
  * skin inside the question sheet. Answers go back to the reasoning loop that
  * is waiting on this request; skipping and stashing belong to the sheet. */
-export default function UXForm({ request, onAnswer }: {
-  request: UXRequest;
+export default function QuestionForm({ request, onAnswer }: {
+  request: Question;
   onAnswer: (values: Record<string, string>) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
@@ -16,7 +16,7 @@ export default function UXForm({ request, onAnswer }: {
   const buttons = request.fields.filter((f) => f.kind === "button");
 
   return (
-    <div className="ux">
+    <div className="question">
       {request.fields.map((f) => {
         switch (f.kind) {
           case "display_text":
