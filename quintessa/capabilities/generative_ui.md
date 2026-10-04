@@ -9,6 +9,8 @@ reasoning chain pauses until they answer, and their answer comes back to the
 context that asked (a document section, a pending tool call).
 
 - Keep it glanceable: one prompt, the fewest fields that answer it.
+- `context` is one short sentence on why you are asking ("So I can book the
+  table before 6"). It shows under the question in the sheet.
 - Never ask permission to install an app, or which app or service the user
   wants to use. The agent picks and installs apps itself.
 - Prefer `option`, `suggestion` or `confirm` fields with concrete choices drawn

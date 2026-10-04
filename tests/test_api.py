@@ -10,7 +10,7 @@ from quintessa.state import InMemoryStateBackend
 
 from conftest import decide, until
 from test_ambient_and_persona import aura_transport
-from test_memory import node_op
+from test_memory import node_op, topic_op
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ async def test_input_runs_for_that_user_only(api, script):
 async def test_answering_a_question(api, script):
     script.on("decide", decide("generative_ui"))
     script.on("capability:generative_ui", {
-        "prompt": "Which night?", "purpose": "disambiguation",
+        "prompt": "Which night?", "purpose": "disambiguation", "context": "",
         "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"]}],
         "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None})
     await api.post("/api/input?user=maya", json={"content": "dinner"})
@@ -242,3 +242,38 @@ async def test_cards_can_be_opened_snoozed_and_dismissed(api):
     assert state["brief"] == [] and [c["text"] for c in state["snoozed"]] == ["Call the bank"]
     assert [s["kind"] for s in state["suppressions"]] == ["snoozed", "dismissed"]
     assert (await api.post(f"/api/brief/{passport.id}/dismiss?user=maya")).status_code == 404
+
+
+async def test_stashing_a_question(api, script):
+    script.on("decide", decide("memory"), decide("generative_ui"))
+    script.on("capability:memory", {"summary": "ok", "operations": [topic_op("topic-dinner", "Dinner")]})
+    script.on("capability:generative_ui", {
+        "prompt": "Which night?", "purpose": "disambiguation", "context": "So I can book a table.",
+        "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"]}],
+        "document_id": None, "section_id": None, "topic_id": "topic-dinner", "tool": None, "function": None})
+    await api.post("/api/input?user=maya", json={"content": "dinner"})
+    agent = await api.host.agent("maya")
+    await until(lambda: bool(agent.ux.pending))
+    question = (await api.get("/api/state?user=maya")).json()["pending_ux"][0]
+    assert question["context"] == "So I can book a table." and question["user_waiting"] is True
+
+    assert (await api.post("/api/ux/nope/stash?user=maya")).status_code == 404
+    assert (await api.post(f"/api/ux/{question['id']}/stash?user=maya")).status_code == 200
+    state = (await api.get("/api/state?user=maya")).json()
+    assert [q["ux_request_id"] for q in state["device"]["stashed"]] == [question["id"]]
+    assert [q["id"] for q in state["pending_ux"]] == [question["id"]]  # still waiting
+    from quintessa.device.freshness import brief_context
+    assert brief_context(agent)["questions_waiting"][0]["stashed"] is True
+
+    # its topic changing brings it back to the stack
+    topic = agent.store.topics["topic-dinner"]
+    agent.store.upsert_topic(topic)
+    assert (await api.get("/api/state?user=maya")).json()["device"]["stashed"] == []
+
+    await api.post(f"/api/ux/{question['id']}/stash?user=maya")
+    assert (await api.post(f"/api/ux/{question['id']}/unstash?user=maya")).json() == {"ok": True}
+    await api.post(f"/api/ux/{question['id']}/stash?user=maya")
+    # answering it clears it from the stash
+    await api.post(f"/api/ux/{question['id']}?user=maya", json={"values": {"night": "Wed"}})
+    await agent.wait_idle()
+    assert (await api.get("/api/state?user=maya")).json()["device"]["stashed"] == []

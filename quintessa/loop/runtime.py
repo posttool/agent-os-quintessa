@@ -200,6 +200,23 @@ class AgentRuntime:
     def answer(self, response: UXResponse) -> bool:
         return self.ux.answer(response)
 
+    def stash_question(self, request_id: str) -> bool:
+        """The user put a waiting question aside; its session keeps waiting."""
+        request = self.ux.pending.get(request_id)
+        if request is None:
+            return False
+        self.device.stash(request.id, request.topic_id)
+        return True
+
+    def prune_stash(self) -> list[str]:
+        """Drop stashed questions that stopped waiting and bring back those
+        whose topic changed since they were stashed."""
+        def changed(topic_id: str, since) -> bool:
+            topic = self.store.topics.get(topic_id)
+            return topic is not None and topic.updated_at > since
+
+        return self.device.prune_stash(set(self.ux.pending), changed)
+
     async def cancel_tasks(self) -> None:
         for task in list(self._tasks):
             task.cancel()

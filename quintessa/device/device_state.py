@@ -7,6 +7,7 @@ from quintessa.device.discovery_item import DiscoveryItem
 from quintessa.device.document_focus import DocumentFocus
 from quintessa.device.island_state import IslandState
 from quintessa.device.salience import Suppression
+from quintessa.device.stashed_question import StashedQuestion
 
 
 @dataclass
@@ -19,6 +20,7 @@ class DeviceState:
     snoozed: list[BriefItem] = field(default_factory=list)  # back in the brief at their snoozed_until
     suppressions: list[Suppression] = field(default_factory=list)
     open_ux_ids: list[str] = field(default_factory=list)
+    stashed: list[StashedQuestion] = field(default_factory=list)  # questions put aside, still waiting
     space_document_ids: list[str] = field(default_factory=list)
     focused_document_id: str | None = None
     focus: dict[str, DocumentFocus] = field(default_factory=dict)

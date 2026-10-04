@@ -27,6 +27,7 @@ CONFIRM_YES = "yes"
 SCHEMA = s.obj(
     {
         "prompt": s.string("The question, in a few words."),
+        "context": s.string("One short sentence on why you are asking, shown under the question."),
         "purpose": s.enum_of(UXPurpose),
         "fields": s.array(
             s.obj(
@@ -67,6 +68,7 @@ def build_request(session_id: str, data: dict, store: MemoryStore) -> UXRequest:
         tool=data["tool"],
         function=data["function"],
         topic_id=question_topic(store, data.get("topic_id"), data["document_id"]),
+        context=data.get("context") or "",
     )
 
 

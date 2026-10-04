@@ -23,5 +23,11 @@ class UXRequest:
     tool: str | None = None
     function: str | None = None
     topic_id: str | None = None
+    # why the agent asks, in one sentence; for an approval, the call it runs
+    context: str = ""
+    arguments: dict[str, str] = field(default_factory=dict)
+    # asked by a session the user started moments ago, so they are likely
+    # looking at the screen; a skin may open the question at once
+    user_waiting: bool = False
     id: str = field(default_factory=lambda: new_id("ux"))
     created_at: datetime = field(default_factory=now)

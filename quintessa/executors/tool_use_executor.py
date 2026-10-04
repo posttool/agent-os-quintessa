@@ -96,6 +96,8 @@ class ToolUseExecutor:
             tool=tool.name,
             function=function.name,
             topic_id=question_topic(store, call.get("topic_id"), call["document_id"]),
+            context=call["rationale"],
+            arguments=args,
         )
 
         async def on_answer(response: UXResponse) -> StepOutcome:

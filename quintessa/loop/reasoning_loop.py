@@ -18,6 +18,10 @@ from quintessa.models import ReasoningSession, SessionStatus, StepDecision, Trac
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
 
+# A question from a session the user started this recently finds them still
+# looking at the screen, so a skin may open it at once.
+USER_WAITING_SECONDS = 120
+
 log = logging.getLogger(__name__)
 
 DONE = "done"
@@ -128,6 +132,9 @@ class AgentReasoningLoop:
     async def _wait_for_user(self, outcome):
         runtime, session = self.runtime, self.session
         request = outcome.pending_ux
+        request.user_waiting = (
+            session.trigger.source == "user" and (now() - session.started_at).total_seconds() <= USER_WAITING_SECONDS
+        )
         session.status = SessionStatus.WAITING_FOR_USER
         session.pending_ux_id = request.id
         runtime.store.put_session(session)
