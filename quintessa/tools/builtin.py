@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
 
-from quintessa.device import FOCUSED, FULL, Card, CardAction, DiscoveryItem
-from quintessa.device.salience import Salience, clamp
+from quintessa.device import FOCUSED, FULL, DiscoveryItem
+from quintessa.device.cards import cards_from_entries
 from quintessa.models import Tool, ToolFunction, ToolKind, ToolParameter
+from quintessa.paths import user_folder_name
 from quintessa.tools.tool_call_result import ToolCallResult
 
 if TYPE_CHECKING:
@@ -117,8 +117,6 @@ async def _fetch(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
 
 
 async def _download(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
-    from quintessa.state import user_folder_name  # quintessa.state imports the runtime's models
-
     folder = Path(runtime.data_dir) / "downloads" / user_folder_name(runtime.user_id)
     folder.mkdir(parents=True, exist_ok=True)
     async with httpx.AsyncClient(follow_redirects=True, timeout=60) as client:
@@ -141,30 +139,11 @@ def _json_list(args: dict[str, str], name: str) -> tuple[list, str]:
     return value, ""
 
 
-def _brief_cards(raw: list, runtime: AgentRuntime) -> tuple[list[Card], list[str]]:
-    """Cards from the agent's entries, one per topic: a later card for the
-    same topic replaces the earlier one."""
-    cards: list[Card] = []
-    notes: list[str] = []
-    for n, entry in enumerate(raw, 1):
-        if not isinstance(entry, dict) or not entry.get("text"):
-            notes.append(f"card {n}: skipped, it has no text")
-            continue
-        card, fixes = build_card(entry, runtime)
-        notes += [f"card {n}: {fix}" for fix in fixes]
-        twin = next((i for i, b in enumerate(cards) if card.topic_id and b.topic_id == card.topic_id), None)
-        if twin is not None:
-            notes.append(f"card {n}: replaces card {twin + 1}, a topic has one card")
-            cards.pop(twin)
-        cards.append(card)
-    return cards, notes
-
-
 async def _set_brief(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     raw, problem = _json_list(args, "cards")
     if problem:
         return ToolCallResult("failed", problem)
-    cards, notes = _brief_cards(raw, runtime)
+    cards, notes = cards_from_entries(raw, runtime.store)
     runtime.device.set_brief(cards)
     return ToolCallResult("done", "; ".join([f"brief shows {len(cards)} cards", *notes]))
 
@@ -174,7 +153,7 @@ async def _update_brief(args: dict[str, str], runtime: AgentRuntime) -> ToolCall
     remove, problem2 = _json_list(args, "remove")
     if problem or problem2:
         return ToolCallResult("failed", problem or problem2)
-    cards, notes = _brief_cards(put, runtime)
+    cards, notes = cards_from_entries(put, runtime.store)
     lines: list[str] = []
     gone = runtime.device.remove_cards([str(i) for i in remove])
     lines += [f"removed {b.id} ({b.text})" for b in gone]
@@ -187,97 +166,6 @@ async def _update_brief(args: dict[str, str], runtime: AgentRuntime) -> ToolCall
         )
     lines.append(f"brief shows {len(runtime.device.state.brief)} cards")
     return ToolCallResult("done", "; ".join([*lines, *notes]))
-
-
-def build_card(entry: dict, runtime: AgentRuntime) -> tuple[Card, list[str]]:
-    """Build a brief card, keeping only links that lead somewhere: a topic and
-    document that exist, a section of that document, an installed tool. What
-    was dropped is reported back so the agent can learn from it."""
-    store = runtime.store
-    fixes: list[str] = []
-    topic_id = entry.get("topic_id") or None
-    topic = store.topics.get(topic_id) if topic_id else None
-    if topic_id and topic is None:
-        fixes.append(f"no topic {topic_id}, dropped the link")
-        topic_id = None
-    document_id = entry.get("document_id") or None
-    if document_id is None and topic is not None and topic.document_id:
-        document_id = topic.document_id
-    doc = store.documents.get(document_id) if document_id else None
-    if document_id and (doc is None or doc.status.value == "archived"):
-        fixes.append(f"no open document {document_id}, kept as a card")
-        document_id, doc = None, None
-    section_id = entry.get("section_id") or None
-    if section_id and (doc is None or doc.section(section_id) is None):
-        fixes.append(f"no section {section_id} in {document_id or 'a document'}, dropped it")
-        section_id = None
-    action, problem = card_action(entry.get("action"), runtime)
-    if problem:
-        fixes.append(f"action dropped: {problem}")
-    expires_at, problem = parse_time(entry.get("expires_at"))
-    if problem:
-        fixes.append(f"expires_at dropped: {problem}")
-    due_at, problem = parse_time(entry.get("due_at"))
-    if problem:
-        fixes.append(f"due_at dropped: {problem}")
-    raw_salience = entry.get("salience") if isinstance(entry.get("salience"), dict) else {}
-    scores = Salience(
-        urgency=clamp(raw_salience["urgency"], 0.4) if raw_salience.get("urgency") is not None else None,
-        relevance=clamp(raw_salience.get("relevance"), 0.5),
-        affinity=clamp(raw_salience.get("affinity"), 0.5),
-    )
-    card = Card(
-        str(entry["text"]),
-        topic_id,
-        document_id,
-        section_id,
-        urgency=entry.get("urgency") or "normal",
-        detail=str(entry.get("detail") or ""),
-        action=action,
-        expires_at=expires_at,
-        due_at=due_at,
-        salience=scores,
-    )
-    if entry.get("id"):
-        card.id = str(entry["id"])
-    return card, fixes
-
-
-def parse_time(raw: object) -> tuple[datetime | None, str]:
-    """An ISO time; one without a zone is taken as UTC."""
-    if not raw:
-        return None, ""
-    try:
-        at = datetime.fromisoformat(str(raw))
-    except ValueError:
-        return None, f"{raw!r} is not an ISO time"
-    return (at if at.tzinfo else at.replace(tzinfo=UTC)), ""
-
-
-def card_action(raw: object, runtime: AgentRuntime) -> tuple[CardAction | None, str]:
-    if not raw:
-        return None, ""
-    if isinstance(raw, str):
-        try:
-            raw = json.loads(raw)
-        except json.JSONDecodeError:
-            return None, "it is not an object"
-    if not isinstance(raw, dict):
-        return None, "it is not an object"
-    tool = runtime.store.tools.get(str(raw.get("tool") or ""))
-    if tool is None:
-        return None, f"{raw.get('tool')!r} is not installed"
-    function = tool.function(str(raw.get("function") or ""))
-    if function is None:
-        return None, f"{tool.name} has no function {raw.get('function')!r}"
-    arguments = raw.get("arguments") or {}
-    if isinstance(arguments, list):  # [{name, value}], the tool_use shape
-        arguments = {a.get("name"): a.get("value") for a in arguments if isinstance(a, dict)}
-    if not isinstance(arguments, dict):
-        return None, "arguments must be an object"
-    arguments = {str(k): v if isinstance(v, str) else json.dumps(v) for k, v in arguments.items() if k}
-    label = str(raw.get("label") or function.name.replace("_", " ").capitalize())
-    return CardAction(tool.name, function.name, label, arguments), ""
 
 
 async def _show_document(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:

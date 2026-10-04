@@ -9,20 +9,16 @@ from quintessa.llm import schema as s
 from quintessa.models import (
     Answer,
     FieldKind,
-    OversightLevel,
-    Permission,
     Question,
     QuestionField,
     QuestionPurpose,
 )
 from quintessa.models.answer import WITHDRAWN
+from quintessa.oversight import record_permission
 from quintessa.serde import to_dict
 
 if TYPE_CHECKING:
     from quintessa.memory.store import MemoryStore
-
-# Skins send this value for an approved `confirm` field.
-CONFIRM_YES = "yes"
 
 SCHEMA = s.obj(
     {
@@ -72,45 +68,13 @@ def build_request(session_id: str, data: dict, store: MemoryStore) -> Question:
     )
 
 
-def is_approval(request: Question, response: Answer) -> bool:
-    if response.dismissed:
-        return False
-    confirms = [f.name for f in request.fields if f.kind == FieldKind.CONFIRM]
-    return bool(confirms) and all(response.values.get(name) == CONFIRM_YES for name in confirms)
-
-
-def record_permission(ctx: StepContext, request: Question, response: Answer) -> Permission | None:
-    """A permission answer carries forward through this session, and is kept in
-    memory when the function only needs confirming once."""
-    if request.purpose != QuestionPurpose.PERMISSION or not request.tool or not request.function:
-        return None
-    granted = is_approval(request, response)
-    permission = Permission(
-        tool=request.tool,
-        function=request.function,
-        granted=granted,
-        scope="session",
-        detail=request.prompt,
-        session_id=ctx.session.id,
-        question_id=request.id,
-    )
-    ctx.session.permissions.append(permission)
-    tool = ctx.runtime.store.tools.get(request.tool)
-    function = tool.function(request.function) if tool else None
-    if granted and function and function.oversight == OversightLevel.CONFIRM_ONCE:
-        ctx.runtime.store.add_permission(
-            Permission(request.tool, request.function, True, "persistent", request.prompt, ctx.session.id, request.id)
-        )
-    return permission
-
-
 class GenerativeUIExecutor:
     async def run(self, ctx: StepContext) -> StepOutcome:
         result = await call_capability(ctx, SCHEMA)
         request = build_request(ctx.session.id, result.data, ctx.runtime.store)
 
         async def on_answer(response: Answer) -> StepOutcome:
-            permission = record_permission(ctx, request, response)
+            permission = record_permission(ctx.session, ctx.runtime.store, request, response)
             answer = "dismissed" if response.dismissed else response.values
             summary = f"Asked '{request.prompt}'; user answered {answer}"
             if response.surface_context.startswith(WITHDRAWN):

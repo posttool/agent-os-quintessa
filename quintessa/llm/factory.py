@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import os
-
+from quintessa import config
 from quintessa.llm.client import LLMClient
 from quintessa.llm.credentials import load_service_account_env
 from quintessa.llm.resilient import ModelRoute, ResilientLLM
@@ -24,7 +23,7 @@ def build_llm(chain: str | None = None) -> ResilientLLM:
       ANTHROPIC_API_KEY         used when QUINTESSA_ANTHROPIC_API_KEY is not set
     """
     load_service_account_env()
-    spec = chain or os.environ.get("QUINTESSA_MODEL_CHAIN", DEFAULT_CHAIN)
+    spec = chain or config.model_chain(DEFAULT_CHAIN)
     clients: dict[str, LLMClient] = {}
     routes = []
     for item in [s.strip() for s in spec.split(",") if s.strip()]:
@@ -32,12 +31,12 @@ def build_llm(chain: str | None = None) -> ResilientLLM:
         if provider not in clients:
             clients[provider] = _client_for(provider)
         routes.append(ModelRoute(clients[provider], model))
-    return ResilientLLM(routes, retries=int(os.environ.get("QUINTESSA_LLM_RETRIES", "2")))
+    return ResilientLLM(routes, retries=config.llm_retries())
 
 
 def _client_for(provider: str) -> LLMClient:
-    project = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    location = os.environ.get("GOOGLE_CLOUD_LOCATION", "global")
+    project = config.gcp_project()
+    location = config.gcp_location()
     if provider == "gemini":
         from quintessa.llm.gemini_vertex import GeminiVertexAdapter
 
@@ -45,6 +44,6 @@ def _client_for(provider: str) -> LLMClient:
     if provider == "claude":
         from quintessa.llm.claude import ClaudeAdapter
 
-        on_vertex = os.environ.get("QUINTESSA_CLAUDE_ON_VERTEX") == "1"
+        on_vertex = config.claude_on_vertex()
         return ClaudeAdapter(vertex_project=project if on_vertex else None, vertex_region=location)
     raise ValueError(f"unknown LLM provider {provider!r}")

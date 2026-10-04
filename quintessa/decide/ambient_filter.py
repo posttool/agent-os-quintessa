@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
 import time
 from typing import TYPE_CHECKING, Any
 
+from quintessa import config
 from quintessa.decide.card_scorer import CardScorer
 from quintessa.decide.next_step import NextStepDecider
 from quintessa.decide.system_one import SystemOneClient, SystemOneError, client_from_env
@@ -82,12 +82,8 @@ def jev_options_from_env() -> dict[str, Any]:
         return {}
     return {
         "jev_next_step": NextStepDecider(client),
-        "jev_ambient_filter": AmbientFilter(client, _threshold()),
+        "jev_ambient_filter": AmbientFilter(client, config.ambient_threshold(DEFAULT_THRESHOLD)),
         "jev_card_scorer": CardScorer(client),
-        "jev_shadow_default": os.environ.get("QUINTESSA_DECIDER", "shadow") != "llm",
-        "jev_filter_default": os.environ.get("QUINTESSA_AMBIENT_FILTER") == "1",
+        "jev_shadow_default": config.jev_shadow_default(),
+        "jev_filter_default": config.jev_filter_default(),
     }
-
-
-def _threshold() -> float:
-    return float(os.environ.get("QUINTESSA_AMBIENT_THRESHOLD", DEFAULT_THRESHOLD))

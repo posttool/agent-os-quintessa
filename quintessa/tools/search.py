@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import os
 from typing import Any, Protocol
+
+from quintessa import config
 
 
 class SearchBackend(Protocol):
@@ -44,7 +45,7 @@ class ClaudeWebSearch:
         if client is None:
             import anthropic
 
-            client = anthropic.AsyncAnthropic(api_key=os.environ.get("QUINTESSA_ANTHROPIC_API_KEY") or None)
+            client = anthropic.AsyncAnthropic(api_key=config.anthropic_api_key())
         self.client = client
         self.model = model
         self.max_continuations = max_continuations
@@ -77,10 +78,8 @@ class ClaudeWebSearch:
 def search_backend_from_env() -> SearchBackend | None:
     """Gemini's Google Search grounding when GOOGLE_CLOUD_PROJECT is set,
     otherwise Claude's web search when an Anthropic key is set."""
-    if os.environ.get("GOOGLE_CLOUD_PROJECT"):
-        return GeminiGroundedSearch(
-            project=os.environ["GOOGLE_CLOUD_PROJECT"], location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global")
-        )
-    if os.environ.get("QUINTESSA_ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"):
-        return ClaudeWebSearch(model=os.environ.get("QUINTESSA_SEARCH_MODEL", "claude-opus-5-5"))
+    if config.gcp_project():
+        return GeminiGroundedSearch(project=config.gcp_project(), location=config.gcp_location())
+    if config.anthropic_api_key():
+        return ClaudeWebSearch(model=config.search_model())
     return None

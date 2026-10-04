@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 import random
 from typing import TYPE_CHECKING
 
 import httpx
 
+from quintessa import config
 from quintessa.llm import schema as s
 from quintessa.models import AuthState, Tool, ToolBinding, ToolCallRecord, ToolFunction, ToolKind
 from quintessa.serde import to_dict
@@ -40,6 +40,7 @@ SIMULATED_KINDS = (ToolKind.LLM, ToolKind.MCP, ToolKind.CODE)
 
 # A simulated tool keeps its recent calls and sees them on each new call,
 # so a menu, an order or a booking matches what it reported earlier.
+DEFAULT_FAILURE_RATE = 0.2  # about one simulated call in five runs into a problem
 HISTORY_KEPT = 30
 HISTORY_SHOWN = 12
 HISTORY_RESULT_LIMIT = 3000
@@ -63,10 +64,7 @@ FAIL_INSTRUCTION = (
 def failure_rate() -> float:
     """How often a simulated call runs into a problem, from
     QUINTESSA_SIM_FAILURE_RATE (default 0.2: about one call in five)."""
-    try:
-        return min(max(float(os.environ.get("QUINTESSA_SIM_FAILURE_RATE", "0.2")), 0.0), 1.0)
-    except ValueError:
-        return 0.2
+    return config.sim_failure_rate(DEFAULT_FAILURE_RATE)
 
 
 def _schema(statuses: list[str]) -> dict:

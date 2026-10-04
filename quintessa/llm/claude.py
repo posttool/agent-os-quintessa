@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 import anthropic
 
+from quintessa import config
 from quintessa.llm.errors import FatalLLMError, InvalidOutputError, RefusalError, RetryableLLMError
 
 # Models that accept the server-side refusal fallback ("fallbacks": "default").
@@ -33,7 +33,7 @@ class ClaudeAdapter:
                 client = anthropic.AsyncAnthropicVertex(project_id=vertex_project, region=vertex_region)
             else:
                 # QUINTESSA_ANTHROPIC_API_KEY wins; with neither set the SDK reads ANTHROPIC_API_KEY.
-                client = anthropic.AsyncAnthropic(api_key=os.environ.get("QUINTESSA_ANTHROPIC_API_KEY") or None)
+                client = anthropic.AsyncAnthropic(api_key=config.anthropic_api_key())
         self.client = client
         self.effort = effort
         # The server-side fallback parameter is a Claude API feature; it is

@@ -6,10 +6,10 @@ import logging
 from typing import TYPE_CHECKING
 
 from quintessa.clock import now
+from quintessa.context import JSON_INSTRUCTION, controller_context
 from quintessa.decide import is_ambient
 from quintessa.device import BRIEF_SOURCE
 from quintessa.executors import EXECUTORS, StepContext
-from quintessa.executors.common import JSON_INSTRUCTION, controller_context
 from quintessa.llm import LLMUnavailableError
 from quintessa.llm import schema as s
 from quintessa.loop.brief_refresh import refresh_brief, score_cards

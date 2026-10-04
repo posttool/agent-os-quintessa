@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
 
+from quintessa import config
 from quintessa.apps.fallback import FallbackAppStore
 from quintessa.apps.offline import OfflineCatalog
 from quintessa.apps.play import PlayStore
@@ -21,7 +21,7 @@ __all__ = ["AppStore", "FallbackAppStore", "OfflineCatalog", "PlayStore", "WebSe
 def app_store_from_env(search: SearchBackend | None, llm: ResilientLLM) -> AppStore:
     """QUINTESSA_APP_STORE: play, search, offline, or auto (the default):
     Play, then web search (when a search backend exists), then the bundled catalog."""
-    choice = os.environ.get("QUINTESSA_APP_STORE", "auto").lower()
+    choice = config.app_store()
     if choice == "play":
         return PlayStore()
     if choice == "search" and search is not None:

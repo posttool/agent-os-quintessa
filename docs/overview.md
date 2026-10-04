@@ -87,7 +87,7 @@ Input events are kept in memory for audit only. Memory organizes what they mean;
 
 A session is a sequence of **steps**. Before each step the **controller** (one model call, prompt in `capabilities/_controller.md`) reads the context and picks one capability with a `focus` (exactly what to do) and a few **status words** for the dynamic island, or picks `done`. The capability runs, and its summary joins the context for the next decision. A session ends at `done` or after 12 steps.
 
-What the controller reads is built in one place (`executors/common.py: controller_context`), so the LLM and Jev decide from the same facts:
+What the controller reads is built in one place (`quintessa/context.py: controller_context`), so the LLM and Jev decide from the same facts:
 
 ```ts
 ControllerContext {
@@ -435,6 +435,8 @@ Oversight levels, from least to most:
 | `auto_from_memory` | Run, filling arguments from memory. |
 | `confirm_once` | Ask the first time; a grant is kept in memory. |
 | `always_ask` | Needs a grant in the current session (spending money, messaging someone). |
+
+The rule lives in `quintessa/oversight.py`: a grant or refusal earlier in the session decides first, then the level, then a `confirm_once` grant kept in memory.
 
 A tool call returns a **tool result**: `{ status: "done" | "in_progress" | "needs_user" | "failed", result, progress_stages }`.
 
