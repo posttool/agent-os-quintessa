@@ -146,6 +146,6 @@ export interface AgentState {
   persona: { profile: PersonaProfile; date: string | null; running: boolean } | null;
   settings: ModelSettings;
   jev: JevStatus;
-  apps: { store: string; ask_before_install: boolean };
+  apps: { store: string };
   server_time: string;
 }

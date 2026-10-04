@@ -149,14 +149,9 @@ function Apps({ state, api, act }: { state: AgentState; api: Api; act: (fn: () =
     <div>
       <div className="row" style={{ marginBottom: 8 }}>
         <h3 className="grow" style={{ margin: 0 }}>Apps</h3>
-        <label className="small muted row" style={{ gap: 6 }}>
-          <input type="checkbox" checked={state.apps.ask_before_install}
-            onChange={(e) => act(() => api.putPreferences({ ask_before_install: e.target.checked }))} />
-          Ask before installing apps
-        </label>
       </div>
       <div className="muted small" style={{ marginBottom: 8 }}>
-        The agent installs apps from the store ({state.apps.store}) when it needs one. Installed apps are simulated by a model for now.
+        The agent installs apps from the store ({state.apps.store}) whenever it needs one, without asking. Installed apps are simulated by a model for now.
       </div>
       <div className="row" style={{ marginBottom: 10 }}>
         <input className="grow" placeholder="Search the app store" value={query}

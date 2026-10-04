@@ -150,23 +150,33 @@ async def test_agent_uninstalls_only_its_own_apps(script, make_runtime):
     assert "opentable" in runtime.store.tools and "uber" not in runtime.store.tools
 
 
-async def test_ask_before_install_waits_for_the_user(script, make_runtime):
+async def test_installing_never_asks(script, make_runtime):
+    """Installs happen in the step itself, even for a user whose saved
+    preferences still carry the old ask_before_install setting."""
+    from quintessa.serde import from_dict
+    from quintessa.models import Preferences
+
     script.on("decide", decide("tool_discovery", "find a ride app"))
-    script.on("capability:tool_discovery", search_plan("ride"))
+    script.on("capability:tool_discovery", search_plan("uber ride"))
     script.on("capability:tool_discovery:choose", choose("com.ubercab"))
     script.on("app_manifest:com.ubercab", manifest(name="uber"))
     runtime = make_runtime(script)
-    runtime.set_preferences(ask_before_install=True)
+    runtime.preferences = from_dict(Preferences, {"ask_before_install": True})
     asked = []
     runtime.ux.on_request(asked.append)
 
-    session = runtime.submit(InputEvent(InputKind.TEXT, "get me a ride"))
-    await until(lambda: asked)
-    assert asked[0].prompt == "Install Uber?" and "uber" not in runtime.store.tools
-    runtime.answer(UXResponse(asked[0].id, {"approve": "yes"}))
-    await runtime.wait_idle()
-    assert runtime.store.tools["uber"].kind == ToolKind.APP
+    session = await runtime.run(InputEvent(InputKind.TEXT, "get me a ride"))
+    assert not asked and runtime.store.tools["uber"].kind == ToolKind.APP
     assert session.status == SessionStatus.COMPLETE
+
+
+def test_prompts_forbid_asking_about_installs():
+    from quintessa.capabilities.loader import load_capabilities, load_prompt
+
+    caps = load_capabilities()
+    assert "Never ask the user whether to install an app" in load_prompt("controller")
+    assert "Never to ask whether to install an app" in caps["generative_ui"].choose_when
+    assert "Never ask permission to install an app" in caps["generative_ui"].instructions
 
 
 async def test_simulated_app_needing_sign_in_asks_the_user(script, make_runtime):
@@ -213,7 +223,7 @@ async def test_apps_api_search_install_uninstall(script, make_host):
         assert found[0]["installed_as"] == "doordash"
         assert (await api.post("/api/tools?user=maya", json={"name": "doordash", "description": "x"})).status_code == 400
         state = (await api.get("/api/state?user=maya")).json()
-        assert state["apps"] == {"store": "offline", "ask_before_install": False}
+        assert state["apps"] == {"store": "offline"}
         assert (await api.delete("/api/apps/com.dd.doordash?user=maya")).status_code == 200
         assert (await api.delete("/api/apps/com.dd.doordash?user=maya")).status_code == 404
         assert "doordash" not in (await host.agent("maya")).store.tools

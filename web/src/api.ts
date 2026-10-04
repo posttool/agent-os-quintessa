@@ -64,7 +64,7 @@ export function makeApi(user: string) {
     searchApps: (q: string) => call<AppSearchResult[]>("GET", `/api/apps/search?q=${encodeURIComponent(q)}`),
     installApp: (listing: AppListing) => call("POST", "/api/apps/install", listing),
     uninstallApp: (appId: string) => call("DELETE", `/api/apps/${encodeURIComponent(appId)}`),
-    putPreferences: (p: Partial<Record<"jev" | "jev_shadow" | "jev_filter" | "jev_drive" | "jev_rank" | "ask_before_install", boolean | null>>) =>
+    putPreferences: (p: Partial<Record<"jev" | "jev_shadow" | "jev_filter" | "jev_drive" | "jev_rank", boolean | null>>) =>
       call<JevStatus>("PUT", "/api/preferences", p),
   };
 }
