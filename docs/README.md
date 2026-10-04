@@ -1,5 +1,6 @@
 # Docs
 
+- [overview.md](overview.md): a high-level overview of Quintessa, updated from the original brief, with the key schemas.
 - [spec.md](spec.md): the Quintessa Agent OS spec, copied from Duke's gist on 2026-10-02.
 - [plans/](plans/): every plan written for this project so far, oldest first. Each file starts with its date, whether it was built, and the PR that built it.
 
