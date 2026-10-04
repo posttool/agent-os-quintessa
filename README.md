@@ -20,6 +20,17 @@ uv run python -m quintessa serve                      # http://127.0.0.1:8000
 
 After pulling new changes, run `uv sync --extra dev` and `npm install && npm run build` in `web/` again, then restart the server.
 
+### Before you push
+
+```bash
+uv run ruff check quintessa tests            # lint (rules and line length in pyproject.toml)
+uv run ruff format quintessa tests           # format
+uv run pytest -q
+cd web && npm run build                      # type-checks the web app too
+```
+
+GitHub Actions runs the same checks on every pull request (`.github/workflows/ci.yml`).
+
 ## How it works
 
 ```
@@ -44,38 +55,44 @@ permissions, processes, traces       notifications
 
 - **The LLM does the reasoning.** Every model call returns JSON that matches a closed schema (Claude structured outputs, Gemini `response_json_schema`). Code only carries out those structured decisions; it never parses text to decide anything.
 - **Capabilities are markdown files** in `quintessa/capabilities/`. Each file's front matter names its executor and says when to choose it; the body is the capability's prompt. The controller's prompt is `_controller.md`. `load_capabilities(dir, names=[...])` picks the set.
+- **Prompts are files too.** Every other fixed text sent to a model is a markdown file in `quintessa/prompts/` (front matter says where it is used and which `{placeholders}` it takes), Jev's questions are YAML in `quintessa/prompts/jev/`, and the built-in tools are defined in `quintessa/tools/builtin_tools.yaml`. Tuning the agent's wording never means editing Python.
+- **One context for every model.** What the controller, each capability and Jev read is assembled in `quintessa/context.py`, so the LLM and Jev decide from the same facts.
 - **Memory** holds a graph of typed nodes and edges, the topic index, documents (each the growing record of one topic, made of sections), tools, permissions, process subscriptions, raw input events (for audit only) and the trace of every session.
 - **Questions.** A `generative_ui` step, or a tool call that needs approval, asks the user a question and the session waits. Every question is answered in the question sheet; waiting questions stack at the top of the brief, and the user can stash one for later. The answer returns to the context that asked (a document section, a pending tool call).
-- **Oversight.** Each tool function has an oversight level: `auto`, `auto_from_memory`, `confirm_once` (the answer is kept in memory) or `always_ask`. A permission given in a session carries through the rest of that session.
+- **Oversight.** Each tool function has an oversight level: `auto`, `auto_from_memory`, `confirm_once` (the answer is kept in memory) or `always_ask`. A permission given in a session carries through the rest of that session. The rules are in `quintessa/oversight.py`.
 - **Apps.** When the user wants something done that people do in a phone app, `tool_discovery` searches an app store, picks an app and installs it without asking. Installed apps are played by a model for now. See [Apps](#apps).
 - **Processes.** A long-running tool call (a ride, a delivery) creates a process subscription, which sends progress back in as input events and archives itself when the process completes.
 - **The brief** is a ranked list of cards. The agent edits single cards, keeps one card per topic, and drops a card at its `expires_at`. After a session that changed a topic with a card, one model call keeps, rewrites or removes that card and withdraws questions the news answered. Cards are ordered by salience (`quintessa/device/salience.py`).
 - **Spaces** shows a document with only the sections that matter now expanded; the rest fold into an outline.
 - **System One models.** With a Jev key, a fast typed-decision model is asked beside the LLM: it shadows next-step choices, can skip ambient events that don't matter, and can score cards. See [Jev](#jev).
 - **Resilience.** `ResilientLLM` retries transient errors and bad output with backoff, then falls back along the model chain. A session that runs out of models is marked failed with the error in its trace; other sessions keep running.
-- **Per-user, durable state.** There is no global memory. Every `AgentHost` call takes a `user_id`; each user has their own memory, device, questions, tools and processes. Only the model chain and the capability definitions are shared. State is saved shortly after any change, reloads on the user's next request after a restart (running process subscriptions resume; sessions that were mid-flight are marked interrupted), and can be downloaded and restored as one versioned JSON document.
+- **Per-user, durable state.** There is no global memory. Every `AgentHost` call takes a `user_id`; each user has their own memory, device, questions, tools and processes. Only the model chain and the capability definitions are shared. State is saved shortly after any change, reloads on the user's next request after a restart (running process subscriptions resume; sessions that were mid-flight are marked interrupted), and can be downloaded and restored as one versioned JSON document (version 2; version 1 files are upgraded as they load).
 - **Separation.** Memory and reasoning know nothing about any skin. Surfaces subscribe to `MemoryStore.listen` and `DeviceSurface.listen`.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `quintessa/models/` | dataclasses and enums, one per file |
+| `quintessa/models/` | dataclasses and enums, one per file (`Question`, `Answer`, `Topic`, `Document`, `Tool`, ...) |
 | `quintessa/capabilities/` | capability markdown files, the controller prompt, and the loader |
-| `quintessa/loop/` | `AgentRuntime` (one user's agent), `AgentReasoningLoop`, `UXBroker` (waiting questions), and the end-of-session brief refresh |
+| `quintessa/prompts/` | every other prompt, as markdown; Jev's questions as YAML in `jev/` |
+| `quintessa/loop/` | `AgentRuntime` (one user's agent), `AgentReasoningLoop`, `QuestionBroker` (waiting questions), and the end-of-session brief refresh |
+| `quintessa/context.py` | what the models read: controller, capability and brief context, card staleness |
 | `quintessa/executors/` | the code that carries out each capability's output |
+| `quintessa/oversight.py` | whether a tool call may run now, and what an approval leaves behind |
 | `quintessa/memory/` | `MemoryStore` and the memory operations |
-| `quintessa/device/` | `DeviceSurface` and its state: cards and salience, document focus, stash |
-| `quintessa/tools/` | the built-in `web` and `device` tools, the tool runner, web search backends |
+| `quintessa/device/` | `DeviceSurface` and its state: cards (`Card`, built in `cards.py`) and salience, document focus, stash |
+| `quintessa/tools/` | the built-in `web` and `device` tools (defined in `builtin_tools.yaml`), the tool runner, web search backends |
 | `quintessa/apps/` | app stores (Play, web search, bundled catalog) and installing apps as tools |
-| `quintessa/decide/` | System One models (Jev, gev): next step, ambient filter, card scoring, agreement report |
-| `quintessa/llm/` | `ClaudeAdapter`, `GeminiVertexAdapter`, `ResilientLLM`, schema helpers, `ScriptedLLM` for tests |
-| `quintessa/host.py` | `AgentHost`: per-user agents, saving, download and restore |
+| `quintessa/decide/` | System One models (Jev, gev): next step, ambient filter, card scoring, `JevSwitches`, agreement report |
+| `quintessa/llm/` | `ClaudeAdapter`, `GeminiVertexAdapter`, `ResilientLLM`, schema helpers, the model picker's catalog, `ScriptedLLM` for tests |
+| `quintessa/host.py` | `AgentHost`: per-user agents, saving, download and restore, the shared model chain |
 | `quintessa/state/` | state backends (SQL, file, in-memory) and the agent state format |
+| `quintessa/config.py` | every environment variable, read in one place |
 | `quintessa/ambient/` | ambient sources and their generators |
 | `quintessa/persona/` | Aura persona client and day replay |
-| `quintessa/samples/` | bootstrap data: tool suggestions, ambient templates, the offline app catalog |
-| `quintessa/api/` | FastAPI app: per-user HTTP API, live change stream, serves the web app |
+| `quintessa/samples/` | bootstrap data: tool suggestions, ambient templates, the offline app catalog, the model picker's list |
+| `quintessa/api/` | FastAPI app (`app.py`) with one router per area in `routes/`: per-user HTTP API, live change stream, serves the web app |
 | `quintessa/cli.py` | the command line (`python -m quintessa`) |
 | `web/` | React web app (Vite, TypeScript) |
 | `tests/` | pytest suite |
@@ -98,6 +115,8 @@ export QUINTESSA_MODEL_CHAIN="claude:claude-opus-5-5,claude:claude-opus-5,gemini
 With no model configured the server still starts, and every input fails with a message saying what is missing.
 
 ### Environment variables
+
+All of these are read through `quintessa/config.py`.
 
 | Variable | Default | What it does |
 |---|---|---|
