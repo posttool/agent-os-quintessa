@@ -2,9 +2,9 @@
 
 Quintessa is a personal agent operating system. An LLM-driven reasoning loop works over a memory of the user's world, and a device surface shows the user what matters right now.
 
-This document is the up-to-date version of the first brief ([spec.md](spec.md)). It describes what the system does today, as of PR #20, and uses one name for each idea. The [glossary](#glossary) at the end lists those names and the older words they replace. Schemas are taken from the code (`quintessa/models/`, `quintessa/device/`) and show field names exactly as they are stored and sent by the API.
+This document is the up-to-date version of the first brief ([spec.md](spec.md)). It describes what the system does today, as of PR #21, and uses one name for each idea. The [glossary](#glossary) at the end lists those names and the older words they replace. Schemas are taken from the code (`quintessa/models/`, `quintessa/device/`) and show field names exactly as they are stored and sent by the API.
 
-Work that is not merged yet is marked **In progress**. Ideas from the first brief that are not built yet are listed in [Not built yet](#not-built-yet).
+Ideas from the first brief that are not built yet are listed in [Not built yet](#not-built-yet).
 
 ## Contents
 
@@ -99,7 +99,7 @@ ControllerContext {
   memory: MemorySnapshot          // see Memory; archived topics and documents left out
   on_screen: DocumentView | null  // what Spaces shows now
   brief: BriefCardContext[]       // the brief as it stands, with a `stale` reason per card
-  questions_waiting: { id, prompt, topic_id, asked_at }[]
+  questions_waiting: { id, prompt, topic_id, asked_at, stashed }[]
   max_steps_left: number
 }
 ```
@@ -335,6 +335,9 @@ UXRequest {                  // a question
   tool: string | null        // for a permission: the function it authorizes
   function: string | null
   topic_id: string | null    // so the brief and sheets can show it with its topic
+  context: string            // why the agent asks, one sentence, shown under the question
+  arguments: { [name]: string }  // for a permission: the call it would run
+  user_waiting: boolean      // asked by a session the user started in the last 2 minutes; the skin opens it at once
   created_at: string
 }
 
@@ -349,7 +352,7 @@ UXField {                    // design-system-agnostic; the skin decides how to 
 UXResponse {                 // the answer
   request_id: string
   values: { [field name]: string }   // a confirm field sends "yes" to approve
-  dismissed: boolean                 // the user chose "Not now"; the session goes on without it
+  dismissed: boolean                 // the user chose "Skip"; the session goes on without it
   surface_context: string            // where it was answered; "withdrawn: <reason>" when the agent took it back
   answered_at: string
 }
@@ -357,8 +360,8 @@ UXResponse {                 // the answer
 
 What happens when a question is asked and answered:
 
-1. The session's status becomes `waiting_for_user`, the island says "Waiting for you", and the question appears in the brief and in Spaces.
-2. The user answers (`POST /api/ux/{id}`). The waiting session resumes with the values, and the device closes the form and returns to the document section the question came from.
+1. The session's status becomes `waiting_for_user`, the island says "Waiting for you", and the question joins the stack at the top of the brief. Where it belongs to a document, Spaces shows a "Waiting on you" row in its place.
+2. The user answers in the question sheet (`POST /api/ux/{id}`). The waiting session resumes with the values, and the device closes the form and returns to the document section the question came from.
 3. If the session asks another question, the same thing happens again, until the session is done.
 
 A question can also be **withdrawn**: when a later session changes the question's topic, the brief refresh may decide the news already answers it. The waiting session then resumes as if the question were dismissed, and is told why.
@@ -380,7 +383,20 @@ Permission {
 
 A grant given in a session carries forward to every later step of that session, so the user is never asked twice in one session. A decline also carries forward: the call is skipped. A grant for a `confirm_once` function is also saved in memory with scope `persistent`, so later sessions do not ask again.
 
-**In progress** (thread "Disambiguation in the bottom sheet"): today questions render in several places (the brief, above Spaces, at the top of a document, under a section). The plan moves every question into the bottom sheet: inline forms become "Waiting on you" rows, several questions stack into one deck ("1 of N"), the user can **stash** a question to keep its session paused without it leading the brief, and "Not now" becomes "Skip". It adds `stashed_ux_ids` to the device state.
+### The question sheet
+
+Every question is answered in one place, the **question sheet**: a bottom sheet holding a **deck** of the waiting questions. The top question is full size with the next two peeking behind it ("1 of N"); answering, skipping or stashing it brings up the next, and a sideways swipe moves through the deck without answering. Option fields offer "Something else…" for a typed answer.
+
+- The brief shows waiting questions as one **stack** at its top, oldest first; tapping it, a "Waiting on you" row, or the dynamic island opens the deck.
+- A question from a session the user started moments ago (`user_waiting`) opens the sheet by itself, since they are likely still looking.
+- **Skip** answers with `dismissed`, and the session goes on without the answer. Closing the sheet leaves the question waiting.
+- **Stash** puts a question aside: it stays unanswered and its session keeps waiting, but it leaves the stack for an "N stashed questions" chip at the end of the brief, and the agent does not ask it again. A stashed question comes back to the stack when its topic changes after it was stashed.
+
+```ts
+StashedQuestion { ux_request_id: string, topic_id: string | null, stashed_at: string }
+```
+
+The prompts tell the agent never to ask in a notification, a card's text or a Discover item, where the user cannot answer.
 
 ## Tools and apps
 
@@ -489,6 +505,7 @@ DeviceState {
   snoozed: BriefItem[]               // cards back in the brief at their snoozed_until
   suppressions: Suppression[]        // topics the user pushed away (see salience)
   open_ux_ids: string[]              // questions on screen now
+  stashed: StashedQuestion[]         // questions the user put aside, still waiting
   space_document_ids: string[]       // documents opened in Spaces
   focused_document_id: string | null // the document Spaces shows now
   focus: { [document_id]: DocumentFocus }
@@ -506,11 +523,11 @@ The screens, as the first brief describes them:
 - **Home** (center): the island, the brief, the installed apps and tools, and the input bar (text and speech).
 - **Spaces** (right): the workspace. A tab per live document, and the open document with its questions.
 
-A **sheet** (bottom sheet) opens over the current screen when the user taps a brief card that has no document, or that has a one-tap action.
+Two bottom sheets open over the current screen: the **card sheet**, when the user taps a brief card that has no document or that has a one-tap action, and the **question sheet** (see [Questions](#the-question-sheet)).
 
 ## The contextual brief
 
-The **brief** is a short ranked list of glanceable **cards**: calls to action, not details. Questions waiting on the user lead it, then the agent's cards ordered by salience. Tapping a card opens its topic's document in Spaces, focused on the section it is about; a card with no document opens a sheet with its detail, its topic's summary, its open questions and its action.
+The **brief** is a short ranked list of glanceable **cards**: calls to action, not details. The stack of questions waiting on the user leads it, then the agent's cards ordered by salience, then a chip for stashed questions. Tapping a card opens its topic's document in Spaces, focused on the section it is about; a card with no document opens the card sheet with its detail, its topic's summary, its open questions and its action.
 
 ```ts
 BriefItem {                  // a brief card
@@ -702,7 +719,7 @@ The FastAPI app (`quintessa/api/app.py`) serves the web app and a per-user HTTP 
 |---|---|
 | State | `GET /api/state` (everything a surface draws), `GET /api/stream` (server-sent `change` events) |
 | Input | `POST /api/input` `{ kind, content, sender, device }` starts a session |
-| Questions | `POST /api/ux/{id}` answers one |
+| Questions | `POST /api/ux/{id}` answers or skips one; `POST /api/ux/{id}/stash`, `/unstash` |
 | Brief | `POST /api/brief/{id}/open`, `/dismiss`, `/snooze`, `/act` |
 | Spaces | `POST /api/view` (the user's focus), `POST /api/topics/{id}/seen` |
 | Tools and apps | `POST /api/tools`, `DELETE /api/tools/{name}`, `GET /api/apps/search`, `POST /api/apps/install`, `DELETE /api/apps/{app_id}` |
@@ -789,7 +806,9 @@ One term per idea. The right-hand column lists words used for the same thing in 
 | **dynamic island** | The status pill at the top of the device. | |
 | **brief** | The contextual brief: the ranked list of cards and waiting questions. | contextual brief, dashboard |
 | **card** | One item in the brief (`BriefItem`). Not a topic. | indicator, brief item |
-| **sheet** | The bottom sheet a card opens when it has no document or has an action. | card sheet |
+| **card sheet** | The bottom sheet a card opens when it has no document or has an action. | sheet |
+| **question sheet** | The bottom sheet where every question is answered, as a deck. | disambiguation sheet, form |
+| **stash** | Questions the user put aside; still waiting, out of the stack. | |
 | **salience** | A card's ranking score. | priority |
 | **Spaces** | The device screen that shows documents. | intent space, intent screen |
 | **focus** | Which sections of a document Spaces expands. | |
