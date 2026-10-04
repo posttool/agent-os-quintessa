@@ -2,15 +2,15 @@ import json
 from datetime import timedelta
 
 import httpx
+from conftest import decide
 
 from quintessa.clock import now
 from quintessa.decide import BriefRanker, SystemOneClient
 from quintessa.device import BriefItem
-from quintessa.device.salience import Salience, proximity, suppression, Suppression
+from quintessa.device.salience import Salience, Suppression, proximity, suppression
 from quintessa.models import InputEvent, InputKind, Topic
 from quintessa.tools.builtin import _set_brief
 
-from conftest import decide
 
 def card(text, topic_id=None, urgency=None, relevance=0.5, affinity=0.5, due_in=None, label="normal"):
     due = now() + due_in if due_in is not None else None
@@ -23,12 +23,14 @@ def texts(runtime):
 
 async def test_the_brief_is_ordered_by_salience(script, make_runtime):
     runtime = make_runtime(script)
-    runtime.device.set_brief([
-        card("Screen time report", urgency=0.1, relevance=0.2, affinity=0.1),
-        card("Rain in 12 minutes", urgency=0.5, relevance=0.9, affinity=0.1, due_in=timedelta(minutes=12)),
-        card("Standup with video link", urgency=0.9, relevance=0.8, affinity=0.6, due_in=timedelta(minutes=15)),
-        card("Plumber at 2pm", urgency=0.8, relevance=0.5, affinity=0.3, due_in=timedelta(hours=5)),
-    ])
+    runtime.device.set_brief(
+        [
+            card("Screen time report", urgency=0.1, relevance=0.2, affinity=0.1),
+            card("Rain in 12 minutes", urgency=0.5, relevance=0.9, affinity=0.1, due_in=timedelta(minutes=12)),
+            card("Standup with video link", urgency=0.9, relevance=0.8, affinity=0.6, due_in=timedelta(minutes=15)),
+            card("Plumber at 2pm", urgency=0.8, relevance=0.5, affinity=0.3, due_in=timedelta(hours=5)),
+        ]
+    )
     assert texts(runtime) == ["Standup with video link", "Rain in 12 minutes", "Plumber at 2pm", "Screen time report"]
     top = runtime.device.state.brief[0].salience
     assert 0.9 < top.proximity < 1 and top.score > 0.8
@@ -46,7 +48,10 @@ def test_suppression_fades_and_ignoring_grows():
     at = now()
     dismissed = [Suppression("topic:t", "dismissed", at)]
     assert suppression("topic:t", None, at, dismissed, at) == -0.6
-    assert abs(suppression("topic:t", None, at, [Suppression("topic:t", "dismissed", at - timedelta(hours=12))], at) + 0.3) < 1e-9
+    assert (
+        abs(suppression("topic:t", None, at, [Suppression("topic:t", "dismissed", at - timedelta(hours=12))], at) + 0.3)
+        < 1e-9
+    )
     assert suppression("topic:other", None, at, dismissed, at) == 0
     # unopened for 2h is fine; then it loses up to 0.4 over the next 10h
     assert suppression("k", None, at - timedelta(hours=2), [], at) == 0
@@ -64,10 +69,17 @@ async def test_dismissing_pushes_a_topic_down_when_the_agent_brings_it_back(scri
     device.dismiss_brief(device.state.brief[0].id)
     assert texts(runtime) == ["Water the plants"]
 
-    await _set_brief({"items": json.dumps([
-        {"text": "Shoe sale: 10% more off", "topic_id": "t-sale", "salience": {"urgency": 0.6}},
-        {"text": "Water the plants", "salience": {"urgency": 0.4}},
-    ])}, runtime)
+    await _set_brief(
+        {
+            "items": json.dumps(
+                [
+                    {"text": "Shoe sale: 10% more off", "topic_id": "t-sale", "salience": {"urgency": 0.6}},
+                    {"text": "Water the plants", "salience": {"urgency": 0.4}},
+                ]
+            )
+        },
+        runtime,
+    )
     sale = next(b for b in device.state.brief if b.topic_id == "t-sale")
     assert texts(runtime) == ["Water the plants", "Shoe sale: 10% more off"]
     assert sale.salience.suppression == -0.6
@@ -119,8 +131,10 @@ class FakeJevScores:
         body = json.loads(request.content)
         self.requests.append(body)
         u, r, a = self.levels[body["state"]["card"]["text"]]
-        answers = {name: {"type": "score", "score": level, "confidence": 0.8, "legend": {}, "probabilities": {}}
-                   for name, level in (("urgency", u), ("relevance", r), ("affinity", a))}
+        answers = {
+            name: {"type": "score", "score": level, "confidence": 0.8, "legend": {}, "probabilities": {}}
+            for name, level in (("urgency", u), ("relevance", r), ("affinity", a))
+        }
         return httpx.Response(200, json={"model": "jev-test", "answers": answers})
 
 
@@ -131,14 +145,31 @@ def ranker(fake) -> BriefRanker:
 async def test_jev_scores_new_cards_and_the_brief_reorders(script, make_runtime):
     fake = FakeJevScores({"Mom's birthday dinner": (3, 2, 3), "Coupon expires": (2, 1, 0)})
     script.on("decide", decide("tool_use"))
-    script.on("capability:tool_use", {
-        "tool": "device", "function": "update_brief", "rationale": "test", "document_id": None, "section_id": None,
-        "topic_id": None, "track_progress": False, "progress_stages": [], "permission_prompt": "",
-        "arguments": [{"name": "put", "value": json.dumps([
-            {"text": "Coupon expires", "salience": {"urgency": 0.9, "relevance": 0.9, "affinity": 0.9}},
-            {"text": "Mom's birthday dinner", "salience": {"urgency": 0.1}},
-        ])}],
-    })
+    script.on(
+        "capability:tool_use",
+        {
+            "tool": "device",
+            "function": "update_brief",
+            "rationale": "test",
+            "document_id": None,
+            "section_id": None,
+            "topic_id": None,
+            "track_progress": False,
+            "progress_stages": [],
+            "permission_prompt": "",
+            "arguments": [
+                {
+                    "name": "put",
+                    "value": json.dumps(
+                        [
+                            {"text": "Coupon expires", "salience": {"urgency": 0.9, "relevance": 0.9, "affinity": 0.9}},
+                            {"text": "Mom's birthday dinner", "salience": {"urgency": 0.1}},
+                        ]
+                    ),
+                }
+            ],
+        },
+    )
     runtime = make_runtime(script, brief_ranker=ranker(fake))
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "Mom: dinner at 7 for my birthday?", sender="Mom"))
 
@@ -176,4 +207,3 @@ async def test_jev_ranking_follows_the_preference_and_failures_keep_agent_scores
 
     runtime.set_preferences(jev_rank=False)
     assert runtime.brief_ranker is None
-

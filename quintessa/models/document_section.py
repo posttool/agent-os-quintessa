@@ -15,5 +15,4 @@ class DocumentSection:
     details: str = ""
     actions_taken: list[str] = field(default_factory=list)
     suggested_actions: list[str] = field(default_factory=list)
-    process_ids: list[str] = field(default_factory=list)
     updated_at: datetime = field(default_factory=now)

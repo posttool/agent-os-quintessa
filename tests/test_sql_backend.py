@@ -2,7 +2,11 @@ import json
 
 import httpx
 import pytest
+from conftest import decide
 from sqlalchemy import event
+from test_host import remember
+from test_memory import node_op
+from test_tools import mock_http
 
 from quintessa.memory import MemoryStore
 from quintessa.models import InputEvent, InputKind
@@ -10,18 +14,21 @@ from quintessa.state import FileStateBackend, user_folder_name
 from quintessa.state.sql_backend import TABLES, database_url
 from quintessa.tools.builtin import BUILTIN_IMPLEMENTATIONS
 
-from conftest import decide
-from test_host import remember
-from test_memory import node_op
-from test_tools import mock_http
-
 
 def snapshot(user_id, nodes=(), events=(), **extra):
     memory = {name: [] for name in TABLES}
     memory["nodes"] = [{"id": n, "type": "fact", "title": n.upper()} for n in nodes]
     memory["events"] = [{"id": e, "kind": "text", "content": e} for e in events]
-    return {"format": "quintessa.agent-state", "version": 1, "user_id": user_id, "saved_at": "now",
-            "memory": memory, "device": {"brief": []}, "preferences": {"jev": None}, **extra}
+    return {
+        "format": "quintessa.agent-state",
+        "version": 1,
+        "user_id": user_id,
+        "saved_at": "now",
+        "memory": memory,
+        "device": {"brief": []},
+        "preferences": {"jev": None},
+        **extra,
+    }
 
 
 def count_inserted_rows(backend):
@@ -118,8 +125,13 @@ async def test_host_runs_save_through_the_database(script, make_host, open_sql):
     host = make_host(script, backend)
     await host.run("maya", InputEvent(InputKind.TEXT, "I love Thai"))
     await host.save("maya")
-    assert await backend.count_rows("maya") == {**{name: 0 for name in TABLES}, "nodes": 1, "tools": 2,
-                                                     "events": 1, "sessions": 1}
+    assert await backend.count_rows("maya") == {
+        **{name: 0 for name in TABLES},
+        "nodes": 1,
+        "tools": 2,
+        "events": 1,
+        "sessions": 1,
+    }
     stored = json.loads(json.dumps(await backend.load("maya")))
     assert stored["memory"]["sessions"][0]["status"] == "complete"
 

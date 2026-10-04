@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -19,8 +20,9 @@ from pydantic import BaseModel
 
 from quintessa.ambient import ambient_templates, source_from_description, source_from_template
 from quintessa.api.model_settings import ModelSettings
-from quintessa.apps.installer import install_app, installed_app, uninstall_app
 from quintessa.api.unconfigured import UnconfiguredLLM
+from quintessa.apps.installer import install_app, installed_app, uninstall_app
+from quintessa.clock import now
 from quintessa.device import FOCUSED, FULL, DocumentFocus
 from quintessa.device.focus import is_stale
 from quintessa.host import AgentHost
@@ -40,10 +42,9 @@ from quintessa.models import (
     ToolParameter,
     UXResponse,
 )
-from quintessa.persona import AuraPersonaClient, PersonaProfile, PersonaSimulation
+from quintessa.persona import AuraPersonaClient, PersonaSimulation
 from quintessa.serde import to_dict
 from quintessa.state import StateFormatError
-from quintessa.clock import now
 
 HEARTBEAT_SECONDS = 15.0
 
@@ -217,7 +218,9 @@ def create_app(
                     {**to_dict(s), "done": agent.ambient.source_done(s.id)} for s in agent.ambient.sources.values()
                 ],
             },
-            "persona": None if agent.persona is None else {
+            "persona": None
+            if agent.persona is None
+            else {
                 "profile": agent.persona["profile"],
                 "date": agent.persona.get("date"),
                 "running": entry is not None and entry.running,
@@ -245,7 +248,7 @@ def create_app(
                     try:
                         kind = await asyncio.wait_for(queue.get(), HEARTBEAT_SECONDS)
                         yield f"event: {kind}\ndata: {{}}\n\n"
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         yield ": heartbeat\n\n"
             finally:
                 agent.watchers.discard(watcher)
@@ -256,7 +259,9 @@ def create_app(
 
     @app.post("/api/input")
     async def send_input(body: InputBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
-        session = agent.submit(InputEvent(body.kind, body.content, source="user", device=body.device, sender=body.sender))
+        session = agent.submit(
+            InputEvent(body.kind, body.content, source="user", device=body.device, sender=body.sender)
+        )
         return {"session_id": session.id}
 
     @app.post("/api/ux/{request_id}")
@@ -291,9 +296,10 @@ def create_app(
         return {"ok": True}
 
     @app.post("/api/brief/{item_id}/snooze")
-    async def brief_snooze(item_id: str, minutes: int = Query(60, ge=1, le=7 * 24 * 60),
-                           agent: AgentRuntime = Agent) -> dict[str, Any]:
-        """"Not now": back in the brief after `minutes`, ranked a little lower."""
+    async def brief_snooze(
+        item_id: str, minutes: int = Query(60, ge=1, le=7 * 24 * 60), agent: AgentRuntime = Agent
+    ) -> dict[str, Any]:
+        """ "Not now": back in the brief after `minutes`, ranked a little lower."""
         card = agent.device.snooze_brief(item_id, now() + timedelta(minutes=minutes))
         if card is None:
             raise HTTPException(404, "that card is no longer in the brief")
@@ -451,8 +457,15 @@ def create_app(
 
     @app.post("/api/ambient/sources")
     async def add_source(body: SourceBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
-        source = AmbientSource(body.name, body.kind, body.events, body.interval_seconds, device=body.device,
-                               sender=body.sender, loop=body.loop)
+        source = AmbientSource(
+            body.name,
+            body.kind,
+            body.events,
+            body.interval_seconds,
+            device=body.device,
+            sender=body.sender,
+            loop=body.loop,
+        )
         agent.ambient.add_source(source)
         return {"id": source.id}
 

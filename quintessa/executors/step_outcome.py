@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from quintessa.models import UXRequest, UXResponse
 
@@ -15,4 +16,4 @@ class StepOutcome:
     summary: str
     model: str = ""
     pending_ux: UXRequest | None = None
-    on_answer: Callable[[UXResponse], Awaitable["StepOutcome"]] | None = None
+    on_answer: Callable[[UXResponse], Awaitable[StepOutcome]] | None = None

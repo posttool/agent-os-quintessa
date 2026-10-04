@@ -9,7 +9,7 @@ import enum
 import types
 import typing
 from datetime import datetime
-from functools import lru_cache
+from functools import cache
 from typing import Any, TypeVar
 
 T = TypeVar("T")
@@ -29,7 +29,7 @@ def to_dict(obj: Any) -> Any:
     return obj
 
 
-@lru_cache(maxsize=None)
+@cache
 def _hints(cls: type) -> dict[str, Any]:
     return typing.get_type_hints(cls)
 

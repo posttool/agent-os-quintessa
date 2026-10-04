@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 
 from quintessa.clock import now
 from quintessa.device import salience
 from quintessa.device.brief_item import BriefItem
 from quintessa.device.device_state import DeviceState
 from quintessa.device.discovery_item import DiscoveryItem
-from quintessa.device.salience import Suppression
 from quintessa.device.document_focus import FOCUSED, DocumentFocus
+from quintessa.device.salience import Suppression
 from quintessa.device.stashed_question import StashedQuestion
 from quintessa.serde import to_dict
 
@@ -121,8 +122,16 @@ class DeviceSurface:
         for card in self.state.brief:
             s = card.salience
             s.proximity = round(salience.proximity(card.due_at, at), 4)
-            s.suppression = round(salience.suppression(
-                salience.card_key(card.topic_id, card.text), card.opened_at, card.updated_at, self.state.suppressions, at), 4)
+            s.suppression = round(
+                salience.suppression(
+                    salience.card_key(card.topic_id, card.text),
+                    card.opened_at,
+                    card.updated_at,
+                    self.state.suppressions,
+                    at,
+                ),
+                4,
+            )
             s.score = salience.score(s, card.urgency)
         self.state.brief.sort(key=lambda b: b.salience.score, reverse=True)
 
@@ -155,7 +164,7 @@ class DeviceSurface:
         return card
 
     def snooze_brief(self, item_id: str, until: datetime) -> BriefItem | None:
-        """"Not now": the card leaves the brief until `until`, then comes
+        """ "Not now": the card leaves the brief until `until`, then comes
         back ranked a little lower."""
         card = next((b for b in self.state.brief if b.id == item_id), None)
         if card is None:
@@ -204,8 +213,9 @@ class DeviceSurface:
         those whose topic changed after they were stashed: that is when they
         may matter again. Returns the ids brought back."""
         self.state.stashed = [q for q in self.state.stashed if q.ux_request_id in waiting]
-        return self.unstash([q.ux_request_id for q in self.state.stashed
-                             if q.topic_id and topic_changed(q.topic_id, q.stashed_at)])
+        return self.unstash(
+            [q.ux_request_id for q in self.state.stashed if q.topic_id and topic_changed(q.topic_id, q.stashed_at)]
+        )
 
     def show_document(
         self,

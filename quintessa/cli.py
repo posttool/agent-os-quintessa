@@ -11,9 +11,9 @@ from pathlib import Path
 
 from quintessa.decide import jev_options_from_env
 from quintessa.decide.report import agreement_report
+from quintessa.host import AgentHost
 from quintessa.llm import LLMError
 from quintessa.llm.factory import build_llm
-from quintessa.host import AgentHost
 from quintessa.loop import AgentRuntime
 from quintessa.memory import MemoryStore
 from quintessa.models import InputEvent, InputKind, UXFieldKind, UXRequest, UXResponse
@@ -92,8 +92,11 @@ async def _run_command(args: argparse.Namespace, backend) -> None:
     elif args.command == "persona":
         sim = PersonaSimulation(agent, AuraPersonaClient(), speed=args.speed)
         profile = await sim.start(args.id, args.date)
-        agent.persona = {"persona_id": args.id, "date": sim.date,
-                         "profile": {k: v for k, v in to_dict(profile).items() if k != "raw"}}
+        agent.persona = {
+            "persona_id": args.id,
+            "date": sim.date,
+            "profile": {k: v for k, v in to_dict(profile).items() if k != "raw"},
+        }
         await sim.wait()
         await agent.wait_idle()
     elif args.command == "export":

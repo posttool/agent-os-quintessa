@@ -75,13 +75,16 @@ def proximity(due_at: datetime | None, at: datetime) -> float:
     return 0.5 ** (ahead / PROXIMITY_HALF_LIFE.total_seconds())
 
 
-def suppression(key: str, opened_at: datetime | None, updated_at: datetime,
-                suppressions: list[Suppression], at: datetime) -> float:
+def suppression(
+    key: str, opened_at: datetime | None, updated_at: datetime, suppressions: list[Suppression], at: datetime
+) -> float:
     penalty = 0.0
     for s in suppressions:
         if s.key != key:
             continue
-        base, half = (DISMISS_PENALTY, DISMISS_HALF_LIFE) if s.kind == "dismissed" else (SNOOZE_PENALTY, SNOOZE_HALF_LIFE)
+        base, half = (
+            (DISMISS_PENALTY, DISMISS_HALF_LIFE) if s.kind == "dismissed" else (SNOOZE_PENALTY, SNOOZE_HALF_LIFE)
+        )
         penalty += base * 0.5 ** (max((at - s.at).total_seconds(), 0.0) / half.total_seconds())
     since = at - max(updated_at, opened_at) if opened_at else at - updated_at
     if since > IGNORE_GRACE:
@@ -91,7 +94,10 @@ def suppression(key: str, opened_at: datetime | None, updated_at: datetime,
 
 def score(s: Salience, label: str) -> float:
     urgency = s.urgency if s.urgency is not None else LABEL_URGENCY.get(label, 0.4)
-    total = (WEIGHTS["urgency"] * urgency + WEIGHTS["proximity"] * s.proximity
-             + WEIGHTS["relevance"] * s.relevance + WEIGHTS["affinity"] * s.affinity)
+    total = (
+        WEIGHTS["urgency"] * urgency
+        + WEIGHTS["proximity"] * s.proximity
+        + WEIGHTS["relevance"] * s.relevance
+        + WEIGHTS["affinity"] * s.affinity
+    )
     return round(total + s.suppression, 4)
-

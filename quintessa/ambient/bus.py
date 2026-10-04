@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from quintessa.models import AmbientSource, InputEvent, InputKind, Subscription
 
@@ -18,7 +19,7 @@ class AmbientBus:
 
     def __init__(
         self,
-        runtime: "AgentRuntime",
+        runtime: AgentRuntime,
         *,
         process_interval: float = 5.0,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
@@ -62,8 +63,13 @@ class AmbientBus:
                 await self._sleep(source.interval_seconds / max(source.speed, 0.01))
                 if self.enabled and source.enabled:
                     self.runtime.submit(
-                        InputEvent(source.kind, content, source=f"ambient:{source.name}", device=source.device,
-                                   sender=source.sender)
+                        InputEvent(
+                            source.kind,
+                            content,
+                            source=f"ambient:{source.name}",
+                            device=source.device,
+                            sender=source.sender,
+                        )
                     )
             if not source.loop:
                 return
@@ -83,12 +89,18 @@ class AmbientBus:
                 subscription.archived = True
             self.runtime.store.put_subscription(subscription)
             if self.enabled:
-                content = f"{subscription.description} | stage {subscription.next_stage}/{len(subscription.stages)}: {stage}"
+                content = (
+                    f"{subscription.description} | stage {subscription.next_stage}/{len(subscription.stages)}: {stage}"
+                )
                 if final:
                     content += " | process complete"
                 self.runtime.submit(
-                    InputEvent(InputKind.PROCESS_PROGRESS, content, source=f"process:{subscription.tool}",
-                               subscription_id=subscription.id)
+                    InputEvent(
+                        InputKind.PROCESS_PROGRESS,
+                        content,
+                        source=f"process:{subscription.tool}",
+                        subscription_id=subscription.id,
+                    )
                 )
 
     # --- lifecycle -------------------------------------------------------------

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class StepContext:
-    runtime: "AgentRuntime"
+    runtime: AgentRuntime
     session: ReasoningSession
     capability: Capability
     decision: StepDecision

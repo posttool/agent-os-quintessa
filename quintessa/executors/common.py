@@ -29,7 +29,7 @@ def session_context(session: ReasoningSession) -> dict[str, Any]:
     }
 
 
-def controller_context(runtime: "AgentRuntime", session: ReasoningSession) -> dict[str, Any]:
+def controller_context(runtime: AgentRuntime, session: ReasoningSession) -> dict[str, Any]:
     """Everything the next-step decision is made from. The LLM controller
     and Jev's next_step question both read this, so they decide on the same
     facts."""

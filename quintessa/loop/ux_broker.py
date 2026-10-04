@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Callable
+from collections.abc import Callable
 
 from quintessa.models import UXRequest, UXResponse
 from quintessa.models.ux_response import WITHDRAWN

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from statistics import median
-from typing import Iterable
 
 from quintessa.models import ReasoningSession, ShadowDecision
 
@@ -35,7 +35,10 @@ def agreement_report(sessions: Iterable[ReasoningSession]) -> str:
         for low, high in BUCKETS:
             group = [d for d in answered if low <= d.confidence < high]
             if group:
-                lines.append(f"  {low:.1f}-{min(high, 1.0):.1f}  {_rate(group):<16} {len(group) / len(answered):.0%} of decisions")
+                lines.append(
+                    f"  {low:.1f}-{min(high, 1.0):.1f}  {_rate(group):<16} "
+                    f"{len(group) / len(answered):.0%} of decisions"
+                )
         latencies = sorted(d.latency_ms for d in answered)
         p95 = latencies[min(len(latencies) - 1, int(len(latencies) * 0.95))]
         lines.append("")

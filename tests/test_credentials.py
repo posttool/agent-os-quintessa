@@ -22,7 +22,8 @@ def test_key_in_variable_becomes_private_credentials_file(env):
     load_service_account_env()
     path = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
     try:
-        assert json.load(open(path)) == KEY
+        with open(path) as f:
+            assert json.load(f) == KEY
         assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
         assert os.environ["GOOGLE_CLOUD_PROJECT"] == "demo-proj"
     finally:

@@ -35,7 +35,7 @@ class WebSearchAppStore:
 
     name = "search"
 
-    def __init__(self, search: SearchBackend, llm: "ResilientLLM"):
+    def __init__(self, search: SearchBackend, llm: ResilientLLM):
         self.backend = search
         self.llm = llm
 

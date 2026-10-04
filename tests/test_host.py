@@ -1,14 +1,13 @@
 import json
 
 import pytest
-
-from quintessa.models import OversightLevel, InputEvent, InputKind, SessionStatus, UXResponse
-from quintessa.state import FileStateBackend, InMemoryStateBackend, StateFormatError
-from quintessa.state.snapshot import INTERRUPTED
-
 from conftest import decide, until
 from test_memory import doc_op, node_op, topic_op
 from test_tools import call, delivery_tool
+
+from quintessa.models import InputEvent, InputKind, OversightLevel, SessionStatus, UXResponse
+from quintessa.state import FileStateBackend, InMemoryStateBackend, StateFormatError
+from quintessa.state.snapshot import INTERRUPTED
 
 
 def remember(*ops):
@@ -17,7 +16,11 @@ def remember(*ops):
 
 async def test_each_user_has_their_own_agent_state(script, make_host):
     script.on("decide", decide("memory"), decide("done"), decide("memory"))
-    script.on("capability:memory", remember(node_op("pref-thai", "Likes Thai")), remember(node_op("pref-sushi", "Likes sushi")))
+    script.on(
+        "capability:memory",
+        remember(node_op("pref-thai", "Likes Thai")),
+        remember(node_op("pref-sushi", "Likes sushi")),
+    )
     host = make_host(script, InMemoryStateBackend())
 
     await host.run("maya", InputEvent(InputKind.TEXT, "I love Thai"))
@@ -75,9 +78,24 @@ async def test_restart_stops_interrupted_sessions_and_resumes_processes(script, 
     backend = make_backend()
     script.on("decide", decide("tool_use"), decide("generative_ui"))
     script.on("capability:tool_use", call("food_delivery", "checkout"))
-    script.on("tool:food_delivery.checkout", {"status": "in_progress", "result": "placed", "progress_stages": ["cooking", "delivered"]})
-    script.on("capability:generative_ui", {"prompt": "Tip?", "purpose": "information", "context": "", "fields": [],
-                                           "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None})
+    script.on(
+        "tool:food_delivery.checkout",
+        {"status": "in_progress", "result": "placed", "progress_stages": ["cooking", "delivered"]},
+    )
+    script.on(
+        "capability:generative_ui",
+        {
+            "prompt": "Tip?",
+            "purpose": "information",
+            "context": "",
+            "fields": [],
+            "document_id": None,
+            "section_id": None,
+            "topic_id": None,
+            "tool": None,
+            "function": None,
+        },
+    )
     host = make_host(script, backend)
     agent = await host.agent("maya")
     agent.store.put_tool(delivery_tool(OversightLevel.AUTO))
@@ -101,7 +119,11 @@ async def test_restart_stops_interrupted_sessions_and_resumes_processes(script, 
 async def test_download_and_restore(script, make_host, make_backend):
     backend = make_backend()
     script.on("decide", decide("memory"), decide("done"), decide("memory"))
-    script.on("capability:memory", remember(node_op("pref-thai", "Likes Thai")), remember(node_op("pref-new", "Something new")))
+    script.on(
+        "capability:memory",
+        remember(node_op("pref-thai", "Likes Thai")),
+        remember(node_op("pref-new", "Something new")),
+    )
     host = make_host(script, backend)
     await host.run("maya", InputEvent(InputKind.TEXT, "I love Thai"))
 
@@ -171,8 +193,20 @@ async def test_clear_is_per_user_and_durable(script, make_host, make_backend):
 
 async def test_answers_go_to_the_right_user(script, make_host):
     script.on("decide", decide("generative_ui"))
-    script.on("capability:generative_ui", {"prompt": "Which?", "purpose": "information", "context": "", "fields": [],
-                                           "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None})
+    script.on(
+        "capability:generative_ui",
+        {
+            "prompt": "Which?",
+            "purpose": "information",
+            "context": "",
+            "fields": [],
+            "document_id": None,
+            "section_id": None,
+            "topic_id": None,
+            "tool": None,
+            "function": None,
+        },
+    )
     host = make_host(script, InMemoryStateBackend())
     session = await host.submit("maya", InputEvent(InputKind.TEXT, "x"))
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)

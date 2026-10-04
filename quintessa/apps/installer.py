@@ -61,7 +61,7 @@ def grounding_for(listing: AppListing, extra: str = "") -> str:
     return "\n".join(lines)
 
 
-async def install_app(runtime: "AgentRuntime", listing: AppListing, need: str = "", created_by: str = "agent") -> Tool:
+async def install_app(runtime: AgentRuntime, listing: AppListing, need: str = "", created_by: str = "agent") -> Tool:
     """Write the app's manifest and add it to the user's tools. Installing
     an app that is already installed returns the installed one."""
     store = runtime.store

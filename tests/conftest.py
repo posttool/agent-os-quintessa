@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import defaultdict
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
@@ -32,7 +33,7 @@ class Script:
         self.queues: dict[str, list[Any]] = defaultdict(list)
         self.prompts: dict[str, list[dict]] = defaultdict(list)
 
-    def on(self, purpose: str, *answers: Any) -> "Script":
+    def on(self, purpose: str, *answers: Any) -> Script:
         self.queues[purpose].extend(answers)
         return self
 

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
 
 
-def staleness(runtime: "AgentRuntime", card: BriefItem) -> str:
+def staleness(runtime: AgentRuntime, card: BriefItem) -> str:
     """Why a card may no longer hold, or "" when nothing changed under it."""
     store = runtime.store
     if card.topic_id:
@@ -28,7 +28,7 @@ def staleness(runtime: "AgentRuntime", card: BriefItem) -> str:
     return ""
 
 
-def brief_context(runtime: "AgentRuntime") -> dict[str, Any]:
+def brief_context(runtime: AgentRuntime) -> dict[str, Any]:
     """What the brief shows now and which questions wait on the user, for the
     agent to read before it adds anything, highest salience first (expired
     cards are dropped first). A stashed question is one the user put aside
@@ -54,8 +54,13 @@ def brief_context(runtime: "AgentRuntime") -> dict[str, Any]:
         for b in runtime.device.state.brief
     ]
     questions = [
-        {"id": r.id, "prompt": r.prompt, "topic_id": r.topic_id, "asked_at": r.created_at,
-         "stashed": runtime.device.is_stashed(r.id)}
+        {
+            "id": r.id,
+            "prompt": r.prompt,
+            "topic_id": r.topic_id,
+            "asked_at": r.created_at,
+            "stashed": runtime.device.is_stashed(r.id),
+        }
         for r in runtime.ux.pending.values()
     ]
     return to_dict({"brief": cards, "questions_waiting": questions})  # plain JSON, for Jev too

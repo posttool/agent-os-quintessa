@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import os
 import time
 from typing import TYPE_CHECKING, Any
 
-from quintessa.decide.system_one import SystemOneClient, SystemOneError, choice, client_from_env
+from quintessa.decide.system_one import SystemOneClient, SystemOneError, choice
 from quintessa.executors.common import controller_context
 from quintessa.models import ReasoningSession, ShadowDecision
 
@@ -33,13 +32,13 @@ class NextStepDecider:
         self.client = client
 
     @staticmethod
-    def question(runtime: "AgentRuntime") -> dict[str, Any]:
+    def question(runtime: AgentRuntime) -> dict[str, Any]:
         criteria = {c.name: c.choose_when or c.description for c in runtime.capabilities.values()}
         criteria[DONE] = DONE_WHEN
         return choice(INSTRUCTIONS, criteria)
 
     @staticmethod
-    def state(runtime: "AgentRuntime", session: ReasoningSession) -> dict[str, Any]:
+    def state(runtime: AgentRuntime, session: ReasoningSession) -> dict[str, Any]:
         """The same context the LLM controller decides from. The capability
         list is left out because the question's criteria carry it. In a replay
         of 68 recorded decisions this full context agreed with the LLM 53% of
@@ -48,7 +47,7 @@ class NextStepDecider:
         context.pop("capabilities")
         return context
 
-    async def shadow(self, runtime: "AgentRuntime", session: ReasoningSession) -> ShadowDecision:
+    async def shadow(self, runtime: AgentRuntime, session: ReasoningSession) -> ShadowDecision:
         """Never raises: a failed call is recorded with its error."""
         decision = ShadowDecision(step_index=len(session.steps), llm_choice="", model=self.client.label)
         started = time.perf_counter()
@@ -63,12 +62,3 @@ class NextStepDecider:
             decision.error = str(e) or type(e).__name__
         decision.latency_ms = round((time.perf_counter() - started) * 1000, 1)
         return decision
-
-
-def shadow_decider_from_env() -> NextStepDecider | None:
-    """Shadow mode is on when a Jev key is configured (see client_from_env),
-    unless QUINTESSA_DECIDER=llm turns it off."""
-    if os.environ.get("QUINTESSA_DECIDER", "shadow") == "llm":
-        return None
-    client = client_from_env()
-    return None if client is None else NextStepDecider(client)

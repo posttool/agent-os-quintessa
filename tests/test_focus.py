@@ -1,5 +1,10 @@
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
+from conftest import decide
+from test_api import api  # noqa: F401  (fixture)
+from test_memory import doc_op, section_op, topic_op
+from test_tools import call
 
 from quintessa.device import FULL, DocumentFocus
 from quintessa.device.focus import resolve_view
@@ -7,12 +12,7 @@ from quintessa.memory import MemoryStore
 from quintessa.memory.apply import apply_operations
 from quintessa.models import Document, DocumentSection, InputEvent, InputKind, Topic, UXPurpose, UXRequest
 
-from conftest import decide
-from test_api import api  # noqa: F401  (fixture)
-from test_memory import doc_op, section_op, topic_op
-from test_tools import call
-
-T0 = datetime(2026, 10, 1, 12, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 1, 12, tzinfo=UTC)
 
 
 def at(minutes: int) -> datetime:
@@ -32,7 +32,9 @@ def question(section_id):
 
 
 def test_rule_shows_the_first_open_section_with_a_next_step():
-    doc = trip(section("flights", status="complete"), section("hotel", next_steps=()), section("car"), section("dinner"))
+    doc = trip(
+        section("flights", status="complete"), section("hotel", next_steps=()), section("car"), section("dinner")
+    )
     view = resolve_view(doc, None, [], None)
     assert view["section_ids"] == ["car"] and view["set_by"] == "rule" and view["mode"] == "focused"
 
@@ -77,13 +79,25 @@ def test_section_timestamp_moves_only_when_content_changes():
 
 async def test_device_tool_focuses_sections_and_rejects_unknown_ones(script, make_runtime):
     script.on("decide", decide("memory"), decide("tool_use"), decide("tool_use"), decide("tool_use"))
-    script.on("capability:memory", {"summary": "", "operations": [
-        doc_op("doc-dinner", None), section_op("sec-place", "doc-dinner"), section_op("sec-time", "doc-dinner")]})
+    script.on(
+        "capability:memory",
+        {
+            "summary": "",
+            "operations": [
+                doc_op("doc-dinner", None),
+                section_op("sec-place", "doc-dinner"),
+                section_op("sec-time", "doc-dinner"),
+            ],
+        },
+    )
     script.on(
         "capability:tool_use",
         call("device", "show_document", {"document_id": "doc-dinner", "section_ids": json.dumps(["sec-nope"])}),
-        call("device", "show_document", {"document_id": "doc-dinner", "section_ids": json.dumps(["sec-time"]),
-                                          "reason": "Jane prefers Wednesday"}),
+        call(
+            "device",
+            "show_document",
+            {"document_id": "doc-dinner", "section_ids": json.dumps(["sec-time"]), "reason": "Jane prefers Wednesday"},
+        ),
         call("device", "show_document", {"document_id": "doc-dinner", "mode": "sideways"}),
     )
     runtime = make_runtime(script)
@@ -99,12 +113,17 @@ async def test_device_tool_focuses_sections_and_rejects_unknown_ones(script, mak
 
 async def test_user_view_is_saved_and_survives_restore(api, script):  # noqa: F811
     agent = await api.host.agent("maya")
-    apply_operations(agent.store, [doc_op("doc-dinner", None), section_op("sec-place", "doc-dinner"),
-                                   section_op("sec-time", "doc-dinner")], None)
+    apply_operations(
+        agent.store,
+        [doc_op("doc-dinner", None), section_op("sec-place", "doc-dinner"), section_op("sec-time", "doc-dinner")],
+        None,
+    )
 
     r = await api.post("/api/view?user=maya", json={"document_id": "doc-dinner", "section_ids": ["sec-time"]})
     assert r.status_code == 200 and r.json()["set_by"] == "user"
-    assert (await api.post("/api/view?user=maya", json={"document_id": "doc-dinner", "section_ids": ["x"]})).status_code == 422
+    assert (
+        await api.post("/api/view?user=maya", json={"document_id": "doc-dinner", "section_ids": ["x"]})
+    ).status_code == 422
     assert (await api.post("/api/view?user=maya", json={"document_id": "doc-none"})).status_code == 404
 
     await api.post("/api/view?user=maya", json={"document_id": "doc-dinner", "section_ids": [], "mode": "full"})
@@ -119,7 +138,9 @@ async def test_user_view_is_saved_and_survives_restore(api, script):  # noqa: F8
 
 def test_user_can_fold_everything_and_open_more_than_two():
     doc = trip(section("flights"), section("hotel"), section("car"))
-    assert resolve_view(doc, DocumentFocus("doc-trip", [], set_by="user", updated_at=at(5)), [], None)["section_ids"] == []
+    assert (
+        resolve_view(doc, DocumentFocus("doc-trip", [], set_by="user", updated_at=at(5)), [], None)["section_ids"] == []
+    )
     many = DocumentFocus("doc-trip", ["flights", "hotel", "car"], set_by="user", updated_at=at(5))
     assert len(resolve_view(doc, many, [], None)["section_ids"]) == 3
     agent = DocumentFocus("doc-trip", ["flights", "hotel", "car"], updated_at=at(5))
@@ -128,8 +149,16 @@ def test_user_can_fold_everything_and_open_more_than_two():
 
 async def test_back_to_focus_and_seen_pins_what_was_shown(api):  # noqa: F811
     agent = await api.host.agent("maya")
-    apply_operations(agent.store, [topic_op("topic-dinner", "Dinner"), doc_op("doc-dinner", "topic-dinner"),
-                                   section_op("sec-place", "doc-dinner"), section_op("sec-time", "doc-dinner")], None)
+    apply_operations(
+        agent.store,
+        [
+            topic_op("topic-dinner", "Dinner"),
+            doc_op("doc-dinner", "topic-dinner"),
+            section_op("sec-place", "doc-dinner"),
+            section_op("sec-time", "doc-dinner"),
+        ],
+        None,
+    )
     await api.post("/api/view?user=maya", json={"document_id": "doc-dinner", "section_ids": []})
     r = await api.post("/api/view?user=maya", json={"document_id": "doc-dinner", "section_ids": None})
     assert r.json()["set_by"] == "rule" and r.json()["section_ids"] == ["sec-place"]

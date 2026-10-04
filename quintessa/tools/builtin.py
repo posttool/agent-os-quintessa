@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
 import httpx
 
 from quintessa.device import FOCUSED, FULL, BriefAction, BriefItem, DiscoveryItem
 from quintessa.device.salience import Salience, clamp
-from quintessa.models import OversightLevel, Tool, ToolFunction, ToolKind, ToolParameter
+from quintessa.models import Tool, ToolFunction, ToolKind, ToolParameter
 from quintessa.tools.tool_call_result import ToolCallResult
 
 if TYPE_CHECKING:
@@ -34,10 +35,10 @@ WEB_TOOL = Tool(
 )
 
 BRIEF_CARD = (
-    "A card is {text, topic_id, document_id, section_id, urgency, detail, action, expires_at, due_at, salience}; detail is "
-    "one or two sentences shown when the card has no document; action is optional "
+    "A card is {text, topic_id, document_id, section_id, urgency, detail, action, expires_at, due_at, salience}; "
+    "detail is one or two sentences shown when the card has no document; action is optional "
     "{tool, function, arguments: {name: value}, label} for a card the user can just say yes to; "
-    "expires_at is an ISO time after which the card no longer applies (\"leave by 3pm\"), or omit it; "
+    'expires_at is an ISO time after which the card no longer applies ("leave by 3pm"), or omit it; '
     "due_at is the ISO time the thing the card is about happens (the meeting, the delivery), or omit it; "
     "salience is {urgency, relevance, affinity}, each 0 to 1: urgency is the personal risk if the user does "
     "not act (0.7-1 hard commitments like a meeting starting, a gate change, a courier outside; 0.3-0.7 "
@@ -67,27 +68,32 @@ DEVICE_TOOL = Tool(
             "the card with its id or its topic_id (a topic has one card); remove takes cards away "
             "that no longer hold. Use it when something new changes what a card says.",
             [
-                ToolParameter("put", "json array of cards, each optionally with the id it replaces. " + BRIEF_CARD, required=False),
+                ToolParameter(
+                    "put", "json array of cards, each optionally with the id it replaces. " + BRIEF_CARD, required=False
+                ),
                 ToolParameter("remove", "json array of card ids to take away", required=False),
             ],
         ),
         ToolFunction(
             "show_document",
             "Bring a document into Spaces showing only what matters now: the sections to expand "
-            "(at most 2; the rest fold into an outline) and a one-line reason. Use mode \"full\" when "
+            '(at most 2; the rest fold into an outline) and a one-line reason. Use mode "full" when '
             "the user asks for the whole document. Omit sections to let the device pick.",
             [
                 ToolParameter("document_id", "string"),
                 ToolParameter("section_ids", "json array of section ids", required=False),
-                ToolParameter("mode", "\"focused\" or \"full\"", required=False),
+                ToolParameter("mode", '"focused" or "full"', required=False),
                 ToolParameter("reason", "string", required=False),
             ],
         ),
         ToolFunction(
             "add_discovery",
             "Add a topic to the Discover screen.",
-            [ToolParameter("title", "string"), ToolParameter("reason", "string"),
-             ToolParameter("topic_id", "string", required=False)],
+            [
+                ToolParameter("title", "string"),
+                ToolParameter("reason", "string"),
+                ToolParameter("topic_id", "string", required=False),
+            ],
         ),
         ToolFunction("notify", "Show a short notification.", [ToolParameter("text", "string")]),
     ],
@@ -96,13 +102,13 @@ DEVICE_TOOL = Tool(
 BUILTIN_TOOLS = [WEB_TOOL, DEVICE_TOOL]
 
 
-async def _search(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+async def _search(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     if runtime.search is None:
         return ToolCallResult("failed", "no web search backend is configured")
     return ToolCallResult("done", await runtime.search.search(args["query"]))
 
 
-async def _fetch(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+async def _fetch(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
         response = await client.get(args["url"])
     text = response.text
@@ -110,7 +116,7 @@ async def _fetch(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResul
     return ToolCallResult("done" if response.is_success else "failed", text[:FETCH_LIMIT] + note)
 
 
-async def _download(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+async def _download(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     from quintessa.state import user_folder_name  # quintessa.state imports the runtime's models
 
     folder = Path(runtime.data_dir) / "downloads" / user_folder_name(runtime.user_id)
@@ -135,7 +141,7 @@ def _json_list(args: dict[str, str], name: str) -> tuple[list, str]:
     return value, ""
 
 
-def _brief_cards(raw: list, runtime: "AgentRuntime") -> tuple[list[BriefItem], list[str]]:
+def _brief_cards(raw: list, runtime: AgentRuntime) -> tuple[list[BriefItem], list[str]]:
     """Cards from the agent's entries, one per topic: a later card for the
     same topic replaces the earlier one."""
     items: list[BriefItem] = []
@@ -154,7 +160,7 @@ def _brief_cards(raw: list, runtime: "AgentRuntime") -> tuple[list[BriefItem], l
     return items, notes
 
 
-async def _set_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+async def _set_brief(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     raw, problem = _json_list(args, "items")
     if problem:
         return ToolCallResult("failed", problem)
@@ -163,7 +169,7 @@ async def _set_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallR
     return ToolCallResult("done", "; ".join([f"brief shows {len(items)} items", *notes]))
 
 
-async def _update_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+async def _update_brief(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     put, problem = _json_list(args, "put")
     remove, problem2 = _json_list(args, "remove")
     if problem or problem2:
@@ -176,12 +182,14 @@ async def _update_brief(args: dict[str, str], runtime: "AgentRuntime") -> ToolCa
     lines += [f"no card {i} to remove" for i in remove if str(i) not in known]
     for item in items:
         replaced = runtime.device.put_brief(item)
-        lines.append(f"replaced {item.id} ({replaced.text} -> {item.text})" if replaced else f"added {item.id} ({item.text})")
+        lines.append(
+            f"replaced {item.id} ({replaced.text} -> {item.text})" if replaced else f"added {item.id} ({item.text})"
+        )
     lines.append(f"brief shows {len(runtime.device.state.brief)} items")
     return ToolCallResult("done", "; ".join([*lines, *notes]))
 
 
-def brief_item(entry: dict, runtime: "AgentRuntime") -> tuple[BriefItem, list[str]]:
+def brief_item(entry: dict, runtime: AgentRuntime) -> tuple[BriefItem, list[str]]:
     """Build a brief card, keeping only links that lead somewhere: a topic and
     document that exist, a section of that document, an installed tool. What
     was dropped is reported back so the agent can learn from it."""
@@ -243,10 +251,10 @@ def parse_time(raw: object) -> tuple[datetime | None, str]:
         at = datetime.fromisoformat(str(raw))
     except ValueError:
         return None, f"{raw!r} is not an ISO time"
-    return (at if at.tzinfo else at.replace(tzinfo=timezone.utc)), ""
+    return (at if at.tzinfo else at.replace(tzinfo=UTC)), ""
 
 
-def brief_action(raw: object, runtime: "AgentRuntime") -> tuple[BriefAction | None, str]:
+def brief_action(raw: object, runtime: AgentRuntime) -> tuple[BriefAction | None, str]:
     if not raw:
         return None, ""
     if isinstance(raw, str):
@@ -272,7 +280,7 @@ def brief_action(raw: object, runtime: "AgentRuntime") -> tuple[BriefAction | No
     return BriefAction(tool.name, function.name, label, arguments), ""
 
 
-async def _show_document(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+async def _show_document(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     doc = runtime.store.documents.get(args["document_id"])
     if doc is None:
         return ToolCallResult("failed", f"no document {args['document_id']}")
@@ -294,12 +302,12 @@ async def _show_document(args: dict[str, str], runtime: "AgentRuntime") -> ToolC
     return ToolCallResult("done", f"showing {doc.id}: {shown}")
 
 
-async def _add_discovery(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+async def _add_discovery(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     runtime.device.add_discovery(DiscoveryItem(args["title"], args["reason"], args.get("topic_id") or None))
     return ToolCallResult("done", f"added {args['title']} to Discover")
 
 
-async def _notify(args: dict[str, str], runtime: "AgentRuntime") -> ToolCallResult:
+async def _notify(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     runtime.device.notify(args["text"])
     return ToolCallResult("done", "notified")
 
@@ -314,6 +322,3 @@ BUILTIN_IMPLEMENTATIONS: dict[tuple[str, str], Impl] = {
     ("device", "add_discovery"): _add_discovery,
     ("device", "notify"): _notify,
 }
-
-# Device changes are the agent's own surface; nothing here needs approval.
-assert all(f.oversight == OversightLevel.AUTO for t in BUILTIN_TOOLS for f in t.functions)

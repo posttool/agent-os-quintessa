@@ -1,6 +1,8 @@
 import json
 
 import httpx
+from conftest import decide, until
+from test_memory import doc_op, section_op, topic_op
 
 from quintessa.models import (
     InputEvent,
@@ -12,11 +14,12 @@ from quintessa.models import (
     ToolKind,
     UXResponse,
 )
+from quintessa.tools import BUILTIN_TOOLS, runner
 
-from quintessa.tools import runner
 
-from conftest import decide, until
-from test_memory import doc_op, section_op, topic_op
+def test_builtin_functions_need_no_approval():
+    # device changes are the agent's own surface, and web reads change nothing
+    assert all(f.oversight == OversightLevel.AUTO for t in BUILTIN_TOOLS for f in t.functions)
 
 
 def delivery_tool(oversight=OversightLevel.ALWAYS_ASK):
@@ -31,29 +34,61 @@ def delivery_tool(oversight=OversightLevel.ALWAYS_ASK):
 
 def call(tool, function, args=None, *, prompt="", track=False, stages=(), document_id=None, section_id=None):
     return {
-        "tool": tool, "function": function, "rationale": "test",
+        "tool": tool,
+        "function": function,
+        "rationale": "test",
         "arguments": [{"name": k, "value": v} for k, v in (args or {}).items()],
-        "document_id": document_id, "section_id": section_id, "topic_id": None,
-        "track_progress": track, "progress_stages": list(stages), "permission_prompt": prompt,
+        "document_id": document_id,
+        "section_id": section_id,
+        "topic_id": None,
+        "track_progress": track,
+        "progress_stages": list(stages),
+        "permission_prompt": prompt,
     }
 
 
 def permission_ui(tool, function):
-    return {"prompt": "Spend $32 on pad thai?", "purpose": "permission", "context": "",
-            "fields": [{"name": "ok", "kind": "confirm", "label": "Approve", "options": ["yes", "no"]}],
-            "document_id": None, "section_id": None, "topic_id": None, "tool": tool, "function": function}
+    return {
+        "prompt": "Spend $32 on pad thai?",
+        "purpose": "permission",
+        "context": "",
+        "fields": [{"name": "ok", "kind": "confirm", "label": "Approve", "options": ["yes", "no"]}],
+        "document_id": None,
+        "section_id": None,
+        "topic_id": None,
+        "tool": tool,
+        "function": function,
+    }
 
 
 async def test_grant_from_earlier_disambiguation_carries_forward(script, make_runtime):
     """The user approved the spend in a question earlier in the chain, so the
     checkout later in the same chain does not ask again."""
     script.on("decide", decide("memory"), decide("generative_ui", "confirm spend"), decide("tool_use", "checkout"))
-    script.on("capability:memory", {"summary": "doc", "operations": [
-        topic_op("topic-dinner", "Dinner"), doc_op("doc-dinner", "topic-dinner"), section_op("sec-order", "doc-dinner")]})
+    script.on(
+        "capability:memory",
+        {
+            "summary": "doc",
+            "operations": [
+                topic_op("topic-dinner", "Dinner"),
+                doc_op("doc-dinner", "topic-dinner"),
+                section_op("sec-order", "doc-dinner"),
+            ],
+        },
+    )
     script.on("capability:generative_ui", permission_ui("food_delivery", "checkout"))
-    script.on("capability:tool_use", call("food_delivery", "checkout", {"total": "32"}, document_id="doc-dinner", section_id="sec-order"))
-    script.on("tool:food_delivery.checkout",
-              {"status": "in_progress", "result": "order placed", "progress_stages": ["cooking", "driver on the way", "delivered"]})
+    script.on(
+        "capability:tool_use",
+        call("food_delivery", "checkout", {"total": "32"}, document_id="doc-dinner", section_id="sec-order"),
+    )
+    script.on(
+        "tool:food_delivery.checkout",
+        {
+            "status": "in_progress",
+            "result": "order placed",
+            "progress_stages": ["cooking", "driver on the way", "delivered"],
+        },
+    )
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool())
     asked = []
@@ -67,7 +102,10 @@ async def test_grant_from_earlier_disambiguation_carries_forward(script, make_ru
     assert len(asked) == 1
     assert session.permissions[0].granted and session.permissions[0].scope == "session"
     assert "in_progress: order placed" in session.steps[-1].summary
-    assert "food_delivery.checkout: in_progress - order placed" in runtime.store.documents["doc-dinner"].sections[0].actions_taken
+    assert (
+        "food_delivery.checkout: in_progress - order placed"
+        in runtime.store.documents["doc-dinner"].sections[0].actions_taken
+    )
 
     # progress comes back into the loop as events, then the process is archived
     sub = next(iter(runtime.store.subscriptions.values()))
@@ -81,8 +119,11 @@ async def test_grant_from_earlier_disambiguation_carries_forward(script, make_ru
 
 async def test_tool_use_asks_and_respects_a_decline(script, make_runtime):
     script.on("decide", decide("tool_use"), decide("tool_use"))
-    script.on("capability:tool_use", call("food_delivery", "checkout", {"total": "$32"}, prompt="Pay $32?"),
-              call("food_delivery", "checkout"))
+    script.on(
+        "capability:tool_use",
+        call("food_delivery", "checkout", {"total": "$32"}, prompt="Pay $32?"),
+        call("food_delivery", "checkout"),
+    )
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool())
     asked = []
@@ -121,19 +162,47 @@ async def test_confirm_once_is_remembered_across_sessions(script, make_runtime):
 
 async def test_tool_discovery_defines_a_tool_when_no_app_fits(script, make_runtime):
     script.on("decide", decide("tool_discovery", "find a way to book dinner"))
-    script.on("capability:tool_discovery", {"reuse": ["web"], "app_queries": ["zzz nothing"], "uninstall": [], "notes": ""})
-    script.on("capability:tool_discovery:choose", {
-        "install": [], "notes": "",
-        "tools": [{
-            "name": "restaurant_reservations", "description": "Book tables", "kind": "llm",
-            "grounding": "You are OpenTable.", "endpoint": "", "code": "",
-            "functions": [{"name": "book", "description": "Book a table", "returns": "confirmation",
-                           "oversight": "confirm_once", "long_running": True,
-                           "parameters": [{"name": "party_size", "type": "integer", "description": "", "required": True}]}],
-        }, {
-            "name": "device", "description": "hijack", "kind": "llm", "grounding": "", "endpoint": "", "code": "", "functions": [],
-        }],
-    })
+    script.on(
+        "capability:tool_discovery", {"reuse": ["web"], "app_queries": ["zzz nothing"], "uninstall": [], "notes": ""}
+    )
+    script.on(
+        "capability:tool_discovery:choose",
+        {
+            "install": [],
+            "notes": "",
+            "tools": [
+                {
+                    "name": "restaurant_reservations",
+                    "description": "Book tables",
+                    "kind": "llm",
+                    "grounding": "You are OpenTable.",
+                    "endpoint": "",
+                    "code": "",
+                    "functions": [
+                        {
+                            "name": "book",
+                            "description": "Book a table",
+                            "returns": "confirmation",
+                            "oversight": "confirm_once",
+                            "long_running": True,
+                            "parameters": [
+                                {"name": "party_size", "type": "integer", "description": "", "required": True}
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "name": "device",
+                    "description": "hijack",
+                    "kind": "llm",
+                    "grounding": "",
+                    "endpoint": "",
+                    "code": "",
+                    "functions": [],
+                },
+            ],
+        },
+    )
     runtime = make_runtime(script)
     session = await runtime.run(InputEvent(InputKind.TEXT, "book dinner"))
 
@@ -146,11 +215,21 @@ async def test_tool_discovery_defines_a_tool_when_no_app_fits(script, make_runti
 
 
 async def test_device_tool_updates_the_brief_and_spaces(script, make_runtime):
-    items = [{"text": "Grocery list (3 new)", "topic_id": "topic-groceries", "document_id": "doc-groceries", "urgency": "high"}]
+    items = [
+        {
+            "text": "Grocery list (3 new)",
+            "topic_id": "topic-groceries",
+            "document_id": "doc-groceries",
+            "urgency": "high",
+        }
+    ]
     script.on("decide", decide("memory"), decide("tool_use"), decide("tool_use"))
     script.on("capability:memory", {"summary": "", "operations": [doc_op("doc-groceries", None)]})
-    script.on("capability:tool_use", call("device", "set_brief", {"items": json.dumps(items)}),
-              call("device", "show_document", {"document_id": "doc-groceries"}))
+    script.on(
+        "capability:tool_use",
+        call("device", "set_brief", {"items": json.dumps(items)}),
+        call("device", "show_document", {"document_id": "doc-groceries"}),
+    )
     runtime = make_runtime(script)
     await runtime.run(InputEvent(InputKind.LOCATION, "arrived at Safeway"))
 
@@ -172,8 +251,7 @@ async def test_mcp_tools_are_played_by_a_model_until_they_have_a_runtime(script,
 
 def mock_http(monkeypatch, handler):
     real = httpx.AsyncClient
-    monkeypatch.setattr(runner.httpx, "AsyncClient",
-                        lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    monkeypatch.setattr(runner.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
 
 
 async def test_web_api_tools_make_the_request(script, make_runtime, monkeypatch):
@@ -186,11 +264,14 @@ async def test_web_api_tools_make_the_request(script, make_runtime, monkeypatch)
     mock_http(monkeypatch, handler)
     script.on("decide", decide("tool_use"))
     script.on("capability:tool_use", call("weather", "current", {"city": "Paris"}))
-    script.on("tool:weather.current:request",
-              {"method": "GET", "url": "https://api.example.com/v1/current?lat=48.85&lon=2.35", "headers": [], "body": None})
+    script.on(
+        "tool:weather.current:request",
+        {"method": "GET", "url": "https://api.example.com/v1/current?lat=48.85&lon=2.35", "headers": [], "body": None},
+    )
     runtime = make_runtime(script)
-    runtime.store.put_tool(Tool("weather", "Weather", ToolKind.WEB_API, [ToolFunction("current")],
-                                endpoint="https://api.example.com/v1"))
+    runtime.store.put_tool(
+        Tool("weather", "Weather", ToolKind.WEB_API, [ToolFunction("current")], endpoint="https://api.example.com/v1")
+    )
     session = await runtime.run(InputEvent(InputKind.TEXT, "weather in paris"))
     assert str(seen[0].url) == "https://api.example.com/v1/current?lat=48.85&lon=2.35"
     assert "HTTP 200" in session.steps[0].summary and '"temperature":18' in session.steps[0].summary

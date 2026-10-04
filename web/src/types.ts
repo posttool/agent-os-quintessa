@@ -17,7 +17,7 @@ export interface Topic {
 }
 export interface DocumentSection {
   id: string; title: string; overview: string; status: string; details: string;
-  actions_taken: string[]; suggested_actions: string[]; process_ids: string[]; updated_at: string;
+  actions_taken: string[]; suggested_actions: string[]; updated_at: string;
 }
 export interface KeyDate { when: string; label: string; tentative: boolean }
 export interface Doc {

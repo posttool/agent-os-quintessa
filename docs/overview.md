@@ -71,7 +71,7 @@ Anything that happens to the user is an **input event**. Each input event starts
 InputEvent {
   id: string                 // "evt_..."
   kind: "text" | "speech" | "message" | "location" | "vision" | "screen"
-      | "notification" | "sensor" | "process_progress" | "ux_response" | "time"
+      | "notification" | "sensor" | "process_progress"
   content: string
   source: string             // "user", "ambient:<source name>", "persona", "process:<tool>"
   device: string             // "phone", ...
@@ -154,7 +154,6 @@ Capability {
   executor: string           // memory | generative_ui | tool_discovery | tool_use
   instructions: string       // the file body
   choose_when: string
-  source_path: string
 }
 ```
 
@@ -300,7 +299,6 @@ DocumentSection {
   details: string
   actions_taken: string[]    // tool calls write a line here automatically
   suggested_actions: string[]
-  process_ids: string[]      // process subscriptions running for this section
   updated_at: string         // drives "changed since you last looked"
 }
 

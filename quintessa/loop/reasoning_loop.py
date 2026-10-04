@@ -32,7 +32,7 @@ class AgentReasoningLoop:
     (or decides the chain is done); the capability runs; its result joins the
     session context for the next decision. Every step is kept as a trace."""
 
-    def __init__(self, runtime: "AgentRuntime", session: ReasoningSession):
+    def __init__(self, runtime: AgentRuntime, session: ReasoningSession):
         self.runtime = runtime
         self.session = session
 
@@ -57,7 +57,10 @@ class AgentReasoningLoop:
                 self.session.shadow_decisions.append(record)
                 capability = "" if record.choice == DONE else record.choice
                 p = record.probabilities.get(record.choice, 0.0)
-                focus = "Chosen by Jev with no instructions: decide what this capability should do for the trigger, given the steps so far."
+                focus = (
+                    "Chosen by Jev with no instructions: decide what this capability should do for the trigger, "
+                    "given the steps so far."
+                )
                 words = capability.replace("_", " ").title()
                 return StepDecision(capability, focus, f"Jev p {p:.2f}"), words, record.model, "jev"
             # Jev failed: the LLM decides this step, and the failure stays on the record
@@ -104,7 +107,9 @@ class AgentReasoningLoop:
                 if not decision.capability:
                     break
                 runtime.device.session_activity(session.id, words)
-                step = TraceStep(index, decision.capability, decision.focus, decision.rationale, model=model, decided_by=decided_by)
+                step = TraceStep(
+                    index, decision.capability, decision.focus, decision.rationale, model=model, decided_by=decided_by
+                )
                 session.steps.append(step)
                 capability = runtime.capabilities[decision.capability]
                 outcome = await EXECUTORS[capability.executor].run(StepContext(runtime, session, capability, decision))
@@ -154,4 +159,3 @@ class AgentReasoningLoop:
             self.session.steps[-1].ended_at = now()
         else:
             self.session.steps.append(TraceStep(len(self.session.steps), "", "", "", error=message, ended_at=now()))
-

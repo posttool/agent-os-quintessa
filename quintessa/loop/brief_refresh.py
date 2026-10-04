@@ -52,11 +52,15 @@ SCHEMA = s.obj(
                     "urgency": s.string(),
                     "expires_at": s.nullable(s.string("ISO time the card stops applying, or null.")),
                     "drop_action": s.boolean(),
-                    "salience": s.nullable(s.obj({
-                        "urgency": s.number("Personal risk if the user does not act, 0 to 1."),
-                        "relevance": s.number("How well it fits the user's context now, 0 to 1."),
-                        "affinity": s.number("How much the person or business involved matters, 0 to 1."),
-                    })),
+                    "salience": s.nullable(
+                        s.obj(
+                            {
+                                "urgency": s.number("Personal risk if the user does not act, 0 to 1."),
+                                "relevance": s.number("How well it fits the user's context now, 0 to 1."),
+                                "affinity": s.number("How much the person or business involved matters, 0 to 1."),
+                            }
+                        )
+                    ),
                     "reason": s.string(),
                 }
             )
@@ -66,7 +70,7 @@ SCHEMA = s.obj(
 )
 
 
-def _stale_questions(runtime: "AgentRuntime") -> list[UXRequest]:
+def _stale_questions(runtime: AgentRuntime) -> list[UXRequest]:
     store = runtime.store
     stale = []
     for request in runtime.ux.pending.values():
@@ -76,7 +80,7 @@ def _stale_questions(runtime: "AgentRuntime") -> list[UXRequest]:
     return stale
 
 
-async def refresh_brief(runtime: "AgentRuntime", session: ReasoningSession) -> TraceStep | None:
+async def refresh_brief(runtime: AgentRuntime, session: ReasoningSession) -> TraceStep | None:
     """Settle stale cards and questions after a session. Cards whose topic is
     gone are removed outright; the rest are asked about in one model call.
     Returns the trace step, or None when nothing was stale."""
@@ -97,8 +101,10 @@ async def refresh_brief(runtime: "AgentRuntime", session: ReasoningSession) -> T
         "trigger": {"kind": session.trigger.kind, "content": session.trigger.content},
         "now": now(),
         "cards": [{**_card(b), "changed": _topic(topics.get(b.topic_id))} for b in cards],
-        "questions": [{"id": q.id, "prompt": q.prompt, "asked_at": q.created_at,
-                       "changed": _topic(topics.get(q.topic_id))} for q in questions],
+        "questions": [
+            {"id": q.id, "prompt": q.prompt, "asked_at": q.created_at, "changed": _topic(topics.get(q.topic_id))}
+            for q in questions
+        ],
         "memory": runtime.store.snapshot(),
     }
     step = _step(session, lines)
@@ -123,7 +129,7 @@ async def refresh_brief(runtime: "AgentRuntime", session: ReasoningSession) -> T
     return step
 
 
-def _apply_cards(runtime: "AgentRuntime", verdicts: list[dict[str, Any]], seen: dict) -> list[str]:
+def _apply_cards(runtime: AgentRuntime, verdicts: list[dict[str, Any]], seen: dict) -> list[str]:
     device = runtime.device
     lines = []
     for v in verdicts:
@@ -143,8 +149,11 @@ def _apply_cards(runtime: "AgentRuntime", verdicts: list[dict[str, Any]], seen: 
             if v.get("drop_action"):
                 card.action = None
             if v.get("salience"):
-                card.salience = Salience(clamp(v["salience"].get("urgency"), 0.4), clamp(v["salience"].get("relevance"), 0.5),
-                                         clamp(v["salience"].get("affinity"), 0.5))
+                card.salience = Salience(
+                    clamp(v["salience"].get("urgency"), 0.4),
+                    clamp(v["salience"].get("relevance"), 0.5),
+                    clamp(v["salience"].get("affinity"), 0.5),
+                )
             lines.append(f"rewrote {card.id} ({old} -> {card.text}): {v['reason']}")
         else:
             lines.append(f"kept {card.id} ({card.text})")
@@ -153,7 +162,7 @@ def _apply_cards(runtime: "AgentRuntime", verdicts: list[dict[str, Any]], seen: 
     return lines
 
 
-def _apply_questions(runtime: "AgentRuntime", verdicts: list[dict[str, Any]], asked: set[str]) -> list[str]:
+def _apply_questions(runtime: AgentRuntime, verdicts: list[dict[str, Any]], asked: set[str]) -> list[str]:
     lines = []
     for v in verdicts:
         if v["withdraw"] and v["id"] in asked and runtime.ux.withdraw(v["id"], v["reason"]):
@@ -162,7 +171,9 @@ def _apply_questions(runtime: "AgentRuntime", verdicts: list[dict[str, Any]], as
 
 
 def _step(session: ReasoningSession, lines: list[str]) -> TraceStep:
-    step = TraceStep(len(session.steps), PURPOSE, "Keep the brief true after this session", "cards or questions went stale")
+    step = TraceStep(
+        len(session.steps), PURPOSE, "Keep the brief true after this session", "cards or questions went stale"
+    )
     step.summary = "; ".join(lines)
     step.ended_at = now()
     session.steps.append(step)
@@ -170,18 +181,32 @@ def _step(session: ReasoningSession, lines: list[str]) -> TraceStep:
 
 
 def _card(b: BriefItem) -> dict[str, Any]:
-    return {"id": b.id, "text": b.text, "detail": b.detail, "urgency": b.urgency, "topic_id": b.topic_id,
-            "action": b.action.label if b.action else None, "expires_at": b.expires_at, "written_at": b.updated_at}
+    return {
+        "id": b.id,
+        "text": b.text,
+        "detail": b.detail,
+        "urgency": b.urgency,
+        "topic_id": b.topic_id,
+        "action": b.action.label if b.action else None,
+        "expires_at": b.expires_at,
+        "written_at": b.updated_at,
+    }
 
 
 def _topic(topic) -> dict[str, Any] | None:
     if topic is None:
         return None
-    return {"title": topic.title, "summary": topic.summary, "new_info": topic.new_info, "due": topic.due,
-            "progress_note": topic.progress_note, "updated_at": topic.updated_at}
+    return {
+        "title": topic.title,
+        "summary": topic.summary,
+        "new_info": topic.new_info,
+        "due": topic.due,
+        "progress_note": topic.progress_note,
+        "updated_at": topic.updated_at,
+    }
 
 
-async def score_brief(runtime: "AgentRuntime", session: ReasoningSession) -> TraceStep | None:
+async def score_brief(runtime: AgentRuntime, session: ReasoningSession) -> TraceStep | None:
     """Have Jev score the cards it has not scored since they were written,
     or every card when the user's location changed (what fits now moved)."""
     ranker = runtime.brief_ranker
@@ -191,8 +216,13 @@ async def score_brief(runtime: "AgentRuntime", session: ReasoningSession) -> Tra
     cards = [b for b in runtime.device.state.brief if moved or b.salience.scored_at != b.updated_at]
     if not cards:
         return None
-    step = TraceStep(len(session.steps), RANK, "Score the brief: urgency, fits now, person",
-                     "the user moved" if moved else "cards changed since they were scored", model=ranker.client.label)
+    step = TraceStep(
+        len(session.steps),
+        RANK,
+        "Score the brief: urgency, fits now, person",
+        "the user moved" if moved else "cards changed since they were scored",
+        model=ranker.client.label,
+    )
     session.steps.append(step)
     step.summary = "; ".join(await ranker.score(runtime, cards))
     runtime.device.rerank()

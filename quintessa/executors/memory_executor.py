@@ -15,9 +15,7 @@ _NODE = s.obj(
         "topic_id": s.nullable(s.string()),
     }
 )
-_EDGE = s.obj(
-    {"source_id": s.string(), "target_id": s.string(), "type": s.enum_of(EdgeType), "note": s.string()}
-)
+_EDGE = s.obj({"source_id": s.string(), "target_id": s.string(), "type": s.enum_of(EdgeType), "note": s.string()})
 _TOPIC = s.obj(
     {
         "title": s.string(),
@@ -29,9 +27,7 @@ _TOPIC = s.obj(
         "progress": s.number("0 to 1"),
         "progress_note": s.string(),
         "due": s.string("A date, or a relative phrase like 'before Mom arrives'; empty if none."),
-        "triggers": s.array(
-            s.obj({"type": s.enum_of(TriggerType), "condition": s.string(), "reasoning": s.string()})
-        ),
+        "triggers": s.array(s.obj({"type": s.enum_of(TriggerType), "condition": s.string(), "reasoning": s.string()})),
         "document_id": s.nullable(s.string()),
     }
 )
