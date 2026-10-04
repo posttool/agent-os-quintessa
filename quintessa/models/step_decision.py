@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# The controller's choice that ends a session; StepDecision stores it as capability "".
+DONE = "done"
+
 
 @dataclass
 class StepDecision:

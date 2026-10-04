@@ -39,7 +39,7 @@ def schema_for(tool_names: list[str]) -> dict:
 
 
 def needs_permission(ctx: StepContext, tool: Tool, function: ToolFunction) -> bool | None:
-    """True: ask first. False: go ahead. None: the user already declined in this chain."""
+    """True: ask first. False: go ahead. None: the user already declined in this session."""
     session_grants = [p for p in ctx.session.permissions if p.tool == tool.name and p.function == function.name]
     if session_grants:
         return None if not session_grants[-1].granted else False

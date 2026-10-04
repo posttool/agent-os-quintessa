@@ -96,8 +96,10 @@ export interface BriefItem {
 /** Why a card ranks where it does (quintessa/device/salience.py); score orders the brief. */
 export interface Salience {
   urgency: number | null; relevance: number; affinity: number; proximity: number; suppression: number;
-  score: number; scored_by: string;
+  score: number; scored_by: string; scored_at: string | null;
 }
+/** The user pushed a card away (quintessa/device/salience.py). */
+export interface Suppression { key: string; kind: "dismissed" | "snoozed"; at: string }
 export type ViewMode = "focused" | "full";
 export interface DocumentFocus {
   document_id: string; section_ids: string[]; mode: ViewMode; reason: string; set_by: string; updated_at: string;
@@ -110,6 +112,8 @@ export interface DocView {
 export interface DeviceState {
   island: { active: boolean; words: string };
   brief: BriefItem[];
+  snoozed: BriefItem[];
+  suppressions: Suppression[];
   open_ux_ids: string[];
   stashed: StashedQuestion[];
   space_document_ids: string[];

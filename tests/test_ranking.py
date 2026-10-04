@@ -5,7 +5,7 @@ import httpx
 from conftest import decide
 
 from quintessa.clock import now
-from quintessa.decide import BriefRanker, SystemOneClient
+from quintessa.decide import CardScorer, SystemOneClient
 from quintessa.device import BriefItem
 from quintessa.device.salience import Salience, Suppression, proximity, suppression
 from quintessa.models import InputEvent, InputKind, Topic
@@ -138,8 +138,8 @@ class FakeJevScores:
         return httpx.Response(200, json={"model": "jev-test", "answers": answers})
 
 
-def ranker(fake) -> BriefRanker:
-    return BriefRanker(SystemOneClient("test-key", base_url="https://jev.test", transport=httpx.MockTransport(fake)))
+def scorer(fake) -> CardScorer:
+    return CardScorer(SystemOneClient("test-key", base_url="https://jev.test", transport=httpx.MockTransport(fake)))
 
 
 async def test_jev_scores_new_cards_and_the_brief_reorders(script, make_runtime):
@@ -170,13 +170,13 @@ async def test_jev_scores_new_cards_and_the_brief_reorders(script, make_runtime)
             ],
         },
     )
-    runtime = make_runtime(script, brief_ranker=ranker(fake))
+    runtime = make_runtime(script, jev_card_scorer=scorer(fake))
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "Mom: dinner at 7 for my birthday?", sender="Mom"))
 
     assert texts(runtime) == ["Mom's birthday dinner", "Coupon expires"]  # Jev's scores replaced the agent's
     mom = runtime.device.state.brief[0].salience
     assert (mom.urgency, mom.relevance, mom.affinity) == (0.75, 2 / 3, 1.0) and mom.scored_by == "jev-test"
-    assert session.steps[-1].capability == "brief_rank"
+    assert session.steps[-1].capability == "score_cards"
     assert fake.requests[0]["questions"]["urgency"]["type"] == "score"
     assert fake.requests[0]["state"]["context"]["recent"][-1]["sender"] == "Mom"
 
@@ -187,7 +187,7 @@ async def test_jev_scores_new_cards_and_the_brief_reorders(script, make_runtime)
 
 async def test_a_location_change_rescores_every_card(script, make_runtime):
     fake = FakeJevScores({"Pick up dry cleaning": (2, 3, 1)})
-    runtime = make_runtime(script, brief_ranker=ranker(fake))
+    runtime = make_runtime(script, jev_card_scorer=scorer(fake))
     runtime.device.set_brief([card("Pick up dry cleaning", urgency=0.3)])
     await runtime.run(InputEvent(InputKind.TEXT, "hi"))
     await runtime.run(InputEvent(InputKind.LOCATION, "Near Elm St Cleaners", source="ambient:location"))
@@ -199,11 +199,11 @@ async def test_jev_ranking_follows_the_preference_and_failures_keep_agent_scores
     def broken(request):
         return httpx.Response(500, json={})
 
-    runtime = make_runtime(script, brief_ranker=ranker(broken))
+    runtime = make_runtime(script, jev_card_scorer=scorer(broken))
     runtime.device.set_brief([card("Pay rent", urgency=0.8)])
     session = await runtime.run(InputEvent(InputKind.TEXT, "hi"))
     assert runtime.device.state.brief[0].salience.urgency == 0.8
     assert "kept the agent's scores (HTTP 500" in session.steps[-1].summary
 
     runtime.set_preferences(jev_rank=False)
-    assert runtime.brief_ranker is None
+    assert runtime.active_card_scorer is None

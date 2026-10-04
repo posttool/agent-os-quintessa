@@ -23,7 +23,7 @@ from quintessa.models.prefilter_decision import PrefilterDecision
 from quintessa.models.reasoning_session import ReasoningSession
 from quintessa.models.session_status import SessionStatus
 from quintessa.models.shadow_decision import ShadowDecision
-from quintessa.models.step_decision import StepDecision
+from quintessa.models.step_decision import DONE, StepDecision
 from quintessa.models.subscription import Subscription
 from quintessa.models.tool import Tool
 from quintessa.models.tool_binding import ToolBinding
@@ -42,6 +42,7 @@ from quintessa.models.ux_request import UXRequest
 from quintessa.models.ux_response import UXResponse
 
 __all__ = [
+    "DONE",
     "AmbientSource",
     "AppListing",
     "AuthKind",

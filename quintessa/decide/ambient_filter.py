@@ -4,7 +4,7 @@ import os
 import time
 from typing import TYPE_CHECKING, Any
 
-from quintessa.decide.brief_ranker import BriefRanker
+from quintessa.decide.card_scorer import CardScorer
 from quintessa.decide.next_step import NextStepDecider
 from quintessa.decide.system_one import SystemOneClient, SystemOneError, client_from_env
 from quintessa.models import InputEvent, PrefilterDecision
@@ -81,9 +81,9 @@ def jev_options_from_env() -> dict[str, Any]:
     if client is None:
         return {}
     return {
-        "shadow": NextStepDecider(client),
-        "ambient_filter": AmbientFilter(client, _threshold()),
-        "brief_ranker": BriefRanker(client),
+        "jev_next_step": NextStepDecider(client),
+        "jev_ambient_filter": AmbientFilter(client, _threshold()),
+        "jev_card_scorer": CardScorer(client),
         "jev_shadow_default": os.environ.get("QUINTESSA_DECIDER", "shadow") != "llm",
         "jev_filter_default": os.environ.get("QUINTESSA_AMBIENT_FILTER") == "1",
     }

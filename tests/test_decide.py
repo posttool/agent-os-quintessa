@@ -53,7 +53,7 @@ async def test_shadow_records_jev_beside_the_llm_without_steering(script, make_r
     script.on("decide", decide("memory", "save the dinner idea"))
     script.on("capability:memory", memory_answer(topic_op("topic-dinner", "Dinner Plans")))
     fake = FakeJev("tool_use", "done")  # disagrees on the first step, agrees on done
-    runtime = make_runtime(script, shadow=decider(fake))
+    runtime = make_runtime(script, jev_next_step=decider(fake))
 
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "Jane: zuni on tuesday?", sender="Jane"))
 
@@ -85,7 +85,7 @@ async def test_shadow_records_jev_beside_the_llm_without_steering(script, make_r
 async def test_a_failing_endpoint_never_fails_the_session(script, make_runtime):
     script.on("decide", decide("memory"))
     script.on("capability:memory", memory_answer())
-    runtime = make_runtime(script, shadow=decider(FakeJev(status=403)))
+    runtime = make_runtime(script, jev_next_step=decider(FakeJev(status=403)))
 
     session = await runtime.run(InputEvent(InputKind.TEXT, "hello"))
 
@@ -135,7 +135,7 @@ async def test_agreement_report(script, make_runtime):
             "permission_prompt": "",
         },
     )
-    runtime = make_runtime(script, shadow=decider(FakeJev("memory", "memory", "done")))
+    runtime = make_runtime(script, jev_next_step=decider(FakeJev("memory", "memory", "done")))
     session = await runtime.run(InputEvent(InputKind.TEXT, "hello"))
 
     report = agreement_report([session])
@@ -164,7 +164,7 @@ def jev_noul(p: float, requests: list | None = None, status: int = 200):
 
 async def test_filter_skips_ambient_noise_without_any_llm_call(script, make_runtime):
     requests = []
-    runtime = make_runtime(script, ambient_filter=jev_noul(0.1, requests))
+    runtime = make_runtime(script, jev_ambient_filter=jev_noul(0.1, requests))
     session = await runtime.run(
         InputEvent(InputKind.MESSAGE, "20% off fall bowls", source="ambient:email", sender="Sweetgreen")
     )
@@ -181,14 +181,14 @@ async def test_filter_skips_ambient_noise_without_any_llm_call(script, make_runt
 async def test_filter_keeps_events_that_matter(script, make_runtime):
     script.on("decide", decide("memory"))
     script.on("capability:memory", memory_answer())
-    runtime = make_runtime(script, ambient_filter=jev_noul(0.9))
+    runtime = make_runtime(script, jev_ambient_filter=jev_noul(0.9))
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "Mom: flight delayed to 4:40", source="ambient:sms"))
     assert not session.prefilter.skipped
     assert [s.capability for s in session.steps] == ["memory"]
 
 
 async def test_filter_fails_open(script, make_runtime):
-    runtime = make_runtime(script, ambient_filter=jev_noul(0.0, status=500))
+    runtime = make_runtime(script, jev_ambient_filter=jev_noul(0.0, status=500))
     session = await runtime.run(InputEvent(InputKind.LOCATION, "Arrived at SFO", source="persona"))
     assert session.prefilter.error.startswith("HTTP 500") and not session.prefilter.skipped
     assert len(script.prompts["decide"]) == 1  # ran as usual
@@ -196,7 +196,7 @@ async def test_filter_fails_open(script, make_runtime):
 
 async def test_filter_never_touches_what_the_user_says(script, make_runtime):
     requests = []
-    runtime = make_runtime(script, ambient_filter=jev_noul(0.0, requests))
+    runtime = make_runtime(script, jev_ambient_filter=jev_noul(0.0, requests))
     for source in ("user", "process:food_delivery", "persona:profile"):
         session = await runtime.run(InputEvent(InputKind.TEXT, "hi", source=source))
         assert session.prefilter is None
@@ -216,14 +216,14 @@ def test_filter_env_sets_the_default_and_threshold(monkeypatch):
     monkeypatch.setenv("QUINTESSA_AMBIENT_FILTER", "1")
     monkeypatch.setenv("QUINTESSA_AMBIENT_THRESHOLD", "0.5")
     options = jev_options_from_env()
-    assert options["jev_filter_default"] is True and options["ambient_filter"].threshold == 0.5
+    assert options["jev_filter_default"] is True and options["jev_ambient_filter"].threshold == 0.5
 
 
 async def test_jev_preference_switches_both_deciders_off_and_on(script, make_runtime):
     script.on("decide", decide("memory"))
     script.on("capability:memory", memory_answer())
     fake, requests = FakeJev(), []
-    runtime = make_runtime(script, shadow=decider(fake), ambient_filter=jev_noul(0.0, requests))
+    runtime = make_runtime(script, jev_next_step=decider(fake), jev_ambient_filter=jev_noul(0.0, requests))
 
     runtime.set_preferences(jev=False)
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off", source="ambient:email"))
@@ -255,7 +255,7 @@ def test_jev_options_from_env(monkeypatch):
     assert jev_options_from_env() == {}
     monkeypatch.setenv("QUINTESSA_JEV_API_KEY", "k")
     options = jev_options_from_env()
-    assert options["shadow"] and options["ambient_filter"]  # both exist so users can switch them on
+    assert options["jev_next_step"] and options["jev_ambient_filter"]  # both exist so users can switch them on
     assert (options["jev_shadow_default"], options["jev_filter_default"]) == (True, False)
     monkeypatch.setenv("QUINTESSA_DECIDER", "llm")
     monkeypatch.setenv("QUINTESSA_AMBIENT_FILTER", "1")
@@ -266,7 +266,7 @@ def test_jev_options_from_env(monkeypatch):
 async def test_jev_can_drive_the_next_step(script, make_runtime):
     script.on("capability:memory", memory_answer(topic_op("topic-dinner", "Dinner Plans")))
     fake = FakeJev("memory", "done")
-    runtime = make_runtime(script, shadow=decider(fake))
+    runtime = make_runtime(script, jev_next_step=decider(fake))
     runtime.set_preferences(jev_drive=True)
 
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "Jane: zuni on tuesday?", sender="Jane"))
@@ -283,7 +283,7 @@ async def test_jev_can_drive_the_next_step(script, make_runtime):
 async def test_the_llm_takes_over_when_jev_fails_to_drive(script, make_runtime):
     script.on("decide", decide("memory"))
     script.on("capability:memory", memory_answer())
-    runtime = make_runtime(script, shadow=decider(FakeJev(status=500)))
+    runtime = make_runtime(script, jev_next_step=decider(FakeJev(status=500)))
     runtime.set_preferences(jev_drive=True)
 
     session = await runtime.run(InputEvent(InputKind.TEXT, "hello"))

@@ -9,7 +9,7 @@ a question you asked.
 
 Work one step at a time. Look at the trigger, the steps already taken in this
 session and the current memory, then choose the single capability that should
-run next, or choose "done" when the chain is complete.
+run next, or choose "done" when the session is complete.
 
 Guidance:
 - Most triggers should first be understood against memory. Choose `memory` when

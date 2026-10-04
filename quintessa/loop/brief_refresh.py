@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 PURPOSE = "brief_refresh"
-RANK = "brief_rank"
+SCORE = "score_cards"
 
 INSTRUCTIONS = """You keep a personal agent's contextual brief true. Each card \
 in `cards` was written before something changed in its topic (`changed` says \
@@ -206,11 +206,11 @@ def _topic(topic) -> dict[str, Any] | None:
     }
 
 
-async def score_brief(runtime: AgentRuntime, session: ReasoningSession) -> TraceStep | None:
+async def score_cards(runtime: AgentRuntime, session: ReasoningSession) -> TraceStep | None:
     """Have Jev score the cards it has not scored since they were written,
     or every card when the user's location changed (what fits now moved)."""
-    ranker = runtime.brief_ranker
-    if ranker is None:
+    scorer = runtime.active_card_scorer
+    if scorer is None:
         return None
     moved = session.trigger.kind == InputKind.LOCATION
     cards = [b for b in runtime.device.state.brief if moved or b.salience.scored_at != b.updated_at]
@@ -218,14 +218,14 @@ async def score_brief(runtime: AgentRuntime, session: ReasoningSession) -> Trace
         return None
     step = TraceStep(
         len(session.steps),
-        RANK,
+        SCORE,
         "Score the brief: urgency, fits now, person",
         "the user moved" if moved else "cards changed since they were scored",
-        model=ranker.client.label,
+        model=scorer.client.label,
     )
     session.steps.append(step)
-    step.summary = "; ".join(await ranker.score(runtime, cards))
-    runtime.device.rerank()
+    step.summary = "; ".join(await scorer.score(runtime, cards))
+    runtime.device.brief_scores_changed()
     step.output = {"order": [{"text": b.text, "score": b.salience.score} for b in runtime.device.state.brief]}
     step.ended_at = now()
     return step

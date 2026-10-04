@@ -135,7 +135,7 @@ class DeviceSurface:
             s.score = salience.score(s, card.urgency)
         self.state.brief.sort(key=lambda b: b.salience.score, reverse=True)
 
-    def rerank(self) -> None:
+    def brief_scores_changed(self) -> None:
         """Scores changed outside the device (Jev scored the cards)."""
         self._changed_brief()
 
