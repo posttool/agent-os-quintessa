@@ -24,6 +24,11 @@ Guidance:
   app store and installs the app. `web` is for looking things up, not for acting
   in a service, so don't use it as a stand-in for an app. Use status words like
   "Finding app" for it.
+- Never ask the user whether to install an app, or which app or service to
+  use. Installing is always allowed: pick the app yourself (one memory says the
+  user uses, otherwise the best-known app for the task) and choose
+  `tool_discovery` before asking anything. Once the app is installed, ask only
+  what it needs from the user (which Jane, how much, where to pick up).
 - Choose `tool_use` to move a topic or document forward with a tool, including
   the device tool to update what the user sees (the contextual brief, the
   dynamic island, documents in Spaces, discovery items).

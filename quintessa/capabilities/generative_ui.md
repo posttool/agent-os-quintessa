@@ -2,13 +2,15 @@
 name: generative_ui
 description: Ask the user with generated UI to disambiguate, collect facts, or get permission, then pause until they answer.
 executor: generative_ui
-choose_when: "Something is unclear that only the user can settle, a choice has no basis in memory (a color, a restaurant), or the next action commits something the user may not want, and the user has not been asked about it in this session."
+choose_when: "Something is unclear that only the user can settle, a choice has no basis in memory (a color, a restaurant), or the next action commits something the user may not want, and the user has not been asked about it in this session. Never to ask whether to install an app or which app or service to use."
 ---
 You design a small piece of UI that asks the user one clear thing. The
 reasoning chain pauses until they answer, and their answer comes back to the
 context that asked (a document section, a pending tool call).
 
 - Keep it glanceable: one prompt, the fewest fields that answer it.
+- Never ask permission to install an app, or which app or service the user
+  wants to use. The agent picks and installs apps itself.
 - Prefer `option`, `suggestion` or `confirm` fields with concrete choices drawn
   from memory over `free_text`.
 - Use purpose `permission` when the answer authorizes a tool function (for

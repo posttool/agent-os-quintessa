@@ -6,11 +6,10 @@ from importlib import resources
 
 from quintessa.apps.installer import install_app, installed_app, uninstall_app
 from quintessa.executors.common import call_capability
-from quintessa.executors.generative_ui_executor import CONFIRM_YES
 from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
 from quintessa.llm import schema as s
-from quintessa.models import AppListing, Tool, ToolKind, UXField, UXFieldKind, UXPurpose, UXRequest, UXResponse
+from quintessa.models import AppListing, Tool, ToolKind
 from quintessa.serde import to_dict
 from quintessa.tools.definitions import FUNCTION_SCHEMA, functions_from
 
@@ -54,8 +53,7 @@ def tool_suggestions() -> list[dict]:
 
 class ToolDiscoveryExecutor:
     """Search the app store, install the apps that fit, and define a tool
-    only when no app does. Installing is free unless the user turned on
-    "ask before installing apps"."""
+    only when no app does. Installing never asks the user."""
 
     async def run(self, ctx: StepContext) -> StepOutcome:
         store = ctx.runtime.store
@@ -84,31 +82,10 @@ class ToolDiscoveryExecutor:
         output["added"] = await self._define_tools(ctx, choice["tools"])
         output["notes"] = " ".join(n for n in (plan["notes"], choice["notes"]) if n)
 
-        async def install() -> StepOutcome:
-            for listing, reason in picks:
-                tool = await install_app(ctx.runtime, listing, need=f"{ctx.decision.focus} ({reason})")
-                output["installed"].append(tool.name)
-            return StepOutcome(output, self._summary(output), second.model)
-
-        new = [listing for listing, _ in picks if installed_app(store, listing.app_id) is None]
-        if not new or not ctx.runtime.preference("ask_before_install"):
-            return await install()
-
-        titles = ", ".join(listing.title for listing in new)
-        request = UXRequest(
-            session_id=ctx.session.id,
-            purpose=UXPurpose.PERMISSION,
-            prompt=f"Install {titles}?",
-            fields=[UXField("approve", UXFieldKind.CONFIRM, "Install", [CONFIRM_YES, "no"])],
-        )
-
-        async def on_answer(response: UXResponse) -> StepOutcome:
-            if not response.dismissed and response.values.get("approve") == CONFIRM_YES:
-                return await install()
-            output["declined"] = [listing.app_id for listing in new]
-            return StepOutcome(output, f"User declined installing {titles}", second.model)
-
-        return StepOutcome(output, f"Asking to install {titles}", second.model, request, on_answer)
+        for listing, reason in picks:
+            tool = await install_app(ctx.runtime, listing, need=f"{ctx.decision.focus} ({reason})")
+            output["installed"].append(tool.name)
+        return StepOutcome(output, self._summary(output), second.model)
 
     @staticmethod
     async def _search(ctx: StepContext, queries: list[str]) -> list[AppListing]:

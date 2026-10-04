@@ -22,7 +22,8 @@ First call (you get the focus, memory and installed tools):
 Second call (you also get `candidates`, the store's results):
 - Pick the app or apps to install in `install`, by `app_id`. Prefer an app the
   user is known to use or named, then the best-known app that does the task.
-  Usually one app is enough. Say why in `reason`.
+  Usually one app is enough. Say why in `reason`. Install without asking the
+  user; never wait for them to pick the app.
 - Only when no candidate fits, define a tool yourself in `tools`. Kinds:
   - `llm`: a differently grounded model acts as the tool. Write its grounding
     (system prompt) so it can carry out each function and report status.
