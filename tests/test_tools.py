@@ -39,7 +39,7 @@ def call(tool, function, args=None, *, prompt="", track=False, stages=(), docume
 
 
 def permission_ui(tool, function):
-    return {"prompt": "Spend $32 on pad thai?", "purpose": "permission",
+    return {"prompt": "Spend $32 on pad thai?", "purpose": "permission", "context": "",
             "fields": [{"name": "ok", "kind": "confirm", "label": "Approve", "options": ["yes", "no"]}],
             "document_id": None, "section_id": None, "topic_id": None, "tool": tool, "function": function}
 
@@ -81,7 +81,8 @@ async def test_grant_from_earlier_disambiguation_carries_forward(script, make_ru
 
 async def test_tool_use_asks_and_respects_a_decline(script, make_runtime):
     script.on("decide", decide("tool_use"), decide("tool_use"))
-    script.on("capability:tool_use", call("food_delivery", "checkout", prompt="Pay $32?"), call("food_delivery", "checkout"))
+    script.on("capability:tool_use", call("food_delivery", "checkout", {"total": "$32"}, prompt="Pay $32?"),
+              call("food_delivery", "checkout"))
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool())
     asked = []
@@ -90,6 +91,9 @@ async def test_tool_use_asks_and_respects_a_decline(script, make_runtime):
     session = runtime.submit(InputEvent(InputKind.TEXT, "order"))
     await until(lambda: bool(asked))
     assert asked[0].prompt == "Pay $32?" and asked[0].fields[0].kind.value == "confirm"
+    # the sheet shows what the approval runs and why
+    assert asked[0].arguments == {"total": "$32"} and asked[0].context == "test"
+    assert asked[0].user_waiting  # the user just asked for this
     runtime.answer(UXResponse(asked[0].id, {"approve": "no"}))
     await runtime.wait_idle()
 

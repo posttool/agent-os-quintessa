@@ -5,9 +5,9 @@ import type { AgentState, BriefItem, UXRequest } from "../types";
 import { load, save } from "../storage";
 import ShadowHost from "./ShadowHost";
 import { DEFAULT_SKIN, SKINS } from "./skins";
-import UXForm from "./UXForm";
 import DocumentView from "./DocumentView";
 import CardSheet from "./CardSheet";
+import QuestionDeck, { QuestionStack, WaitingRow, deckOrder } from "./QuestionDeck";
 
 type Act = (fn: () => Promise<unknown>) => Promise<void>;
 const PAGES = ["Discover", "Home", "Spaces"] as const;
@@ -44,6 +44,8 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
   const [page, setPage] = useState(1);
   const [openDoc, setOpenDoc] = useState<string | null>(null);
   const [sheet, setSheet] = useState<BriefItem | null>(null);
+  // the question sheet: the waiting questions, or the stash, tapped one first
+  const [deck, setDeck] = useState<{ stash: boolean; first: string | null } | null>(null);
   const pages = useRef<HTMLDivElement>(null);
   const now = useClock();
   const device = state.device;
@@ -80,32 +82,44 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
     setTimeout(() => go(2), 0);
   }
 
-  function answer(r: UXRequest, values: Record<string, string>, dismissed = false) {
-    void act(() => api.answer(r.id, values, dismissed));
+  // Every question the agent asks is answered in the question sheet. Waiting
+  // ones stack at the top of the brief; stashed ones wait in a pile after it.
+  const stashedIds = new Set((device.stashed ?? []).map((q) => q.ux_request_id));
+  const waiting = state.pending_ux.filter((r) => !stashedIds.has(r.id));
+  const stashed = state.pending_ux.filter((r) => stashedIds.has(r.id));
+
+  function openQuestion(r: UXRequest | null, stash = stashedIds.has(r?.id ?? "")) {
+    setSheet(null);
+    setDeck({ stash, first: r?.id ?? null });
   }
 
-  // Questions waiting on the user lead the brief, then the agent's own items.
-  const needsYou: BriefItem[] = state.pending_ux.map((r) => ({
-    id: r.id, text: r.prompt, topic_id: r.topic_id, document_id: r.document_id, section_id: r.section_id, ux_request_id: r.id,
-    urgency: "needs-you", detail: "", action: null,
-  }));
+  // A question from something the user just asked for opens by itself: they
+  // are still looking. Questions already here when the phone loads don't.
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const ids = state.pending_ux.map((r) => r.id);
+    if (seen.current === null) {
+      seen.current = new Set(ids);
+      return;
+    }
+    const fresh = waiting.find((r) => !seen.current!.has(r.id) && r.user_waiting);
+    ids.forEach((id) => seen.current!.add(id));
+    if (fresh && !deck && !sheet) openQuestion(fresh, false);
+  }, [state.pending_ux.map((r) => r.id).join(",")]);
+
   // A card past its expires_at is gone even before the server drops it.
   const live = device.brief.filter((b) => !b.expires_at || Date.parse(b.expires_at) > now.getTime());
-  const brief = [...needsYou, ...live];
 
-  // An open sheet follows its card: rewritten, it shows the new text; removed,
-  // expired or (for a question card) answered, it closes.
-  const openCard = !sheet ? null : sheet.ux_request_id
-    ? (state.pending_ux.some((r) => r.id === sheet.ux_request_id) ? sheet : null)
-    : live.find((b) => b.id === sheet.id) ?? null;
+  // An open sheet follows its card: rewritten, it shows the new text; removed
+  // or expired, it closes.
+  const openCard = !sheet ? null : live.find((b) => b.id === sheet.id) ?? null;
   const sheetGone = sheet !== null && openCard === null;
   useEffect(() => {
     if (sheetGone) setSheet(null);
   }, [sheetGone]);
 
   function liveDocument(b: BriefItem): string | null {
-    // a question belongs to the document it names, not to its topic's
-    const id = b.ux_request_id ? b.document_id : b.document_id ?? topics.get(b.topic_id ?? "")?.document_id ?? null;
+    const id = b.document_id ?? topics.get(b.topic_id ?? "")?.document_id ?? null;
     return id && docs.some((d) => d.id === id) ? id : null;
   }
 
@@ -113,46 +127,70 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
    * action to start, open a sheet over the current screen. */
   function tapCard(b: BriefItem) {
     const docId = liveDocument(b);
-    if (!b.ux_request_id) void act(() => api.briefOpen(b.id));
+    void act(() => api.briefOpen(b.id));
     if (docId && !b.action) return openDocument(docId, b.section_id);
     if (b.topic_id && topics.get(b.topic_id)?.new_info) void act(() => api.seen(b.topic_id!));
     setSheet(b);
   }
 
-  const sheetQuestions = !openCard ? [] : openCard.ux_request_id
-    ? state.pending_ux.filter((r) => r.id === openCard.ux_request_id)
-    : state.pending_ux.filter((r) => openCard.topic_id !== null && r.topic_id === openCard.topic_id);
+  const sheetQuestions = !openCard ? [] : state.pending_ux.filter((r) => openCard.topic_id !== null && r.topic_id === openCard.topic_id);
   const sheetDoc = openCard ? liveDocument(openCard) : null;
   const sheetView = openCard && (
     <CardSheet
       item={openCard}
       topic={topics.get(openCard.topic_id ?? "")}
       questions={sheetQuestions}
-      onAnswer={(r, values, dismissed) => answer(r, values, dismissed)}
+      onQuestion={(r) => openQuestion(r)}
       onAction={() => void act(() => api.briefAct(openCard.id))}
       onAsk={() => { void act(() => api.input(`Tell me more about: ${openCard.text}`)); setSheet(null); }}
       onOpen={sheetDoc ? () => { setSheet(null); openDocument(sheetDoc, openCard.section_id); } : undefined}
-      onSnooze={openCard.ux_request_id ? undefined : () => { void act(() => api.briefSnooze(openCard.id)); setSheet(null); }}
-      onDismiss={openCard.ux_request_id ? undefined : () => { void act(() => api.briefDismiss(openCard.id)); setSheet(null); }}
+      onSnooze={() => { void act(() => api.briefSnooze(openCard.id)); setSheet(null); }}
+      onDismiss={() => { void act(() => api.briefDismiss(openCard.id)); setSheet(null); }}
       onClose={() => setSheet(null)}
+    />
+  );
+
+  const deckQuestions = !deck ? [] : deckOrder(deck.stash ? stashed : waiting, deck.first);
+  const deckView = deck && deckQuestions.length > 0 && (
+    <QuestionDeck
+      key={deck.stash ? "stash" : "waiting"}
+      questions={deckQuestions}
+      stash={deck.stash}
+      topics={topics}
+      docs={docs}
+      onAnswer={(r, values) => void act(() => api.answer(r.id, values))}
+      onSkip={(r) => void act(() => api.answer(r.id, {}, true))}
+      onStash={(rs) => rs.forEach((r) => void act(() => api.stash(r.id)))}
+      onUnstash={(r) => void act(() => api.unstash(r.id))}
+      onOpen={(docId, sectionId) => { setDeck(null); openDocument(docId, sectionId); }}
+      onClose={() => setDeck(null)}
     />
   );
 
   const briefList = (
     <div className="brief">
-      {brief.length === 0 && <div className="brief-empty">Nothing needs you right now.</div>}
-      {brief.map((b, i) => (
-        <button key={b.ux_request_id ?? b.id ?? i} className={`brief-item ${b.urgency}`} onClick={() => tapCard(b)}>
+      {waiting.length === 0 && live.length === 0 && <div className="brief-empty">Nothing needs you right now.</div>}
+      <QuestionStack questions={waiting} onOpen={() => openQuestion(waiting[0], false)} />
+      {live.map((b) => (
+        <button key={b.id} className={`brief-item ${b.urgency}`} onClick={() => tapCard(b)}>
           <span className="mark" />
           <span className="text">{b.text}</span>
           <span className="cta">›</span>
         </button>
       ))}
+      {stashed.length > 0 && (
+        <button className="stash-chip" onClick={() => openQuestion(stashed[0], true)}>
+          {stashed.length} stashed {stashed.length === 1 ? "question" : "questions"}
+        </button>
+      )}
     </div>
   );
 
+  // While the agent waits on the user, the island opens the oldest question.
   const island = (
-    <div className={`island ${device.island.active ? "active" : "idle"}`} aria-live="polite">
+    <div className={`island ${device.island.active ? "active" : "idle"} ${waiting.length ? "tappable" : ""}`} aria-live="polite"
+      onClick={waiting.length ? () => openQuestion(waiting[0], false) : undefined}
+      role={waiting.length ? "button" : undefined}>
       {device.island.active && <span className="pulse" />}
       {device.island.active && <span>{device.island.words}</span>}
     </div>
@@ -176,6 +214,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
           <button className="unlock" onClick={() => setLocked(false)}>Swipe up to unlock</button>
         </div>
         {sheetView}
+        {deckView}
       </div>
     );
   }
@@ -234,13 +273,14 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
             </div>
           )}
           <div style={{ display: "grid", gap: 10 }}>
-            {looseQuestions.map((r) => <UXForm key={r.id} request={r} onAnswer={(v, d) => answer(r, v, d)} />)}
+            {looseQuestions.map((r) => <WaitingRow key={r.id} request={r} stashed={stashedIds.has(r.id)} onOpen={() => openQuestion(r)} />)}
             {current ? (
               <DocumentView
                 doc={current}
                 view={state.views?.[current.id]}
                 questions={state.pending_ux.filter((r) => r.document_id === current.id)}
-                onAnswer={answer}
+                stashedIds={stashedIds}
+                onQuestion={(r) => openQuestion(r)}
                 onView={(sectionIds, mode) => void act(() => api.view(current.id, sectionIds, mode))}
               />
             ) : (
@@ -256,6 +296,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
       </div>
       <InputBar onSend={(text, kind) => act(() => api.input(text, kind))} />
       {sheetView}
+      {deckView}
     </div>
   );
 }

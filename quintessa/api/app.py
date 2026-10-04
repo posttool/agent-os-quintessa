@@ -204,6 +204,7 @@ def create_app(
     async def state(agent: AgentRuntime = Agent) -> dict[str, Any]:
         entry = personas.get(agent.user_id)
         agent.device.prune_brief(now())
+        agent.prune_stash()
         return {
             "user_id": agent.user_id,
             "memory": agent.store.to_data(),
@@ -264,6 +265,18 @@ def create_app(
         if not agent.answer(response):
             raise HTTPException(404, "that question is no longer waiting for an answer")
         return {"ok": True}
+
+    @app.post("/api/ux/{request_id}/stash")
+    async def stash(request_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        """Put a question aside for later. It keeps waiting, out of the stack."""
+        if not agent.stash_question(request_id):
+            raise HTTPException(404, "that question is no longer waiting for an answer")
+        return {"ok": True}
+
+    @app.post("/api/ux/{request_id}/unstash")
+    async def unstash(request_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
+        """Back to the needs-you stack."""
+        return {"ok": bool(agent.device.unstash([request_id]))}
 
     @app.post("/api/brief/{item_id}/open")
     async def brief_open(item_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:

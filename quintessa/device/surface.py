@@ -10,6 +10,7 @@ from quintessa.device.device_state import DeviceState
 from quintessa.device.discovery_item import DiscoveryItem
 from quintessa.device.salience import Suppression
 from quintessa.device.document_focus import FOCUSED, DocumentFocus
+from quintessa.device.stashed_question import StashedQuestion
 from quintessa.serde import to_dict
 
 Listener = Callable[[str, dict[str, Any]], None]
@@ -176,9 +177,35 @@ class DeviceSurface:
     def close_ux(self, ux_request_id: str, document_id: str | None, section_id: str | None) -> None:
         if ux_request_id in self.state.open_ux_ids:
             self.state.open_ux_ids.remove(ux_request_id)
+        self.state.stashed = [q for q in self.state.stashed if q.ux_request_id != ux_request_id]
         if document_id:
             self.show_document(document_id, [section_id] if section_id else [])
         self._emit("ux_closed")
+
+    def stash(self, ux_request_id: str, topic_id: str | None) -> None:
+        """Put a waiting question aside: still unanswered, out of the stack."""
+        if not self.is_stashed(ux_request_id):
+            self.state.stashed.append(StashedQuestion(ux_request_id, topic_id))
+            self._emit("stash")
+
+    def unstash(self, ux_request_ids: list[str]) -> list[str]:
+        """Back to the needs-you stack. Returns the ids that were stashed."""
+        back = [q.ux_request_id for q in self.state.stashed if q.ux_request_id in ux_request_ids]
+        if back:
+            self.state.stashed = [q for q in self.state.stashed if q.ux_request_id not in back]
+            self._emit("stash")
+        return back
+
+    def is_stashed(self, ux_request_id: str) -> bool:
+        return any(q.ux_request_id == ux_request_id for q in self.state.stashed)
+
+    def prune_stash(self, waiting: set[str], topic_changed: Callable[[str, datetime], bool]) -> list[str]:
+        """Forget stashed questions nobody waits on any more, and bring back
+        those whose topic changed after they were stashed: that is when they
+        may matter again. Returns the ids brought back."""
+        self.state.stashed = [q for q in self.state.stashed if q.ux_request_id in waiting]
+        return self.unstash([q.ux_request_id for q in self.state.stashed
+                             if q.topic_id and topic_changed(q.topic_id, q.stashed_at)])
 
     def show_document(
         self,

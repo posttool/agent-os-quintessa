@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import type { Doc, DocumentSection, DocView, UXRequest, ViewMode } from "../types";
-import UXForm from "./UXForm";
+import { WaitingRow } from "./QuestionDeck";
 
 /** A document in Spaces. Only the sections that matter now are expanded;
  * the rest fold into an outline the user can open one tap at a time, or all
- * at once. Questions tied to a section render under it, so answering returns
- * the user to the context that asked. */
-export default function DocumentView({ doc, view, questions, onAnswer, onView }: {
+ * at once. A question tied to a section shows under it as a row that opens it
+ * in the question sheet. */
+export default function DocumentView({ doc, view, questions, stashedIds, onQuestion, onView }: {
   doc: Doc;
   view: DocView | undefined;
   questions: UXRequest[];
-  onAnswer: (r: UXRequest, values: Record<string, string>, dismissed?: boolean) => void;
+  stashedIds: Set<string>;
+  onQuestion: (r: UXRequest) => void;
   onView: (sectionIds: string[] | null, mode?: ViewMode) => void;
 }) {
   const serverOpen = view?.section_ids ?? doc.sections.map((s) => s.id);
@@ -60,7 +61,7 @@ export default function DocumentView({ doc, view, questions, onAnswer, onView }:
       {full && doc.description && <p className="desc">{doc.description}</p>}
       {doc.progress_overview && <p className="desc">{doc.progress_overview}</p>}
       {!full && view?.reason && <p className="why">{view.reason}</p>}
-      {loose.map((q) => <UXForm key={q.id} request={q} onAnswer={(v, d) => onAnswer(q, v, d)} />)}
+      {loose.map((q) => <WaitingRow key={q.id} request={q} stashed={stashedIds.has(q.id)} onOpen={() => onQuestion(q)} />)}
       {dates.length > 0 && (
         <div className="block">
           <div className="label">{dates.length < doc.key_dates.length ? "Next date" : "Key dates"}</div>
@@ -91,7 +92,7 @@ export default function DocumentView({ doc, view, questions, onAnswer, onView }:
             )}
             {asks.map((q) => (
               <div key={q.id} style={{ marginTop: 8 }}>
-                <UXForm request={q} onAnswer={(v, d) => onAnswer(q, v, d)} />
+                <WaitingRow request={q} stashed={stashedIds.has(q.id)} onOpen={() => onQuestion(q)} />
               </div>
             ))}
           </div>

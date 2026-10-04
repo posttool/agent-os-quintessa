@@ -24,6 +24,9 @@ finish the job; it can be one step toward it.
   can just say yes to ("Call Mom"), add an `action` naming the installed tool,
   function, arguments and a short button `label`; tapping it approves that
   call.
+- Never ask the user something in a notification, a brief card's text or a
+  discovery item: they can't answer there. A question goes through
+  `generative_ui`, which shows it in the question sheet.
 - `brief` lists the cards shown now. Change only what changed with
   `update_brief` (put a card with the id it replaces, remove ids that no
   longer hold); a topic has one card. Use `set_brief` only to rebuild the

@@ -75,7 +75,13 @@ export interface UXRequest {
   id: string; session_id: string; purpose: "disambiguation" | "permission" | "information"; prompt: string;
   fields: UXField[]; document_id: string | null; section_id: string | null; tool: string | null; function: string | null;
   topic_id: string | null; created_at: string;
+  /** why the agent asks; for an approval, the arguments of the call it runs */
+  context: string; arguments: Record<string, string>;
+  /** asked by a session the user started moments ago: open it at once */
+  user_waiting: boolean;
 }
+/** A waiting question the user put aside; its session still waits on it. */
+export interface StashedQuestion { ux_request_id: string; topic_id: string | null; stashed_at: string }
 /** One tap starts it; the tap is the user's approval for this tool function. */
 export interface BriefAction {
   tool: string; function: string; label: string; arguments: Record<string, string>;
@@ -105,6 +111,7 @@ export interface DeviceState {
   island: { active: boolean; words: string };
   brief: BriefItem[];
   open_ux_ids: string[];
+  stashed: StashedQuestion[];
   space_document_ids: string[];
   focused_document_id: string | null;
   focus: Record<string, DocumentFocus>;
