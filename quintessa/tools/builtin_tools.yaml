@@ -1,0 +1,77 @@
+# The two default tools every agent has. Their functions are implemented in
+# quintessa/tools/builtin.py; {card_format} is replaced with quintessa/prompts/card_format.md.
+- name: web
+  description: >-
+    Web access: Google search, reading pages, downloading files to the device.
+  functions:
+  - name: search
+    description: Search the web.
+    parameters:
+    - name: query
+      type: string
+  - name: fetch
+    description: Read a web page as text.
+    parameters:
+    - name: url
+      type: string
+  - name: download
+    description: Download a file to the device.
+    parameters:
+    - name: url
+      type: string
+- name: device
+  description: >-
+    Device control: update the experience surfaces. The contextual brief is a short ranked list of glanceable
+    calls to action; Spaces shows documents; Discover shows related topics the user did not ask for.
+  functions:
+  - name: set_brief
+    description: >-
+      Replace the whole contextual brief. To change a few cards, use update_brief.
+    parameters:
+    - name: cards
+      type: json array of cards. {card_format}
+  - name: update_brief
+    description: >-
+      Change cards in the contextual brief without rewriting it: put adds a card, or replaces the card
+      with its id or its topic_id (a topic has one card); remove takes cards away that no longer hold.
+      Use it when something new changes what a card says.
+    parameters:
+    - name: put
+      type: >-
+        json array of cards, each optionally with the id it replaces. {card_format}
+      required: false
+    - name: remove
+      type: json array of card ids to take away
+      required: false
+  - name: show_document
+    description: >-
+      Bring a document into Spaces showing only what matters now: the sections to expand (at most 2; the
+      rest fold into an outline) and a one-line reason. Use mode "full" when the user asks for the whole
+      document. Omit sections to let the device pick.
+    parameters:
+    - name: document_id
+      type: string
+    - name: section_ids
+      type: json array of section ids
+      required: false
+    - name: mode
+      type: '"focused" or "full"'
+      required: false
+    - name: reason
+      type: string
+      required: false
+  - name: add_discovery
+    description: Add a topic to the Discover screen.
+    parameters:
+    - name: title
+      type: string
+    - name: reason
+      type: string
+    - name: topic_id
+      type: string
+      required: false
+  - name: notify
+    description: Show a short notification.
+    parameters:
+    - name: text
+      type: string

@@ -27,7 +27,7 @@ build-backend = "setuptools.build_meta"
 include = ["quintessa*"]
 
 [tool.setuptools.package-data]
-quintessa = ["capabilities/*.md", "samples/*.json"]
+quintessa = ["capabilities/*.md", "prompts/*.md", "prompts/jev/*.yaml", "samples/*.json", "tools/*.yaml"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

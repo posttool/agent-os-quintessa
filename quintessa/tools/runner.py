@@ -9,6 +9,7 @@ import httpx
 from quintessa import config
 from quintessa.llm import schema as s
 from quintessa.models import AuthState, Tool, ToolBinding, ToolCallRecord, ToolCallStatus, ToolFunction, ToolKind
+from quintessa.prompts import prompt
 from quintessa.serde import to_dict
 from quintessa.tools.builtin import BUILTIN_IMPLEMENTATIONS, clip
 from quintessa.tools.tool_call_result import ToolCallResult
@@ -44,21 +45,8 @@ DEFAULT_FAILURE_RATE = 0.2  # about one simulated call in five runs into a probl
 HISTORY_KEPT = 30
 HISTORY_SHOWN = 12
 HISTORY_RESULT_LIMIT = 3000
-CONSISTENCY = "Stay consistent with earlier_calls: the same places, items, ids, prices, times and order states."
-SUCCEED_INSTRUCTION = (
-    "This call succeeds. " + CONSISTENCY + " You are a simulation, so be forgiving about inputs: when an "
-    "argument is empty, loose or a name instead of an id, resolve it to the matching record from earlier_calls "
-    "or pick a sensible value, and say what you picked. When the call refers to something that does not exist "
-    "yet (a cart, an order, a trip), create it consistently with earlier_calls. The user is signed in with a "
-    "saved address and payment method, and the agent has already got any approval this call needs, so never "
-    "ask for sign-in or approval."
-)
-FAIL_INSTRUCTION = (
-    "This call runs into one realistic problem that a real app has now and then, such as an item selling out, "
-    "no table or driver available, a declined payment, a closed store or the service being busy. Report it "
-    "specifically, as `failed`, or as `needs_user` when the user has to choose something. Don't blame the "
-    "arguments. " + CONSISTENCY
-)
+SUCCEED_INSTRUCTION = prompt("simulated_tool_succeed")
+FAIL_INSTRUCTION = prompt("simulated_tool_fail")
 
 
 def failure_rate() -> float:
@@ -127,7 +115,7 @@ async def _simulate(
     fails = _rng.random() < failure_rate()
     described = {k: v for k, v in to_dict(function).items() if k != "oversight"}
     result = await runtime.llm.generate_json(
-        system=tool.grounding or f"You act as the service '{tool.name}': {tool.description}",
+        system=tool.grounding or prompt("simulated_tool_default", name=tool.name, description=tool.description),
         prompt=json.dumps(
             {
                 "function": described,
@@ -162,10 +150,12 @@ async def _call_web_api(
     """The model turns the call into an HTTP request against the tool's
     endpoint; the request itself is made here and its response reported."""
     plan = await runtime.llm.generate_json(
-        system=(
-            f"You turn function calls for the web API '{tool.name}' ({tool.description}) into HTTP requests. "
-            f"Base endpoint: {tool.endpoint or 'unknown; use the public API you know for this service'}."
-            + (f"\nNotes: {tool.grounding}" if tool.grounding else "")
+        system=prompt(
+            "web_api_request",
+            name=tool.name,
+            description=tool.description,
+            endpoint=tool.endpoint or "unknown; use the public API you know for this service",
+            notes=f"\nNotes: {tool.grounding}" if tool.grounding else "",
         ),
         prompt=json.dumps({"function": to_dict(function), "arguments": args}, indent=2),
         schema=WEB_API_REQUEST_SCHEMA,

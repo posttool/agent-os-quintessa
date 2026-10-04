@@ -3,27 +3,16 @@ other `provider:model` still works when typed in by hand."""
 
 from __future__ import annotations
 
+import json
+from importlib import resources
 from typing import Any
 
 from quintessa import config
 
-MODELS: dict[str, list[tuple[str, str]]] = {
-    "claude": [
-        ("claude-opus-5-5", "Claude Opus 5.5"),
-        ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
-        ("claude-fable-5-1", "Claude Fable 5.1"),
-        ("claude-opus-5", "Claude Opus 5"),
-        ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
-    ],
-    "gemini": [
-        ("gemini-3.8-flash", "Gemini 3.8 Flash"),
-        ("gemini-2.5-pro", "Gemini 2.5 Pro"),
-        ("gemini-2.5-flash", "Gemini 2.5 Flash"),
-        ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite"),
-    ],
-}
 
-PROVIDER_LABELS = {"claude": "Claude", "gemini": "Gemini (Vertex)"}
+def providers() -> dict[str, Any]:
+    """The picker's models, from quintessa/samples/models.json."""
+    return json.loads(resources.files("quintessa.samples").joinpath("models.json").read_text())
 
 
 def provider_setup(provider: str) -> str:
@@ -43,9 +32,9 @@ def model_catalog() -> list[dict[str, Any]]:
     return [
         {
             "provider": provider,
-            "label": PROVIDER_LABELS.get(provider, provider),
+            "label": entry["label"],
             "setup": provider_setup(provider),
-            "models": [{"id": f"{provider}:{model}", "label": label} for model, label in models],
+            "models": [{"id": f"{provider}:{m['id']}", "label": m["label"]} for m in entry["models"]],
         }
-        for provider, models in MODELS.items()
+        for provider, entry in providers().items()
     ]

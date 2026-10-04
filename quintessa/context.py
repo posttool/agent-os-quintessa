@@ -10,13 +10,14 @@ from typing import TYPE_CHECKING, Any
 from quintessa.clock import now
 from quintessa.device import Card
 from quintessa.models import ReasoningSession
+from quintessa.prompts import prompt
 from quintessa.serde import to_dict
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
     from quintessa.memory import MemoryStore
 
-JSON_INSTRUCTION = "Respond only with a JSON object that matches the provided schema."
+JSON_INSTRUCTION = prompt("json_instruction")
 
 
 def session_context(session: ReasoningSession) -> dict[str, Any]:

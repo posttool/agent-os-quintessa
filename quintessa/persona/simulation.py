@@ -10,6 +10,7 @@ from quintessa.models import InputEvent, InputKind
 from quintessa.persona.client import AuraPersonaClient
 from quintessa.persona.persona_observation import PersonaObservation
 from quintessa.persona.persona_profile import PersonaProfile
+from quintessa.prompts import prompt
 from quintessa.serde import to_dict
 
 if TYPE_CHECKING:
@@ -78,9 +79,7 @@ class PersonaSimulation:
         observations = sorted(await self.client.list_observations(persona_id, date), key=lambda o: o.time)
         profile = to_dict(persona.summary())
         self.runtime.submit(
-            InputEvent(
-                InputKind.TEXT, "This is the user you are serving: " + json.dumps(profile), source="persona:profile"
-            )
+            InputEvent(InputKind.TEXT, prompt("persona_profile", profile=json.dumps(profile)), source="persona:profile")
         )
         self._task = asyncio.create_task(self._replay(observations))
         return persona

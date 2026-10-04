@@ -8,23 +8,14 @@ from quintessa.decide.card_scorer import CardScorer
 from quintessa.decide.next_step import NextStepDecider
 from quintessa.decide.system_one import SystemOneClient, SystemOneError, client_from_env
 from quintessa.models import AmbientFilterDecision, InputEvent, NodeType
+from quintessa.prompts import data
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
 
 QUESTION = "matters"
 DEFAULT_THRESHOLD = 0.3  # on 60 hand-labeled events it missed nothing that mattered and skipped half the sessions
-NOUL = {
-    "type": "noul",
-    "instructions": (
-        "This incoming event matters to the user's personal agent: it brings new information, a request, a risk "
-        "or a change that the agent should record or act on, given what the agent is already tracking."
-    ),
-    "criteria": {
-        "true": "New facts, requests, changes or risks, especially about something being tracked.",
-        "false": "Marketing, routine notices, small talk with nothing new, or ordinary movement and motion.",
-    },
-}
+NOUL = data("jev/matters")
 
 
 def is_ambient(event: InputEvent) -> bool:

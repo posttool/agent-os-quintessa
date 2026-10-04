@@ -1,0 +1,10 @@
+# Jev's "does this matter?" question for ambient events (quintessa/decide/ambient_filter.py).
+type: noul
+instructions: >-
+  This incoming event matters to the user's personal agent: it brings new information, a request, a risk
+  or a change that the agent should record or act on, given what the agent is already tracking.
+criteria:
+  'true': >-
+    New facts, requests, changes or risks, especially about something being tracked.
+  'false': >-
+    Marketing, routine notices, small talk with nothing new, or ordinary movement and motion.

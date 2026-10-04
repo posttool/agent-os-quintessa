@@ -147,6 +147,8 @@ TraceStep {
 
 A **capability** is a markdown file in `quintessa/capabilities/`. Its front matter names the **executor** (the code that applies the model's output) and a `choose_when` criterion (what Jev reads when it picks the next step). Its body is the system prompt for that capability's model call.
 
+Every other fixed text the system sends to a model lives in `quintessa/prompts/`: one markdown file per prompt (the brief refresh, simulated tools and apps, the card format the device tool documents, web search, ambient data writers, the persona introduction, the JSON instruction), with front matter naming where it is used and its `{placeholders}`. Jev's questions are YAML in `quintessa/prompts/jev/`, the built-in tools' definitions are `quintessa/tools/builtin_tools.yaml`, and the model picker's list is `quintessa/samples/models.json`.
+
 ```ts
 Capability {
   name: string
