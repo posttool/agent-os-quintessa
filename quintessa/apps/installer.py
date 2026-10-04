@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from quintessa.llm import schema as s
 from quintessa.memory import MemoryStore
 from quintessa.models import AppListing, AuthKind, AuthRequirement, AuthState, Tool, ToolAuthor, ToolBinding, ToolKind
+from quintessa.prompts import prompt
 from quintessa.serde import to_dict
 from quintessa.tools.definitions import FUNCTION_SCHEMA, functions_from
 
@@ -30,14 +31,7 @@ MANIFEST_SCHEMA = s.obj(
     }
 )
 
-MANIFEST_INSTRUCTIONS = """You write the function manifest for a phone app the agent is installing.
-List the 2 to 6 things an agent would do in this app for a user (search, book,
-order, track, cancel, message...), each a function with typed parameters and a
-return value. Give every function an oversight level: `auto`, `auto_from_memory`,
-`confirm_once` (ask the first time, remember the answer) or `always_ask` (spends
-money, messages someone, or commits the user to something). Mark functions that
-start a real-world process (a ride, a delivery, a booking) as `long_running`.
-`auth` is the sign-in the real app would need (most consumer apps: oauth)."""
+MANIFEST_INSTRUCTIONS = prompt("app_manifest")
 
 _SLUG = re.compile(r"[^a-z0-9]+")
 
@@ -52,13 +46,8 @@ def installed_app(store: MemoryStore, app_id: str) -> Tool | None:
 
 def grounding_for(listing: AppListing, extra: str = "") -> str:
     by = f" by {listing.developer}" if listing.developer else ""
-    lines = [
-        f"You are the backend of the {listing.title} app{by}. {listing.summary}".strip(),
-        "Carry out each function call as this app would and report realistic results and statuses.",
-    ]
-    if extra:
-        lines.append(extra)
-    return "\n".join(lines)
+    text = prompt("app_grounding", title=listing.title, by=by, summary=listing.summary)
+    return f"{text}\n{extra}" if extra else text
 
 
 async def install_app(

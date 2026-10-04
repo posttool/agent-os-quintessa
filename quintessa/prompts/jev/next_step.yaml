@@ -1,0 +1,9 @@
+# Jev's next_step choice question (quintessa/decide/next_step.py). The options are
+# the capabilities, each with its choose_when, plus "done" with done_when.
+instructions: >-
+  A personal agent is working through what to do about the trigger, one step at a time. Given the trigger,
+  the steps it has already taken and what it knows, which step should it take next? A step that already
+  succeeded with the same purpose should not be repeated.
+done_when: >-
+  Nothing useful remains for this trigger: the steps taken so far have handled it, or it needs nothing
+  at all, as many ambient events do.

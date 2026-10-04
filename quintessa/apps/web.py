@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from quintessa.apps.store import play_url
 from quintessa.llm import schema as s
 from quintessa.models import AppListing
+from quintessa.prompts import prompt
 from quintessa.tools.search import SearchBackend
 
 if TYPE_CHECKING:
@@ -40,13 +41,9 @@ class WebSearchAppStore:
         self.llm = llm
 
     async def search(self, query: str, limit: int = 8) -> list[AppListing]:
-        found = await self.backend.search(
-            f"Android apps on Google Play for: {query}. "
-            "List each app's name, developer and its play.google.com/store/apps/details?id= URL."
-        )
+        found = await self.backend.search(prompt("app_listing_search", query=query))
         result = await self.llm.generate_json(
-            system="Extract Google Play app listings from these search results. Only include apps whose "
-            "package id appears in a play.google.com URL in the text. Never invent ids.",
+            system=prompt("app_listing_extract"),
             prompt=json.dumps({"query": query, "search_results": found}),
             schema=LISTINGS_SCHEMA,
             purpose="app_store:extract",

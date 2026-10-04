@@ -7,6 +7,7 @@ from typing import Any
 from quintessa.llm import ResilientLLM
 from quintessa.llm import schema as s
 from quintessa.models import AmbientSource, InputKind
+from quintessa.prompts import prompt
 
 SCHEMA = s.obj(
     {
@@ -27,11 +28,7 @@ async def source_from_template(
     """Write a realistic stream for a template (emails, SMS, a drive to work),
     grounded in the persona when one is given."""
     result = await llm.generate_json(
-        system=(
-            "You simulate incoming data for a personal agent test harness. Write realistic, "
-            "specific events in order, grounded in the person's life. "
-            "Respond only with JSON matching the schema."
-        ),
+        system=f"{prompt('ambient_template')}\n\n{prompt('json_instruction')}",
         prompt=json.dumps({"template": template, "persona": persona, "count": count}, indent=1),
         schema=SCHEMA,
         purpose="ambient:generate",
@@ -64,11 +61,7 @@ async def source_from_description(
     """Vibe-code a new ambient source from a plain description, such as
     "a smart oven reporting a roast" or "a flight with a gate change"."""
     result = await llm.generate_json(
-        system=(
-            "You design simulated ambient data sources for a personal agent test harness. "
-            "From the description, pick the input kind and write realistic events in order, "
-            "grounded in the person's life when one is given. Respond only with JSON matching the schema."
-        ),
+        system=f"{prompt('ambient_vibe')}\n\n{prompt('json_instruction')}",
         prompt=json.dumps({"description": description, "persona": persona, "count": count}, indent=1),
         schema=VIBE_SCHEMA,
         purpose="ambient:vibe",

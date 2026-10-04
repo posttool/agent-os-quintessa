@@ -6,20 +6,15 @@ from typing import TYPE_CHECKING, Any
 from quintessa.context import controller_context
 from quintessa.decide.system_one import SystemOneClient, SystemOneError, choice
 from quintessa.models import DONE, ReasoningSession, ShadowDecision
+from quintessa.prompts import data
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
 
 QUESTION = "next_step"
-INSTRUCTIONS = (
-    "A personal agent is working through what to do about the trigger, one step at a time. "
-    "Given the trigger, the steps it has already taken and what it knows, which step should it take next? "
-    "A step that already succeeded with the same purpose should not be repeated."
-)
-DONE_WHEN = (
-    "Nothing useful remains for this trigger: the steps taken so far have handled it, or it needs nothing at all, "
-    "as many ambient events do."
-)
+_QUESTION_TEXT = data("jev/next_step")
+INSTRUCTIONS = _QUESTION_TEXT["instructions"]
+DONE_WHEN = _QUESTION_TEXT["done_when"]
 
 
 class NextStepDecider:

@@ -27,6 +27,7 @@ from quintessa.models import (
     Preferences,
     ReasoningSession,
 )
+from quintessa.prompts import prompt
 from quintessa.serde import to_dict
 from quintessa.tools import BUILTIN_TOOLS
 from quintessa.tools.search import SearchBackend
@@ -168,12 +169,13 @@ class AgentRuntime:
             )
             if v
         )
-        content = (
-            f'The user tapped "{action.label}" on the brief card "{card.text}"'
-            + (f" ({about})" if about else "")
-            + f". Do it now with {action.tool}.{action.function}"
-            + (f" using {json.dumps(action.arguments)}" if action.arguments else "")
-            + ". The tap approves that call."
+        content = prompt(
+            "card_action",
+            label=action.label,
+            text=card.text,
+            about=f" ({about})" if about else "",
+            call=f"{action.tool}.{action.function}",
+            arguments=f" using {json.dumps(action.arguments)}" if action.arguments else "",
         )
         grant = Permission(
             action.tool, action.function, True, PermissionScope.SESSION, f'tapped "{action.label}" in the brief'

@@ -14,6 +14,7 @@ from quintessa.llm import LLMUnavailableError
 from quintessa.llm import schema as s
 from quintessa.loop.brief_refresh import refresh_brief, score_cards
 from quintessa.models import DONE, ReasoningSession, SessionStatus, ShadowDecision, StepDecision, TraceStep
+from quintessa.prompts import prompt
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
@@ -65,10 +66,7 @@ class AgentReasoningLoop:
         record.drove = True
         capability = "" if record.choice == DONE else record.choice
         p = record.probabilities.get(record.choice, 0.0)
-        focus = (
-            "Chosen by Jev with no instructions: decide what this capability should do for the trigger, "
-            "given the steps so far."
-        )
+        focus = prompt("jev_driven_focus")
         words = capability.replace("_", " ").title()
         return StepDecision(capability, focus, f"Jev p {p:.2f}", words, record.model, "jev")
 

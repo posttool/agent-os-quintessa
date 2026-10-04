@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from quintessa import config
+from quintessa.prompts import prompt
 
 
 class SearchBackend(Protocol):
@@ -30,7 +31,7 @@ class GeminiGroundedSearch:
 
         response = await self.client.aio.models.generate_content(
             model=self.model,
-            contents=f"Search the web and report what you find, with source URLs: {query}",
+            contents=prompt("web_search", query=query),
             config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
         )
         return response.text or ""
@@ -51,9 +52,7 @@ class ClaudeWebSearch:
         self.max_continuations = max_continuations
 
     async def search(self, query: str) -> str:
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": f"Search the web and report what you find, with source URLs: {query}"}
-        ]
+        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt("web_search", query=query)}]
         for _ in range(self.max_continuations + 1):
             response = await self.client.messages.create(
                 model=self.model,
