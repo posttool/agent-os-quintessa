@@ -1,7 +1,7 @@
 # Plan: every question in the bottom sheet
 
 > **Date:** 2026-10-04  
-> **Status:** Approved by Duke on 2026-10-04 and being built in [PR #21](https://github.com/posttool/agent-os-quintessa/pull/21) (open). Installs without asking were split out into [#20](https://github.com/posttool/agent-os-quintessa/pull/20).  
+> **Status:** Approved by Duke on 2026-10-04 and built with the defaults in [PR #21](https://github.com/posttool/agent-os-quintessa/pull/21) (merged). Installs without asking were split out into [#20](https://github.com/posttool/agent-os-quintessa/pull/20).  
 > **Source:** [plan doc](https://claude.ai/code/artifact/d9eba0c5-14c3-4fe2-8bde-9ba9ae04e119), copied as written.
 
 
