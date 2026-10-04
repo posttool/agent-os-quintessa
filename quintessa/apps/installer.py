@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from quintessa.llm import schema as s
 from quintessa.memory import MemoryStore
-from quintessa.models import AppListing, AuthKind, AuthRequirement, AuthState, Tool, ToolBinding, ToolKind
+from quintessa.models import AppListing, AuthKind, AuthRequirement, AuthState, Tool, ToolAuthor, ToolBinding, ToolKind
 from quintessa.serde import to_dict
 from quintessa.tools.definitions import FUNCTION_SCHEMA, functions_from
 
@@ -61,7 +61,9 @@ def grounding_for(listing: AppListing, extra: str = "") -> str:
     return "\n".join(lines)
 
 
-async def install_app(runtime: AgentRuntime, listing: AppListing, need: str = "", created_by: str = "agent") -> Tool:
+async def install_app(
+    runtime: AgentRuntime, listing: AppListing, need: str = "", created_by: ToolAuthor = ToolAuthor.AGENT
+) -> Tool:
     """Write the app's manifest and add it to the user's tools. Installing
     an app that is already installed returns the installed one."""
     store = runtime.store

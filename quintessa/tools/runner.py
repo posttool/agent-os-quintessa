@@ -8,9 +8,9 @@ import httpx
 
 from quintessa import config
 from quintessa.llm import schema as s
-from quintessa.models import AuthState, Tool, ToolBinding, ToolCallRecord, ToolFunction, ToolKind
+from quintessa.models import AuthState, Tool, ToolBinding, ToolCallRecord, ToolCallStatus, ToolFunction, ToolKind
 from quintessa.serde import to_dict
-from quintessa.tools.builtin import BUILTIN_IMPLEMENTATIONS, FETCH_LIMIT
+from quintessa.tools.builtin import BUILTIN_IMPLEMENTATIONS, clip
 from quintessa.tools.tool_call_result import ToolCallResult
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 LLM_TOOL_SCHEMA = s.obj(
     {
-        "status": s.enum_of(["done", "in_progress", "needs_user", "failed"]),
+        "status": s.enum_of(ToolCallStatus),
         "result": s.string("What happened, as the tool would report it."),
         "progress_stages": s.array(s.string(), "Stages still to come if the process continues."),
     }
@@ -71,8 +71,8 @@ def _schema(statuses: list[str]) -> dict:
     return s.obj({**LLM_TOOL_SCHEMA["properties"], "status": s.enum_of(statuses)})
 
 
-SUCCEED_SCHEMA = _schema(["done", "in_progress"])
-FAIL_SCHEMA = _schema(["failed", "needs_user"])
+SUCCEED_SCHEMA = _schema([ToolCallStatus.DONE, ToolCallStatus.IN_PROGRESS])
+FAIL_SCHEMA = _schema([ToolCallStatus.FAILED, ToolCallStatus.NEEDS_USER])
 _rng = random.Random()
 
 
@@ -86,7 +86,7 @@ async def run_tool(
         if tool.kind == ToolKind.BUILTIN:
             impl = BUILTIN_IMPLEMENTATIONS.get((tool.name, function.name))
             if impl is None:
-                return ToolCallResult("failed", f"{tool.name}.{function.name} has no implementation")
+                return ToolCallResult(ToolCallStatus.FAILED, f"{tool.name}.{function.name} has no implementation")
             return await impl(args, runtime)
         if tool.kind == ToolKind.APP:
             return await _call_app(runtime, tool, function, args, purpose)
@@ -95,8 +95,8 @@ async def run_tool(
         if tool.kind in SIMULATED_KINDS:
             return await _simulate(runtime, tool, function, args, purpose)
     except httpx.HTTPError as e:
-        return ToolCallResult("failed", f"{tool.name}.{function.name}: {type(e).__name__}: {e}")
-    return ToolCallResult("failed", f"running {tool.kind.value} tools is not implemented yet")
+        return ToolCallResult(ToolCallStatus.FAILED, f"{tool.name}.{function.name}: {type(e).__name__}: {e}")
+    return ToolCallResult(ToolCallStatus.FAILED, f"running {tool.kind.value} tools is not implemented yet")
 
 
 async def _call_app(
@@ -106,10 +106,12 @@ async def _call_app(
     today; a real binding would first need the user signed in."""
     title = tool.listing.title if tool.listing else tool.name
     if tool.auth.state == AuthState.NEEDED:
-        return ToolCallResult("needs_user", f"Sign in to {title} before the agent can use it.")
+        return ToolCallResult(ToolCallStatus.NEEDS_USER, f"Sign in to {title} before the agent can use it.")
     if tool.binding == ToolBinding.SIMULATED:
         return await _simulate(runtime, tool, function, args, purpose)
-    return ToolCallResult("failed", f"{title}: running apps through {tool.binding.value} is not implemented yet")
+    return ToolCallResult(
+        ToolCallStatus.FAILED, f"{title}: running apps through {tool.binding.value} is not implemented yet"
+    )
 
 
 async def _simulate(
@@ -172,7 +174,7 @@ async def _call_web_api(
     req = plan.data
     url = httpx.URL(req["url"])
     if url.scheme not in ("http", "https"):
-        return ToolCallResult("failed", f"{tool.name}.{function.name}: refusing non-http URL {req['url']}")
+        return ToolCallResult(ToolCallStatus.FAILED, f"{tool.name}.{function.name}: refusing non-http URL {req['url']}")
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
         response = await client.request(
             req["method"],
@@ -180,7 +182,5 @@ async def _call_web_api(
             headers={h["name"]: h["value"] for h in req["headers"]},
             content=req["body"].encode() if req["body"] else None,
         )
-    text = response.text
-    note = f"\n[truncated to {FETCH_LIMIT} of {len(text)} characters]" if len(text) > FETCH_LIMIT else ""
-    status = "done" if response.is_success else "failed"
-    return ToolCallResult(status, f"{req['method']} {url} -> HTTP {response.status_code}\n{text[:FETCH_LIMIT]}{note}")
+    status = ToolCallStatus.DONE if response.is_success else ToolCallStatus.FAILED
+    return ToolCallResult(status, f"{req['method']} {url} -> HTTP {response.status_code}\n{clip(response.text)}")

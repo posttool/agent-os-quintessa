@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import StrEnum
 
 from quintessa.clock import now
 
@@ -47,13 +48,18 @@ class Salience:
     scored_at: datetime | None = None  # the card's updated_at when Jev scored it
 
 
+class SuppressionKind(StrEnum):
+    DISMISSED = "dismissed"
+    SNOOZED = "snoozed"  # "Not now"
+
+
 @dataclass
 class Suppression:
     """The user pushed a card away. Kept per topic (or per card text when it
     has none), so a new card on the same topic still ranks lower for a while."""
 
     key: str
-    kind: str  # "dismissed" | "snoozed"
+    kind: SuppressionKind
     at: datetime = field(default_factory=now)
 
 
@@ -83,7 +89,9 @@ def suppression(
         if s.key != key:
             continue
         base, half = (
-            (DISMISS_PENALTY, DISMISS_HALF_LIFE) if s.kind == "dismissed" else (SNOOZE_PENALTY, SNOOZE_HALF_LIFE)
+            (DISMISS_PENALTY, DISMISS_HALF_LIFE)
+            if s.kind == SuppressionKind.DISMISSED
+            else (SNOOZE_PENALTY, SNOOZE_HALF_LIFE)
         )
         penalty += base * 0.5 ** (max((at - s.at).total_seconds(), 0.0) / half.total_seconds())
     since = at - max(updated_at, opened_at) if opened_at else at - updated_at

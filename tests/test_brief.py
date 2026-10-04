@@ -96,7 +96,7 @@ async def test_a_tapped_action_carries_its_approval(script, make_runtime):
     action = CardAction("food_delivery", "checkout", "Order pad thai", {"total": "32"})
     runtime.device.set_brief([Card("Dinner?", action=action)])
     asked = []
-    runtime.questions.on_request(asked.append)
+    runtime.questions.on_question(asked.append)
 
     session = runtime.start_card_action(runtime.device.state.brief[0].id)
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
@@ -124,7 +124,7 @@ async def test_questions_know_their_topic(script, make_runtime):
     runtime = make_runtime(script)
     seed(runtime)
     asked = []
-    runtime.questions.on_request(asked.append)
+    runtime.questions.on_question(asked.append)
     session = runtime.submit(InputEvent(InputKind.TEXT, "the dentist called"))
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
     assert asked[0].topic_id == "topic-dentist"  # taken from its document

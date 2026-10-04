@@ -7,7 +7,7 @@ from quintessa import config
 from quintessa.decide.card_scorer import CardScorer
 from quintessa.decide.next_step import NextStepDecider
 from quintessa.decide.system_one import SystemOneClient, SystemOneError, client_from_env
-from quintessa.models import AmbientFilterDecision, InputEvent
+from quintessa.models import AmbientFilterDecision, InputEvent, NodeType
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
@@ -53,9 +53,9 @@ class AmbientFilter:
             "documents": [
                 {"title": d.title, "sections": [s.title for s in d.sections]}
                 for d in store.documents.values()
-                if d.status.value != "archived"
+                if not d.archived
             ],
-            "people": [n.title for n in store.nodes.values() if n.type.value == "person"],
+            "people": [n.title for n in store.nodes.values() if n.type == NodeType.PERSON],
         }
 
     async def check(self, runtime: AgentRuntime, event: InputEvent) -> AmbientFilterDecision:

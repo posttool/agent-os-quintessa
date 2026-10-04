@@ -4,6 +4,7 @@ Keeping it in one place means the LLM and Jev decide on the same facts."""
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from quintessa.clock import now
@@ -64,24 +65,7 @@ def brief_context(runtime: AgentRuntime) -> dict[str, Any]:
     for later; it still waits."""
     runtime.device.prune_brief(now())
     runtime.prune_stash()
-    cards = [
-        {
-            "id": b.id,
-            "text": b.text,
-            "topic_id": b.topic_id,
-            "document_id": b.document_id,
-            "section_id": b.section_id,
-            "urgency": b.urgency,
-            "detail": b.detail,
-            "action": b.action.label if b.action else None,
-            "expires_at": b.expires_at,
-            "due_at": b.due_at,
-            "salience": b.salience,
-            "updated_at": b.updated_at,
-            "stale": staleness(runtime.store, b),
-        }
-        for b in runtime.device.state.brief
-    ]
+    cards = [{**card_view(b), "stale": staleness(runtime.store, b).value} for b in runtime.device.state.brief]
     questions = [
         {
             "id": r.id,
@@ -95,16 +79,47 @@ def brief_context(runtime: AgentRuntime) -> dict[str, Any]:
     return to_dict({"brief": cards, "questions_waiting": questions})  # plain JSON, for Jev too
 
 
-def staleness(store: MemoryStore, card: Card) -> str:
-    """Why a card may no longer hold, or "" when nothing changed under it."""
+def card_view(card: Card) -> dict[str, Any]:
+    """A card as the agent reads it."""
+    return {
+        "id": card.id,
+        "text": card.text,
+        "topic_id": card.topic_id,
+        "document_id": card.document_id,
+        "section_id": card.section_id,
+        "urgency": card.urgency,
+        "detail": card.detail,
+        "action": card.action.label if card.action else None,
+        "expires_at": card.expires_at,
+        "due_at": card.due_at,
+        "salience": card.salience,
+        "updated_at": card.updated_at,
+    }
+
+
+class Staleness(Enum):
+    """Whether a card still holds. The value is how the agent is told."""
+
+    FRESH = ""
+    TOPIC_CHANGED = "its topic changed after the card was written"
+    TOPIC_GONE = "its topic is gone"
+    DOCUMENT_GONE = "its document is gone"
+
+    @property
+    def gone(self) -> bool:
+        """What the card points at no longer exists, so it goes without asking."""
+        return self in (Staleness.TOPIC_GONE, Staleness.DOCUMENT_GONE)
+
+
+def staleness(store: MemoryStore, card: Card) -> Staleness:
     if card.topic_id:
         topic = store.topics.get(card.topic_id)
         if topic is None or topic.archived:
-            return "its topic is gone"
+            return Staleness.TOPIC_GONE
         if topic.updated_at > card.updated_at:
-            return "its topic changed after the card was written"
+            return Staleness.TOPIC_CHANGED
     if card.document_id:
         doc = store.documents.get(card.document_id)
-        if doc is None or doc.status.value == "archived":
-            return "its document is gone"
-    return ""
+        if doc is None or doc.archived:
+            return Staleness.DOCUMENT_GONE
+    return Staleness.FRESH

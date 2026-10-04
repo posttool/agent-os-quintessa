@@ -6,15 +6,8 @@ from quintessa.executors.generative_ui_executor import question_topic
 from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
 from quintessa.llm import schema as s
-from quintessa.models import (
-    Answer,
-    FieldKind,
-    Question,
-    QuestionField,
-    QuestionPurpose,
-    Subscription,
-)
-from quintessa.oversight import CONFIRM_YES, needs_permission, record_permission
+from quintessa.models import Answer, FieldKind, Question, QuestionField, QuestionPurpose, Subscription, ToolCallStatus
+from quintessa.oversight import CONFIRM_YES, Gate, gate, record_permission
 from quintessa.serde import to_dict
 from quintessa.tools.runner import run_tool
 
@@ -51,7 +44,9 @@ class ToolUseExecutor:
             outcome = await run_tool(ctx.runtime, tool, function, args, purpose=call["rationale"])
             output = {**call, "result": to_dict(outcome)}
             stages = outcome.progress_stages or call["progress_stages"]
-            if (call["track_progress"] or function.long_running or outcome.status == "in_progress") and stages:
+            if (
+                call["track_progress"] or function.long_running or outcome.status == ToolCallStatus.IN_PROGRESS
+            ) and stages:
                 subscription = Subscription(
                     tool=tool.name,
                     function=function.name,
@@ -68,13 +63,13 @@ class ToolUseExecutor:
                 output, f"{tool.name}.{function.name} -> {outcome.status}: {outcome.result}", result.model
             )
 
-        gate = needs_permission(ctx.session, store, tool, function)
-        if gate is None:
+        verdict = gate(ctx.session, store, tool, function)
+        if verdict == Gate.DECLINED:
             return StepOutcome(call, f"Skipped {tool.name}.{function.name}: the user declined it earlier", result.model)
-        if gate is False:
+        if verdict == Gate.GO:
             return await execute()
 
-        request = Question(
+        question = Question(
             session_id=ctx.session.id,
             purpose=QuestionPurpose.PERMISSION,
             prompt=call["permission_prompt"] or f"Allow {tool.name} to {function.name}?",
@@ -88,15 +83,17 @@ class ToolUseExecutor:
             arguments=args,
         )
 
-        async def on_answer(response: Answer) -> StepOutcome:
-            permission = record_permission(ctx.session, store, request, response)
+        async def on_answer(answer: Answer) -> StepOutcome:
+            permission = record_permission(ctx.session, store, question, answer)
             if permission and permission.granted:
                 return await execute()
             return StepOutcome(
                 {**call, "permission": "declined"}, f"User declined {tool.name}.{function.name}", result.model
             )
 
-        return StepOutcome(call, f"Asking permission for {tool.name}.{function.name}", result.model, request, on_answer)
+        return StepOutcome(
+            call, f"Asking permission for {tool.name}.{function.name}", result.model, question, on_answer
+        )
 
     @staticmethod
     def _note_action(ctx: StepContext, call: dict, line: str) -> None:

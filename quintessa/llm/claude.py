@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import anthropic
 
 from quintessa import config
 from quintessa.llm.errors import FatalLLMError, InvalidOutputError, RefusalError, RetryableLLMError
+from quintessa.llm.output import json_object
 
 # Models that accept the server-side refusal fallback ("fallbacks": "default").
 SERVER_FALLBACK_MODELS = {"claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"}
@@ -78,12 +78,4 @@ class ClaudeAdapter:
         if response.stop_reason == "max_tokens":
             raise InvalidOutputError(f"claude {model} hit max_tokens")
         text = next((b.text for b in response.content if b.type == "text"), None)
-        if text is None:
-            raise InvalidOutputError(f"claude {model} returned no text")
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError as e:
-            raise InvalidOutputError(f"claude {model}: invalid JSON") from e
-        if not isinstance(data, dict):
-            raise InvalidOutputError(f"claude {model}: expected a JSON object")
-        return data
+        return json_object(text, f"claude {model}")

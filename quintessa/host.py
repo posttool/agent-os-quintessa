@@ -5,7 +5,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from quintessa.llm import ResilientLLM
+from quintessa.llm import ModelRoute, ResilientLLM
 from quintessa.loop.runtime import AgentRuntime
 from quintessa.models import Answer, InputEvent, ReasoningSession
 from quintessa.state.snapshot import apply_snapshot, take_snapshot, validate_snapshot
@@ -58,6 +58,16 @@ class AgentHost:
     @property
     def loaded_users(self) -> list[str]:
         return sorted(self._agents)
+
+    def set_model_chain(self, routes: list[ModelRoute], retries: int, base_delay: float) -> None:
+        """Switch every user's agent to a new model chain (it is platform-wide)
+        and refresh their open views."""
+        self.llm.routes = routes
+        self.llm.retries = max(retries, 0)
+        self.llm.base_delay = max(base_delay, 0.0)
+        for runtime in self._agents.values():
+            for watcher in list(runtime.watchers):
+                watcher()
 
     # --- requests ---------------------------------------------------------------
 

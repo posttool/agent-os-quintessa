@@ -21,6 +21,7 @@ from quintessa.models.memory_node import MemoryNode
 from quintessa.models.node_type import NodeType
 from quintessa.models.oversight_level import OversightLevel
 from quintessa.models.permission import Permission
+from quintessa.models.permission_scope import PermissionScope
 from quintessa.models.preferences import Preferences
 from quintessa.models.question import Question
 from quintessa.models.question_field import QuestionField
@@ -31,8 +32,10 @@ from quintessa.models.shadow_decision import ShadowDecision
 from quintessa.models.step_decision import DONE, StepDecision
 from quintessa.models.subscription import Subscription
 from quintessa.models.tool import Tool
+from quintessa.models.tool_author import ToolAuthor
 from quintessa.models.tool_binding import ToolBinding
 from quintessa.models.tool_call_record import ToolCallRecord
+from quintessa.models.tool_call_status import ToolCallStatus
 from quintessa.models.tool_function import ToolFunction
 from quintessa.models.tool_kind import ToolKind
 from quintessa.models.tool_parameter import ToolParameter
@@ -42,6 +45,9 @@ from quintessa.models.trigger_spec import TriggerSpec
 from quintessa.models.trigger_type import TriggerType
 
 __all__ = [
+    "ToolCallStatus",
+    "ToolAuthor",
+    "PermissionScope",
     "DONE",
     "AmbientSource",
     "AppListing",

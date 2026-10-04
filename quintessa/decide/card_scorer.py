@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from quintessa.clock import now
 from quintessa.decide.system_one import SystemOneClient, SystemOneError
 from quintessa.device import Card
-from quintessa.models import InputKind
+from quintessa.models import InputKind, NodeType
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
@@ -90,7 +90,7 @@ class CardScorer:
                 "last_location": location.content if location else None,
                 "recent": [{"kind": e.kind.value, "sender": e.sender, "content": e.content[:200]} for e in events],
             },
-            "people": [n.title for n in store.nodes.values() if n.type.value == "person"],
+            "people": [n.title for n in store.nodes.values() if n.type == NodeType.PERSON],
         }
 
     async def score(self, runtime: AgentRuntime, cards: list[Card]) -> list[str]:

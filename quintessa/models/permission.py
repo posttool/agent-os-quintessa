@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from quintessa.clock import now
+from quintessa.models.permission_scope import PermissionScope
 
 
 @dataclass
@@ -15,7 +16,7 @@ class Permission:
     tool: str
     function: str
     granted: bool
-    scope: str
+    scope: PermissionScope
     detail: str = ""
     session_id: str | None = None
     question_id: str | None = None
