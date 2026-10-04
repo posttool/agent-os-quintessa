@@ -11,5 +11,3 @@ class InputKind(str, Enum):
     NOTIFICATION = "notification"
     SENSOR = "sensor"
     PROCESS_PROGRESS = "process_progress"
-    UX_RESPONSE = "ux_response"
-    TIME = "time"

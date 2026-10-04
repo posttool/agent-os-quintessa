@@ -1,10 +1,11 @@
 import httpx
+from conftest import decide
+from test_tools import call
 
 from quintessa.apps import FallbackAppStore, OfflineCatalog, app_store_from_env
 from quintessa.apps.installer import install_app
 from quintessa.apps.web import WebSearchAppStore
 from quintessa.models import (
-    AppListing,
     AuthKind,
     AuthState,
     InputEvent,
@@ -13,23 +14,34 @@ from quintessa.models import (
     SessionStatus,
     ToolBinding,
     ToolKind,
-    UXResponse,
 )
 from quintessa.state import InMemoryStateBackend
 from quintessa.tools import runner
 
-from conftest import decide, until
-from test_tools import call
-
 
 def manifest(name="opentable", auth="oauth"):
     return {
-        "name": name, "description": "Find and book restaurant tables.", "grounding": "", "auth": auth,
+        "name": name,
+        "description": "Find and book restaurant tables.",
+        "grounding": "",
+        "auth": auth,
         "functions": [
-            {"name": "search", "description": "Find tables", "returns": "list", "oversight": "auto_from_memory",
-             "long_running": False, "parameters": [{"name": "query", "type": "string", "description": "", "required": True}]},
-            {"name": "book", "description": "Book a table", "returns": "confirmation", "oversight": "confirm_once",
-             "long_running": True, "parameters": [{"name": "time", "type": "string", "description": "", "required": True}]},
+            {
+                "name": "search",
+                "description": "Find tables",
+                "returns": "list",
+                "oversight": "auto_from_memory",
+                "long_running": False,
+                "parameters": [{"name": "query", "type": "string", "description": "", "required": True}],
+            },
+            {
+                "name": "book",
+                "description": "Book a table",
+                "returns": "confirmation",
+                "oversight": "confirm_once",
+                "long_running": True,
+                "parameters": [{"name": "time", "type": "string", "description": "", "required": True}],
+            },
         ],
     }
 
@@ -69,13 +81,24 @@ async def test_web_search_store_keeps_only_ids_seen_in_results(script, make_runt
         async def search(self, query):
             return "Resy https://play.google.com/store/apps/details?id=com.resy.android"
 
-    script.on("app_store:extract", {"apps": [
-        {"app_id": "com.resy.android", "title": "Resy", "developer": "Resy", "category": "Food", "summary": "Book"},
-        {"app_id": "com.invented.app", "title": "Fake", "developer": "", "category": "", "summary": ""},
-    ]})
+    script.on(
+        "app_store:extract",
+        {
+            "apps": [
+                {
+                    "app_id": "com.resy.android",
+                    "title": "Resy",
+                    "developer": "Resy",
+                    "category": "Food",
+                    "summary": "Book",
+                },
+                {"app_id": "com.invented.app", "title": "Fake", "developer": "", "category": "", "summary": ""},
+            ]
+        },
+    )
     runtime = make_runtime(script)
     store = WebSearchAppStore(FakeSearch(), runtime.llm)
-    assert [l.app_id for l in await store.search("reservations")] == ["com.resy.android"]
+    assert [listing.app_id for listing in await store.search("reservations")] == ["com.resy.android"]
 
 
 def test_app_store_from_env(monkeypatch):
@@ -153,8 +176,8 @@ async def test_agent_uninstalls_only_its_own_apps(script, make_runtime):
 async def test_installing_never_asks(script, make_runtime):
     """Installs happen in the step itself, even for a user whose saved
     preferences still carry the old ask_before_install setting."""
-    from quintessa.serde import from_dict
     from quintessa.models import Preferences
+    from quintessa.serde import from_dict
 
     script.on("decide", decide("tool_discovery", "find a ride app"))
     script.on("capability:tool_discovery", search_plan("uber ride"))
@@ -221,7 +244,9 @@ async def test_apps_api_search_install_uninstall(script, make_host):
         assert r.status_code == 200 and r.json()["created_by"] == "user"
         found = (await api.get("/api/apps/search?user=maya&q=doordash")).json()
         assert found[0]["installed_as"] == "doordash"
-        assert (await api.post("/api/tools?user=maya", json={"name": "doordash", "description": "x"})).status_code == 400
+        assert (
+            await api.post("/api/tools?user=maya", json={"name": "doordash", "description": "x"})
+        ).status_code == 400
         state = (await api.get("/api/state?user=maya")).json()
         assert state["apps"] == {"store": "offline"}
         assert (await api.delete("/api/apps/com.dd.doordash?user=maya")).status_code == 200
@@ -234,11 +259,18 @@ async def test_simulated_app_sees_its_earlier_calls(script, make_runtime):
     describe the same restaurant instead of inventing another one."""
     script.on("decide", decide("tool_use", "find thai"), decide("tool_use", "menu"))
     script.on("app_manifest:com.ubercab.eats", manifest(name="uber_eats"))
-    script.on("capability:tool_use",
-              call("uber_eats", "search", {"query": "thai near me"}),
-              call("uber_eats", "search", {"query": "Kin Khao menu"}))
-    script.on("tool:uber_eats.search", {"status": "done", "result": "Kin Khao (store_77), Lers Ros (store_12)", "progress_stages": []})
-    script.on("tool:uber_eats.search", {"status": "done", "result": "Kin Khao menu: pad thai $16", "progress_stages": []})
+    script.on(
+        "capability:tool_use",
+        call("uber_eats", "search", {"query": "thai near me"}),
+        call("uber_eats", "search", {"query": "Kin Khao menu"}),
+    )
+    script.on(
+        "tool:uber_eats.search",
+        {"status": "done", "result": "Kin Khao (store_77), Lers Ros (store_12)", "progress_stages": []},
+    )
+    script.on(
+        "tool:uber_eats.search", {"status": "done", "result": "Kin Khao menu: pad thai $16", "progress_stages": []}
+    )
     runtime = make_runtime(script)
     await install_app(runtime, (await runtime.apps.search("uber eats"))[0])
 
@@ -262,7 +294,9 @@ async def test_tool_history_is_capped_and_saved(script, make_runtime):
     assert len(tool.history) == runner.HISTORY_KEPT and tool.history[-1].result == f"result {runner.HISTORY_KEPT + 4}"
     assert len(script.prompts["tool:opentable.search"][-1]["earlier_calls"]) == runner.HISTORY_SHOWN
     restored = runtime.store.to_data()["tools"]
-    assert next(t for t in restored if t["name"] == "opentable")["history"][-1]["arguments"] == {"query": str(runner.HISTORY_KEPT + 4)}
+    assert next(t for t in restored if t["name"] == "opentable")["history"][-1]["arguments"] == {
+        "query": str(runner.HISTORY_KEPT + 4)
+    }
 
 
 async def test_simulated_calls_fail_about_one_in_five(script, make_runtime, monkeypatch):
@@ -291,6 +325,7 @@ async def test_a_succeeding_call_cannot_report_failure(script, make_runtime):
     """With the outcome drawn as success, the schema only allows done or
     in_progress, so a refusal is rejected as invalid output."""
     import pytest
+
     from quintessa.llm import LLMError
 
     script.on("app_manifest:com.opentable", manifest())

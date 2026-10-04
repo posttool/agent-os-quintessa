@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from quintessa.models import InputEvent, InputKind
 from quintessa.persona.client import AuraPersonaClient
@@ -31,7 +32,9 @@ _KINDS = {
 def to_event(obs: PersonaObservation) -> InputEvent:
     return InputEvent(
         kind=_KINDS.get(obs.type, InputKind.SENSOR),
-        content=f"[{obs.date} {obs.time}] {obs.type}" + (f" from {obs.sender_app}" if obs.sender_app else "") + f": {obs.data}",
+        content=f"[{obs.date} {obs.time}] {obs.type}"
+        + (f" from {obs.sender_app}" if obs.sender_app else "")
+        + f": {obs.data}",
         source="persona",
         device=obs.device,
         sender=obs.sender,
@@ -45,7 +48,7 @@ class PersonaSimulation:
 
     def __init__(
         self,
-        runtime: "AgentRuntime",
+        runtime: AgentRuntime,
         client: AuraPersonaClient,
         *,
         speed: float = 600.0,
@@ -75,7 +78,9 @@ class PersonaSimulation:
         observations = sorted(await self.client.list_observations(persona_id, date), key=lambda o: o.time)
         profile = {k: v for k, v in to_dict(persona).items() if k != "raw"}
         self.runtime.submit(
-            InputEvent(InputKind.TEXT, "This is the user you are serving: " + json.dumps(profile), source="persona:profile")
+            InputEvent(
+                InputKind.TEXT, "This is the user you are serving: " + json.dumps(profile), source="persona:profile"
+            )
         )
         self._task = asyncio.create_task(self._replay(observations))
         return persona

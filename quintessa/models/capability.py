@@ -14,5 +14,4 @@ class Capability:
     description: str
     executor: str
     instructions: str
-    source_path: str = ""
     choose_when: str = ""

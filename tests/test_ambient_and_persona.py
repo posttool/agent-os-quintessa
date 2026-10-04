@@ -2,12 +2,11 @@ import json
 from pathlib import Path
 
 import httpx
+from conftest import no_sleep, until
 
 from quintessa.ambient import ambient_templates, source_from_template
 from quintessa.models import AmbientSource, InputKind, SessionStatus
 from quintessa.persona import AuraPersonaClient, PersonaSimulation
-
-from conftest import no_sleep, until
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "aura_persona.json").read_text())
 
@@ -71,7 +70,9 @@ async def test_ambient_source_emits_at_its_rate(script, make_runtime):
         await no_sleep(d)
 
     runtime.ambient._sleep = sleep
-    runtime.ambient.add_source(AmbientSource("sms", InputKind.MESSAGE, ["hey", "you there?"], interval_seconds=10, speed=2))
+    runtime.ambient.add_source(
+        AmbientSource("sms", InputKind.MESSAGE, ["hey", "you there?"], interval_seconds=10, speed=2)
+    )
     await until(lambda: len(runtime.store.events) == 2)
     await runtime.wait_idle()
     assert [e.content for e in runtime.store.events] == ["hey", "you there?"]

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from quintessa.clock import now
 from quintessa.models import (
@@ -188,9 +187,3 @@ class MemoryStore:
             session = from_dict(ReasoningSession, s)
             self.sessions[session.id] = session
         self._emit("loaded", {})
-
-    def save(self, path: str | Path) -> None:
-        Path(path).write_text(json.dumps(self.to_data(), indent=2))
-
-    def load(self, path: str | Path) -> None:
-        self.load_data(json.loads(Path(path).read_text()))

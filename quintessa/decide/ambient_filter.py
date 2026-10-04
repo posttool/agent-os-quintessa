@@ -17,8 +17,8 @@ DEFAULT_THRESHOLD = 0.3  # on 60 hand-labeled events it missed nothing that matt
 NOUL = {
     "type": "noul",
     "instructions": (
-        "This incoming event matters to the user's personal agent: it brings new information, a request, a risk or a change "
-        "that the agent should record or act on, given what the agent is already tracking."
+        "This incoming event matters to the user's personal agent: it brings new information, a request, a risk "
+        "or a change that the agent should record or act on, given what the agent is already tracking."
     ),
     "criteria": {
         "true": "New facts, requests, changes or risks, especially about something being tracked.",
@@ -42,7 +42,7 @@ class AmbientFilter:
         self.threshold = threshold
 
     @staticmethod
-    def state(runtime: "AgentRuntime", event: InputEvent) -> dict[str, Any]:
+    def state(runtime: AgentRuntime, event: InputEvent) -> dict[str, Any]:
         """The event, and the outline of what the agent is tracking; without
         the outline the model cannot tell a delayed flight it is waiting on
         from any other notice."""
@@ -58,7 +58,7 @@ class AmbientFilter:
             "people": [n.title for n in store.nodes.values() if n.type.value == "person"],
         }
 
-    async def check(self, runtime: "AgentRuntime", event: InputEvent) -> PrefilterDecision:
+    async def check(self, runtime: AgentRuntime, event: InputEvent) -> PrefilterDecision:
         """Never raises; a failed call keeps the event."""
         decision = PrefilterDecision(matters=1.0, threshold=self.threshold, skipped=False, model=self.client.label)
         started = time.perf_counter()
@@ -71,20 +71,6 @@ class AmbientFilter:
             decision.error = str(e) or type(e).__name__
         decision.latency_ms = round((time.perf_counter() - started) * 1000, 1)
         return decision
-
-
-def ambient_filter_from_env() -> AmbientFilter | None:
-    """Off unless QUINTESSA_AMBIENT_FILTER=1 and a Jev key is configured.
-
-    Environment:
-      QUINTESSA_AMBIENT_FILTER      "1" to skip ambient events the model says do not matter
-      QUINTESSA_AMBIENT_THRESHOLD   skip below this P(matters) (default 0.3)
-      QUINTESSA_JEV_API_KEY, QUINTESSA_JEV_URL, QUINTESSA_JEV_MODEL   as for shadow mode
-    """
-    if os.environ.get("QUINTESSA_AMBIENT_FILTER") != "1":
-        return None
-    client = client_from_env()
-    return None if client is None else AmbientFilter(client, _threshold())
 
 
 def jev_options_from_env() -> dict[str, Any]:

@@ -27,7 +27,9 @@ PROVIDER_LABELS = {"claude": "Claude", "gemini": "Gemini (Vertex)"}
 
 def provider_setup(provider: str) -> str:
     """What is missing before this provider can answer, or "" when it looks configured."""
-    vertex = any(os.environ.get(v) for v in ("GOOGLE_CLOUD_PROJECT", "QUINTESSA_GCP_SA_JSON", "GOOGLE_APPLICATION_CREDENTIALS"))
+    vertex = any(
+        os.environ.get(v) for v in ("GOOGLE_CLOUD_PROJECT", "QUINTESSA_GCP_SA_JSON", "GOOGLE_APPLICATION_CREDENTIALS")
+    )
     if provider == "gemini":
         return "" if vertex else "set GOOGLE_CLOUD_PROJECT or QUINTESSA_GCP_SA_JSON"
     if provider == "claude":

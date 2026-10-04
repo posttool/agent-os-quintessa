@@ -45,9 +45,8 @@ def needs_permission(ctx: StepContext, tool: Tool, function: ToolFunction) -> bo
         return None if not session_grants[-1].granted else False
     if function.oversight in (OversightLevel.AUTO, OversightLevel.AUTO_FROM_MEMORY):
         return False
-    if function.oversight == OversightLevel.CONFIRM_ONCE and ctx.runtime.store.persistent_grant(tool.name, function.name):
-        return False
-    return True
+    remembered = ctx.runtime.store.persistent_grant(tool.name, function.name)
+    return not (function.oversight == OversightLevel.CONFIRM_ONCE and remembered)
 
 
 class ToolUseExecutor:
@@ -78,7 +77,9 @@ class ToolUseExecutor:
                 ctx.runtime.ambient.follow(subscription)
                 output["subscription_id"] = subscription.id
             self._note_action(ctx, call, f"{tool.name}.{function.name}: {outcome.status} - {outcome.result}")
-            return StepOutcome(output, f"{tool.name}.{function.name} -> {outcome.status}: {outcome.result}", result.model)
+            return StepOutcome(
+                output, f"{tool.name}.{function.name} -> {outcome.status}: {outcome.result}", result.model
+            )
 
         gate = needs_permission(ctx, tool, function)
         if gate is None:
@@ -104,7 +105,9 @@ class ToolUseExecutor:
             permission = record_permission(ctx, request, response)
             if permission and permission.granted:
                 return await execute()
-            return StepOutcome({**call, "permission": "declined"}, f"User declined {tool.name}.{function.name}", result.model)
+            return StepOutcome(
+                {**call, "permission": "declined"}, f"User declined {tool.name}.{function.name}", result.model
+            )
 
         return StepOutcome(call, f"Asking permission for {tool.name}.{function.name}", result.model, request, on_answer)
 

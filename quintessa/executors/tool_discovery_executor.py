@@ -60,19 +60,31 @@ class ToolDiscoveryExecutor:
         first = await call_capability(ctx, SEARCH_SCHEMA)
         plan = first.data
         uninstalled = self._uninstall(ctx, plan["uninstall"])
-        output: dict = {"reuse": plan["reuse"], "app_queries": plan["app_queries"], "uninstalled": uninstalled,
-                        "candidates": [], "installed": [], "added": [], "notes": plan["notes"]}
+        output: dict = {
+            "reuse": plan["reuse"],
+            "app_queries": plan["app_queries"],
+            "uninstalled": uninstalled,
+            "candidates": [],
+            "installed": [],
+            "added": [],
+            "notes": plan["notes"],
+        }
         if not plan["app_queries"]:
             return StepOutcome(output, self._summary(output), first.model)
 
         candidates = await self._search(ctx, plan["app_queries"])
         output["candidates"] = [
-            {**to_dict(c), "installed_as": t.name if (t := installed_app(store, c.app_id)) else None} for c in candidates
+            {**to_dict(c), "installed_as": t.name if (t := installed_app(store, c.app_id)) else None}
+            for c in candidates
         ]
         second = await call_capability(
-            ctx, CHOOSE_SCHEMA,
-            {"app_queries": plan["app_queries"], "candidates": output["candidates"],
-             "sample_tool_suggestions": tool_suggestions()},
+            ctx,
+            CHOOSE_SCHEMA,
+            {
+                "app_queries": plan["app_queries"],
+                "candidates": output["candidates"],
+                "sample_tool_suggestions": tool_suggestions(),
+            },
             stage="choose",
         )
         choice = second.data

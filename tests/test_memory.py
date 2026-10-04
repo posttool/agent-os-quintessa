@@ -1,41 +1,115 @@
+import json
+
 from quintessa.memory import MemoryStore
 from quintessa.memory.apply import apply_operations
 from quintessa.models import DocumentStatus, TriggerSpec, TriggerType
 
 
 def node_op(id, title, type="personal_preference", body=""):
-    return {"op": "upsert_node", "id": id, "reason": "", "node": {"type": type, "title": title, "body": body, "topic_id": None},
-            "edge": None, "topic": None, "document": None, "section": None}
+    return {
+        "op": "upsert_node",
+        "id": id,
+        "reason": "",
+        "node": {"type": type, "title": title, "body": body, "topic_id": None},
+        "edge": None,
+        "topic": None,
+        "document": None,
+        "section": None,
+    }
 
 
 def edge_op(op, source, target, type="relates_to"):
-    return {"op": op, "id": "", "reason": "", "node": None, "topic": None, "document": None, "section": None,
-            "edge": {"source_id": source, "target_id": target, "type": type, "note": ""}}
+    return {
+        "op": op,
+        "id": "",
+        "reason": "",
+        "node": None,
+        "topic": None,
+        "document": None,
+        "section": None,
+        "edge": {"source_id": source, "target_id": target, "type": type, "note": ""},
+    }
 
 
 def topic_op(id, title, triggers=(), document_id=None):
-    return {"op": "upsert_topic", "id": id, "reason": "", "node": None, "edge": None, "document": None, "section": None,
-            "topic": {"title": title, "category": "", "parent_id": None, "summary": "s", "new_info": "Jane wants Zuni",
-                      "importance": "", "progress": 0.2, "progress_note": "", "due": "next week",
-                      "triggers": [{"type": t, "condition": c, "reasoning": ""} for t, c in triggers],
-                      "document_id": document_id}}
+    return {
+        "op": "upsert_topic",
+        "id": id,
+        "reason": "",
+        "node": None,
+        "edge": None,
+        "document": None,
+        "section": None,
+        "topic": {
+            "title": title,
+            "category": "",
+            "parent_id": None,
+            "summary": "s",
+            "new_info": "Jane wants Zuni",
+            "importance": "",
+            "progress": 0.2,
+            "progress_note": "",
+            "due": "next week",
+            "triggers": [{"type": t, "condition": c, "reasoning": ""} for t, c in triggers],
+            "document_id": document_id,
+        },
+    }
 
 
 def doc_op(id, topic_id, status="active", observations=()):
-    return {"op": "upsert_document", "id": id, "reason": "", "node": None, "edge": None, "topic": None, "section": None,
-            "document": {"title": "Dinner", "topic_id": topic_id, "description": "d", "status": status,
-                         "progress_overview": "", "links": [], "observations": list(observations),
-                         "key_dates": [{"when": "Tuesday 7pm", "label": "dinner", "tentative": True}]}}
+    return {
+        "op": "upsert_document",
+        "id": id,
+        "reason": "",
+        "node": None,
+        "edge": None,
+        "topic": None,
+        "section": None,
+        "document": {
+            "title": "Dinner",
+            "topic_id": topic_id,
+            "description": "d",
+            "status": status,
+            "progress_overview": "",
+            "links": [],
+            "observations": list(observations),
+            "key_dates": [{"when": "Tuesday 7pm", "label": "dinner", "tentative": True}],
+        },
+    }
 
 
 def section_op(id, doc_id, actions=()):
-    return {"op": "upsert_section", "id": id, "reason": "", "node": None, "edge": None, "topic": None, "document": None,
-            "section": {"document_id": doc_id, "title": "Pick a place", "overview": "", "status": "in progress",
-                        "details": "", "actions_taken": list(actions), "suggested_actions": ["book"]}}
+    return {
+        "op": "upsert_section",
+        "id": id,
+        "reason": "",
+        "node": None,
+        "edge": None,
+        "topic": None,
+        "document": None,
+        "section": {
+            "document_id": doc_id,
+            "title": "Pick a place",
+            "overview": "",
+            "status": "in progress",
+            "details": "",
+            "actions_taken": list(actions),
+            "suggested_actions": ["book"],
+        },
+    }
 
 
 def simple(op, id):
-    return {"op": op, "id": id, "reason": "done", "node": None, "edge": None, "topic": None, "document": None, "section": None}
+    return {
+        "op": op,
+        "id": id,
+        "reason": "done",
+        "node": None,
+        "edge": None,
+        "topic": None,
+        "document": None,
+        "section": None,
+    }
 
 
 def test_graph_documents_and_topics():
@@ -75,7 +149,9 @@ def test_delete_node_removes_its_edges():
 def test_user_trigger_overrides_survive_agent_updates():
     store = MemoryStore()
     apply_operations(store, [topic_op("topic-academics", "Academics", [("time", "mornings")])], None)
-    store.topics["topic-academics"].triggers.append(TriggerSpec(TriggerType.TIME, "never on weekends", user_override=True))
+    store.topics["topic-academics"].triggers.append(
+        TriggerSpec(TriggerType.TIME, "never on weekends", user_override=True)
+    )
     apply_operations(store, [topic_op("topic-academics", "Academics", [("location", "at school")])], None)
     conditions = [(t.condition, t.user_override) for t in store.topics["topic-academics"].triggers]
     assert conditions == [("never on weekends", True), ("at school", False)]
@@ -84,19 +160,30 @@ def test_user_trigger_overrides_survive_agent_updates():
 def test_archived_items_leave_the_snapshot_and_seen_clears_new_info():
     store = MemoryStore()
     apply_operations(store, [topic_op("t1", "Party"), doc_op("d1", "t1"), topic_op("t2", "Sofa")], None)
-    apply_operations(store, [simple("archive_topic", "t1"), simple("archive_document", "d1"), simple("mark_topic_seen", "t2")], None)
+    apply_operations(
+        store, [simple("archive_topic", "t1"), simple("archive_document", "d1"), simple("mark_topic_seen", "t2")], None
+    )
     snap = store.snapshot()
     assert [t["id"] for t in snap["topics"]] == ["t2"] and snap["documents"] == []
     assert store.topics["t2"].new_info == "" and store.topics["t2"].last_seen_at is not None
 
 
-def test_save_and_load(tmp_path):
+def test_to_data_and_load_data_round_trip():
     store = MemoryStore()
-    apply_operations(store, [node_op("a", "A"), node_op("b", "B"), edge_op("upsert_edge", "a", "b"),
-                             topic_op("t", "T"), doc_op("d", "t"), section_op("s", "d")], "evt")
-    store.save(tmp_path / "m.json")
+    apply_operations(
+        store,
+        [
+            node_op("a", "A"),
+            node_op("b", "B"),
+            edge_op("upsert_edge", "a", "b"),
+            topic_op("t", "T"),
+            doc_op("d", "t"),
+            section_op("s", "d"),
+        ],
+        "evt",
+    )
     loaded = MemoryStore()
-    loaded.load(tmp_path / "m.json")
+    loaded.load_data(json.loads(json.dumps(store.to_data())))
     assert loaded.snapshot() == store.snapshot()
 
 

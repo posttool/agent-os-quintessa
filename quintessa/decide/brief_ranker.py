@@ -25,9 +25,15 @@ QUESTIONS: dict[str, dict[str, Any]] = {
         "criteria": [
             "Ambient or routine: a daily brief, an FYI, a screen time or health report.",
             "Good to know soon, but nothing is lost by waiting.",
-            "A perishable window: rain starting where they are in minutes, a 2FA code, a missed important call, a subscription about to lapse.",
+            (
+                "A perishable window: rain starting where they are in minutes, a 2FA code, a missed important call, "
+                "a subscription about to lapse."
+            ),
             "A hard commitment today: a meeting, a flight, a delivery, a paid event, a visit from a tradesperson.",
-            "A hard commitment happening now: a meeting starting in minutes, boarding has begun, the courier is outside.",
+            (
+                "A hard commitment happening now: a meeting starting in minutes, boarding has begun, "
+                "the courier is outside."
+            ),
         ],
     },
     "relevance": {
@@ -65,7 +71,7 @@ class BriefRanker:
         self.client = client
 
     @staticmethod
-    def state(runtime: "AgentRuntime", card: BriefItem) -> dict[str, Any]:
+    def state(runtime: AgentRuntime, card: BriefItem) -> dict[str, Any]:
         """The card, its topic, and the user's context: the time, where they
         last were, and the latest things that happened."""
         store = runtime.store
@@ -74,7 +80,11 @@ class BriefRanker:
         location = next((e for e in reversed(store.events) if e.kind == InputKind.LOCATION), None)
         return {
             "now": now().isoformat(),
-            "card": {"text": card.text, "detail": card.detail, "due_at": card.due_at.isoformat() if card.due_at else None},
+            "card": {
+                "text": card.text,
+                "detail": card.detail,
+                "due_at": card.due_at.isoformat() if card.due_at else None,
+            },
             "topic": {"title": topic.title, "summary": topic.summary, "due": topic.due} if topic else None,
             "context": {
                 "last_location": location.content if location else None,
@@ -83,7 +93,7 @@ class BriefRanker:
             "people": [n.title for n in store.nodes.values() if n.type.value == "person"],
         }
 
-    async def score(self, runtime: "AgentRuntime", cards: list[BriefItem]) -> list[str]:
+    async def score(self, runtime: AgentRuntime, cards: list[BriefItem]) -> list[str]:
         """Score the cards side by side and write the scores onto them.
         Never raises; returns one line per card for the trace."""
         started = time.perf_counter()

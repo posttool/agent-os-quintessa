@@ -11,8 +11,14 @@ class SearchBackend(Protocol):
 class GeminiGroundedSearch:
     """Google Search through Gemini's search grounding on Vertex AI."""
 
-    def __init__(self, client: Any | None = None, *, project: str | None = None, location: str = "global",
-                 model: str = "gemini-3.8-flash"):
+    def __init__(
+        self,
+        client: Any | None = None,
+        *,
+        project: str | None = None,
+        location: str = "global",
+        model: str = "gemini-3.8-flash",
+    ):
         from google import genai
 
         self.client = client or genai.Client(vertexai=True, project=project, location=location)
@@ -49,7 +55,10 @@ class ClaudeWebSearch:
         ]
         for _ in range(self.max_continuations + 1):
             response = await self.client.messages.create(
-                model=self.model, max_tokens=16000, messages=messages, tools=[self.TOOL],
+                model=self.model,
+                max_tokens=16000,
+                messages=messages,
+                tools=[self.TOOL],
                 output_config={"effort": "low"},
             )
             if response.stop_reason != "pause_turn":
@@ -69,8 +78,9 @@ def search_backend_from_env() -> SearchBackend | None:
     """Gemini's Google Search grounding when GOOGLE_CLOUD_PROJECT is set,
     otherwise Claude's web search when an Anthropic key is set."""
     if os.environ.get("GOOGLE_CLOUD_PROJECT"):
-        return GeminiGroundedSearch(project=os.environ["GOOGLE_CLOUD_PROJECT"],
-                                    location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"))
+        return GeminiGroundedSearch(
+            project=os.environ["GOOGLE_CLOUD_PROJECT"], location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global")
+        )
     if os.environ.get("QUINTESSA_ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"):
         return ClaudeWebSearch(model=os.environ.get("QUINTESSA_SEARCH_MODEL", "claude-opus-5-5"))
     return None

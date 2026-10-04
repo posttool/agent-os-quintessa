@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from quintessa.llm import ResilientLLM
 from quintessa.loop.runtime import AgentRuntime

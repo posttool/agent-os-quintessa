@@ -1,5 +1,8 @@
 import httpx
 import pytest
+from conftest import decide, until
+from test_ambient_and_persona import aura_transport
+from test_memory import node_op, topic_op
 
 from quintessa.api import create_app
 from quintessa.api.model_settings import ModelSettings
@@ -7,10 +10,6 @@ from quintessa.llm import ModelRoute, ResilientLLM, ScriptedLLM
 from quintessa.models import InputEvent, InputKind, SessionStatus
 from quintessa.persona import AuraPersonaClient
 from quintessa.state import InMemoryStateBackend
-
-from conftest import decide, until
-from test_ambient_and_persona import aura_transport
-from test_memory import node_op, topic_op
 
 
 @pytest.fixture
@@ -23,7 +22,9 @@ def api(script, make_host):
         built.append(chain)
         return ResilientLLM([ModelRoute(ScriptedLLM(script), c.split(":", 1)[1]) for c in chain.split(",")])
 
-    app = create_app(host, settings=ModelSettings(chain=["scripted:test-model"]), llm_factory=factory, persona_client=persona)
+    app = create_app(
+        host, settings=ModelSettings(chain=["scripted:test-model"]), llm_factory=factory, persona_client=persona
+    )
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
     client.host, client.built = host, built
     return client
@@ -51,10 +52,20 @@ async def test_input_runs_for_that_user_only(api, script):
 
 async def test_answering_a_question(api, script):
     script.on("decide", decide("generative_ui"))
-    script.on("capability:generative_ui", {
-        "prompt": "Which night?", "purpose": "disambiguation", "context": "",
-        "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"]}],
-        "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None})
+    script.on(
+        "capability:generative_ui",
+        {
+            "prompt": "Which night?",
+            "purpose": "disambiguation",
+            "context": "",
+            "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"]}],
+            "document_id": None,
+            "section_id": None,
+            "topic_id": None,
+            "tool": None,
+            "function": None,
+        },
+    )
     await api.post("/api/input?user=maya", json={"content": "dinner"})
     agent = await api.host.agent("maya")
     await until(lambda: bool(agent.ux.pending))
@@ -62,7 +73,9 @@ async def test_answering_a_question(api, script):
     assert pending[0]["prompt"] == "Which night?"
 
     assert (await api.post(f"/api/ux/{pending[0]['id']}?user=tunde", json={"values": {}})).status_code == 404
-    assert (await api.post(f"/api/ux/{pending[0]['id']}?user=maya", json={"values": {"night": "Wed"}})).status_code == 200
+    assert (
+        await api.post(f"/api/ux/{pending[0]['id']}?user=maya", json={"values": {"night": "Wed"}})
+    ).status_code == 200
     await agent.wait_idle()
     session = next(iter(agent.store.sessions.values()))
     assert session.status == SessionStatus.COMPLETE and "Wed" in session.steps[0].summary
@@ -86,9 +99,19 @@ async def test_export_restore_and_clear(api, script):
 
 
 async def test_tools_can_be_created_and_deleted_but_not_builtins(api):
-    tool = {"name": "rides", "description": "Ride hailing", "kind": "llm",
-            "functions": [{"name": "request_ride", "oversight": "always_ask", "long_running": True,
-                           "parameters": [{"name": "to", "type": "string"}]}]}
+    tool = {
+        "name": "rides",
+        "description": "Ride hailing",
+        "kind": "llm",
+        "functions": [
+            {
+                "name": "request_ride",
+                "oversight": "always_ask",
+                "long_running": True,
+                "parameters": [{"name": "to", "type": "string"}],
+            }
+        ],
+    }
     assert (await api.post("/api/tools?user=maya", json=tool)).status_code == 200
     tools = {t["name"]: t for t in (await api.get("/api/state?user=maya")).json()["memory"]["tools"]}
     assert tools["rides"]["functions"][0]["oversight"] == "always_ask" and tools["rides"]["created_by"] == "user"
@@ -99,13 +122,26 @@ async def test_tools_can_be_created_and_deleted_but_not_builtins(api):
 
 
 async def test_ambient_sources(api, script):
-    script.on("ambient:vibe", {"name": "oven", "kind": "sensor", "device": "oven", "sender": "",
-                               "interval_seconds": 0, "events": ["preheated", "roast done"]})
+    script.on(
+        "ambient:vibe",
+        {
+            "name": "oven",
+            "kind": "sensor",
+            "device": "oven",
+            "sender": "",
+            "interval_seconds": 0,
+            "events": ["preheated", "roast done"],
+        },
+    )
     script.on("ambient:generate", {"sender": "Mom", "device": "phone", "events": ["call me"]})
     assert (await api.put("/api/ambient/enabled?user=maya", json={"enabled": False})).status_code == 200
     vibe = (await api.post("/api/ambient/sources/vibe?user=maya", json={"description": "a smart oven"})).json()
-    templ = (await api.post("/api/ambient/sources/from-template?user=maya", json={"template": "sms", "count": 1})).json()
-    assert (await api.post("/api/ambient/sources/from-template?user=maya", json={"template": "nope"})).status_code == 404
+    templ = (
+        await api.post("/api/ambient/sources/from-template?user=maya", json={"template": "sms", "count": 1})
+    ).json()
+    assert (
+        await api.post("/api/ambient/sources/from-template?user=maya", json={"template": "nope"})
+    ).status_code == 404
     state = (await api.get("/api/state?user=maya")).json()["ambient"]
     assert state["enabled"] is False
     sources = {s["id"]: s for s in state["sources"]}
@@ -141,7 +177,9 @@ async def test_persona_simulation_through_the_api(api):
 
 
 async def test_model_settings_rebuild_the_chain(api, script):
-    r = await api.put("/api/settings", json={"chain": ["scripted:fast", "scripted:older"], "retries": 1, "base_delay": 0.5})
+    r = await api.put(
+        "/api/settings", json={"chain": ["scripted:fast", "scripted:older"], "retries": 1, "base_delay": 0.5}
+    )
     assert r.json()["chain"] == ["scripted:fast", "scripted:older"]
     assert [route.model for route in api.host.llm.routes] == ["fast", "older"]
     assert api.host.llm.retries == 1 and api.host.llm.base_delay == 0.5
@@ -192,7 +230,13 @@ async def test_jev_preference_is_per_user_and_saved(api):
 
     await api.host.save("maya")
     saved = await api.host.backend.load("maya")
-    assert saved["preferences"] == {"jev": False, "jev_shadow": None, "jev_filter": None, "jev_drive": None, "jev_rank": None}
+    assert saved["preferences"] == {
+        "jev": False,
+        "jev_shadow": None,
+        "jev_filter": None,
+        "jev_drive": None,
+        "jev_rank": None,
+    }
     await api.post("/api/clear?user=maya")  # clearing memory keeps settings
     assert (await api.get("/api/state?user=maya")).json()["jev"]["jev"] is False
     r = await api.put("/api/preferences?user=maya", json={"jev": None})  # back to the platform default
@@ -210,10 +254,21 @@ async def test_tapping_a_brief_action_starts_a_session(api, script):
     from quintessa.device import BriefAction, BriefItem
 
     script.on("decide", decide("tool_use"))
-    script.on("capability:tool_use", {
-        "tool": "device", "function": "notify", "arguments": [{"name": "text", "value": "hi"}], "rationale": "",
-        "document_id": None, "section_id": None, "topic_id": None, "track_progress": False, "progress_stages": [],
-        "permission_prompt": ""})
+    script.on(
+        "capability:tool_use",
+        {
+            "tool": "device",
+            "function": "notify",
+            "arguments": [{"name": "text", "value": "hi"}],
+            "rationale": "",
+            "document_id": None,
+            "section_id": None,
+            "topic_id": None,
+            "track_progress": False,
+            "progress_stages": [],
+            "permission_prompt": "",
+        },
+    )
     agent = await api.host.agent("maya")
     agent.device.set_brief([BriefItem("Say hi", action=BriefAction("device", "notify", "Say hi", {"text": "hi"}))])
     card = agent.device.state.brief[0]
@@ -247,10 +302,20 @@ async def test_cards_can_be_opened_snoozed_and_dismissed(api):
 async def test_stashing_a_question(api, script):
     script.on("decide", decide("memory"), decide("generative_ui"))
     script.on("capability:memory", {"summary": "ok", "operations": [topic_op("topic-dinner", "Dinner")]})
-    script.on("capability:generative_ui", {
-        "prompt": "Which night?", "purpose": "disambiguation", "context": "So I can book a table.",
-        "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"]}],
-        "document_id": None, "section_id": None, "topic_id": "topic-dinner", "tool": None, "function": None})
+    script.on(
+        "capability:generative_ui",
+        {
+            "prompt": "Which night?",
+            "purpose": "disambiguation",
+            "context": "So I can book a table.",
+            "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"]}],
+            "document_id": None,
+            "section_id": None,
+            "topic_id": "topic-dinner",
+            "tool": None,
+            "function": None,
+        },
+    )
     await api.post("/api/input?user=maya", json={"content": "dinner"})
     agent = await api.host.agent("maya")
     await until(lambda: bool(agent.ux.pending))
@@ -263,6 +328,7 @@ async def test_stashing_a_question(api, script):
     assert [q["ux_request_id"] for q in state["device"]["stashed"]] == [question["id"]]
     assert [q["id"] for q in state["pending_ux"]] == [question["id"]]  # still waiting
     from quintessa.device.freshness import brief_context
+
     assert brief_context(agent)["questions_waiting"][0]["stashed"] is True
 
     # its topic changing brings it back to the stack

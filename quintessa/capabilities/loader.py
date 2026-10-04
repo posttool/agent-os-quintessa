@@ -32,7 +32,6 @@ def load_capabilities(directory: str | Path | None = None, names: list[str] | No
             description=meta["description"],
             executor=meta.get("executor", meta["name"]),
             instructions=body,
-            source_path=str(path),
             choose_when=meta.get("choose_when", ""),
         )
     return capabilities

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 __all__ = ["AppStore", "FallbackAppStore", "OfflineCatalog", "PlayStore", "WebSearchAppStore", "app_store_from_env"]
 
 
-def app_store_from_env(search: SearchBackend | None, llm: "ResilientLLM") -> AppStore:
+def app_store_from_env(search: SearchBackend | None, llm: ResilientLLM) -> AppStore:
     """QUINTESSA_APP_STORE: play, search, offline, or auto (the default):
     Play, then web search (when a search backend exists), then the bundled catalog."""
     choice = os.environ.get("QUINTESSA_APP_STORE", "auto").lower()

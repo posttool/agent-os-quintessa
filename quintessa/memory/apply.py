@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from quintessa.clock import now
+from quintessa.memory.store import MemoryStore
 from quintessa.models import (
     Document,
     DocumentSection,
@@ -18,9 +20,7 @@ from quintessa.models import (
     TriggerSpec,
     TriggerType,
 )
-from quintessa.memory.store import MemoryStore
 from quintessa.serde import to_dict
-from quintessa.clock import now
 
 
 def apply_operations(store: MemoryStore, operations: list[dict[str, Any]], event_id: str | None) -> list[str]:
@@ -125,7 +125,9 @@ def _upsert_document(store: MemoryStore, op: dict[str, Any], _: str | None) -> s
     doc.links = _merge(doc.links, spec.get("links", []))
     doc.observations = _merge(doc.observations, spec.get("observations", []))
     new_dates = [KeyDate(d["when"], d["label"], d.get("tentative", False)) for d in spec.get("key_dates", [])]
-    doc.key_dates = [d for d in doc.key_dates if (d.when, d.label) not in {(n.when, n.label) for n in new_dates}] + new_dates
+    doc.key_dates = [
+        d for d in doc.key_dates if (d.when, d.label) not in {(n.when, n.label) for n in new_dates}
+    ] + new_dates
     store.upsert_document(doc)
     if doc.topic_id and doc.topic_id in store.topics and not store.topics[doc.topic_id].document_id:
         store.topics[doc.topic_id].document_id = doc.id

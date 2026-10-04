@@ -1,15 +1,15 @@
 import json
 
 import httpx
+from conftest import decide
+from test_memory import topic_op
+from test_reasoning_loop import memory_answer
 
-from quintessa.decide import NextStepDecider, SystemOneClient, shadow_decider_from_env
+from quintessa.decide import AmbientFilter, NextStepDecider, SystemOneClient, jev_options_from_env
 from quintessa.decide.report import agreement_report
+from quintessa.decide.system_one import client_from_env
 from quintessa.models import InputEvent, InputKind, ReasoningSession, SessionStatus
 from quintessa.serde import from_dict, to_dict
-
-from conftest import decide
-from test_reasoning_loop import memory_answer
-from test_memory import topic_op
 
 
 class FakeJev:
@@ -31,15 +31,22 @@ class FakeJev:
         options = body["questions"]["next_step"]["criteria"]
         rest = (1 - 0.9) / (len(options) - 1)
         probabilities = {k: 0.9 if k == pick else rest for k in options}
-        return httpx.Response(200, json={
-            "model": "jev-test",
-            "answers": {"next_step": {"type": "choice", "choice": pick, "probabilities": probabilities, "confidence": 0.8}},
-            "usage": {"input_tokens": 100, "output_tokens": 1},
-        })
+        return httpx.Response(
+            200,
+            json={
+                "model": "jev-test",
+                "answers": {
+                    "next_step": {"type": "choice", "choice": pick, "probabilities": probabilities, "confidence": 0.8}
+                },
+                "usage": {"input_tokens": 100, "output_tokens": 1},
+            },
+        )
 
 
 def decider(fake: FakeJev) -> NextStepDecider:
-    return NextStepDecider(SystemOneClient("test-key", base_url="https://jev.test", transport=httpx.MockTransport(fake)))
+    return NextStepDecider(
+        SystemOneClient("test-key", base_url="https://jev.test", transport=httpx.MockTransport(fake))
+    )
 
 
 async def test_shadow_records_jev_beside_the_llm_without_steering(script, make_runtime):
@@ -65,7 +72,7 @@ async def test_shadow_records_jev_beside_the_llm_without_steering(script, make_r
     assert fake.requests[0]["model"] == "jev-latest"
     # the same context the LLM controller saw, without the capability list the criteria carry
     first_llm, second_llm = script.prompts["decide"]
-    for request, llm_prompt in zip(fake.requests, (first_llm, second_llm)):
+    for request, llm_prompt in zip(fake.requests, (first_llm, second_llm), strict=True):
         assert {k: v for k, v in llm_prompt.items() if k not in ("capabilities", "now")} == {
             k: v for k, v in request["state"].items() if k != "now"
         }
@@ -99,26 +106,35 @@ def test_shadow_decisions_survive_a_round_trip():
     assert from_dict(ReasoningSession, data).shadow_decisions == []
 
 
-def test_env_turns_shadow_on_with_a_key(monkeypatch):
-    for name in ("QUINTESSA_JEV_API_KEY", "TYPESAFE_API_KEY", "QUINTESSA_DECIDER", "QUINTESSA_JEV_URL"):
+def test_env_configures_the_jev_client(monkeypatch):
+    for name in ("QUINTESSA_JEV_API_KEY", "TYPESAFE_API_KEY", "QUINTESSA_JEV_URL"):
         monkeypatch.delenv(name, raising=False)
-    assert shadow_decider_from_env() is None
+    assert client_from_env() is None
     monkeypatch.setenv("QUINTESSA_JEV_API_KEY", "k")
     monkeypatch.setenv("QUINTESSA_JEV_URL", "https://gev.example.run.app/")
-    shadow = shadow_decider_from_env()
-    assert shadow is not None and shadow.client.base_url == "https://gev.example.run.app"
-    assert shadow.client.label == "jev-latest@gev.example.run.app"
-    monkeypatch.setenv("QUINTESSA_DECIDER", "llm")
-    assert shadow_decider_from_env() is None
+    client = client_from_env()
+    assert client is not None and client.base_url == "https://gev.example.run.app"
+    assert client.label == "jev-latest@gev.example.run.app"
 
 
 async def test_agreement_report(script, make_runtime):
     script.on("decide", decide("memory"), decide("tool_use"))
     script.on("capability:memory", memory_answer())
-    script.on("capability:tool_use", {
-        "tool": "device", "function": "set_island", "arguments": [], "rationale": "", "document_id": None,
-        "section_id": None, "topic_id": None, "track_progress": False, "progress_stages": [], "permission_prompt": "",
-    })
+    script.on(
+        "capability:tool_use",
+        {
+            "tool": "device",
+            "function": "set_island",
+            "arguments": [],
+            "rationale": "",
+            "document_id": None,
+            "section_id": None,
+            "topic_id": None,
+            "track_progress": False,
+            "progress_stages": [],
+            "permission_prompt": "",
+        },
+    )
     runtime = make_runtime(script, shadow=decider(FakeJev("memory", "memory", "done")))
     session = await runtime.run(InputEvent(InputKind.TEXT, "hello"))
 
@@ -131,8 +147,6 @@ async def test_agreement_report(script, make_runtime):
 
 # --- ambient filter ------------------------------------------------------------------
 
-from quintessa.decide import AmbientFilter, ambient_filter_from_env
-
 
 def jev_noul(p: float, requests: list | None = None, status: int = 200):
     def handler(request: httpx.Request) -> httpx.Response:
@@ -142,13 +156,18 @@ def jev_noul(p: float, requests: list | None = None, status: int = 200):
         if status != 200:
             return httpx.Response(status, json={})
         return httpx.Response(200, json={"model": "jev-test", "answers": {"matters": {"type": "noul", "noul": p}}})
-    return AmbientFilter(SystemOneClient("test-key", base_url="https://jev.test", transport=httpx.MockTransport(handler)))
+
+    return AmbientFilter(
+        SystemOneClient("test-key", base_url="https://jev.test", transport=httpx.MockTransport(handler))
+    )
 
 
 async def test_filter_skips_ambient_noise_without_any_llm_call(script, make_runtime):
     requests = []
     runtime = make_runtime(script, ambient_filter=jev_noul(0.1, requests))
-    session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off fall bowls", source="ambient:email", sender="Sweetgreen"))
+    session = await runtime.run(
+        InputEvent(InputKind.MESSAGE, "20% off fall bowls", source="ambient:email", sender="Sweetgreen")
+    )
 
     assert session.status == SessionStatus.COMPLETE and session.steps == []
     assert session.prefilter.skipped and session.prefilter.matters == 0.1 and session.prefilter.threshold == 0.3
@@ -184,14 +203,20 @@ async def test_filter_never_touches_what_the_user_says(script, make_runtime):
     assert requests == []
 
 
-def test_filter_env_is_off_by_default(monkeypatch):
-    for name in ("QUINTESSA_AMBIENT_FILTER", "QUINTESSA_AMBIENT_THRESHOLD", "QUINTESSA_JEV_API_KEY", "TYPESAFE_API_KEY"):
+def test_filter_env_sets_the_default_and_threshold(monkeypatch):
+    for name in (
+        "QUINTESSA_AMBIENT_FILTER",
+        "QUINTESSA_AMBIENT_THRESHOLD",
+        "QUINTESSA_JEV_API_KEY",
+        "TYPESAFE_API_KEY",
+    ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("QUINTESSA_JEV_API_KEY", "k")
-    assert ambient_filter_from_env() is None
+    assert jev_options_from_env()["jev_filter_default"] is False
     monkeypatch.setenv("QUINTESSA_AMBIENT_FILTER", "1")
     monkeypatch.setenv("QUINTESSA_AMBIENT_THRESHOLD", "0.5")
-    assert ambient_filter_from_env().threshold == 0.5
+    options = jev_options_from_env()
+    assert options["jev_filter_default"] is True and options["ambient_filter"].threshold == 0.5
 
 
 async def test_jev_preference_switches_both_deciders_off_and_on(script, make_runtime):
@@ -202,19 +227,29 @@ async def test_jev_preference_switches_both_deciders_off_and_on(script, make_run
 
     runtime.set_preferences(jev=False)
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off", source="ambient:email"))
-    assert session.prefilter is None and session.shadow_decisions == [] and [s.capability for s in session.steps] == ["memory"]
+    assert (
+        session.prefilter is None
+        and session.shadow_decisions == []
+        and [s.capability for s in session.steps] == ["memory"]
+    )
     assert fake.requests == [] and requests == []
 
     runtime.set_preferences(jev=True, jev_shadow=False)
     session = await runtime.run(InputEvent(InputKind.MESSAGE, "20% off", source="ambient:email"))
     assert session.prefilter.skipped and fake.requests == []
-    assert runtime.jev_status() == {"available": True, "model": "jev-latest@jev.test", "threshold": 0.3,
-                                    "jev": True, "jev_shadow": False, "jev_filter": True, "jev_drive": False, "jev_rank": True}
+    assert runtime.jev_status() == {
+        "available": True,
+        "model": "jev-latest@jev.test",
+        "threshold": 0.3,
+        "jev": True,
+        "jev_shadow": False,
+        "jev_filter": True,
+        "jev_drive": False,
+        "jev_rank": True,
+    }
 
 
 def test_jev_options_from_env(monkeypatch):
-    from quintessa.decide import jev_options_from_env
-
     for name in ("QUINTESSA_AMBIENT_FILTER", "QUINTESSA_DECIDER", "QUINTESSA_JEV_API_KEY", "TYPESAFE_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     assert jev_options_from_env() == {}
@@ -238,7 +273,10 @@ async def test_jev_can_drive_the_next_step(script, make_runtime):
 
     assert "decide" not in script.prompts  # the LLM never picked a step
     assert [(s.capability, s.decided_by, s.rationale) for s in session.steps] == [("memory", "jev", "Jev p 0.90")]
-    assert [(d.choice, d.drove, d.llm_choice) for d in session.shadow_decisions] == [("memory", True, ""), ("done", True, "")]
+    assert [(d.choice, d.drove, d.llm_choice) for d in session.shadow_decisions] == [
+        ("memory", True, ""),
+        ("done", True, ""),
+    ]
     assert "No shadow decisions" in agreement_report([session])  # driven choices are not agreement data
 
 
@@ -252,4 +290,7 @@ async def test_the_llm_takes_over_when_jev_fails_to_drive(script, make_runtime):
 
     assert [(s.capability, s.decided_by) for s in session.steps] == [("memory", "")]
     assert len(script.prompts["decide"]) == 2
-    assert [(d.drove, d.llm_choice, d.error[:8]) for d in session.shadow_decisions] == [(False, "memory", "HTTP 500"), (False, "done", "HTTP 500")]
+    assert [(d.drove, d.llm_choice, d.error[:8]) for d in session.shadow_decisions] == [
+        (False, "memory", "HTTP 500"),
+        (False, "done", "HTTP 500"),
+    ]

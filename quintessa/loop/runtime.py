@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from quintessa.ambient.bus import AmbientBus
 from quintessa.apps import AppStore, OfflineCatalog
@@ -153,8 +154,15 @@ class AgentRuntime:
         if item is None or item.action is None:
             return None
         action = item.action
-        about = ", ".join(f"{k}: {v}" for k, v in (("topic_id", item.topic_id), ("document_id", item.document_id),
-                                                   ("section_id", item.section_id)) if v)
+        about = ", ".join(
+            f"{k}: {v}"
+            for k, v in (
+                ("topic_id", item.topic_id),
+                ("document_id", item.document_id),
+                ("section_id", item.section_id),
+            )
+            if v
+        )
         content = (
             f'The user tapped "{action.label}" on the brief card "{item.text}"'
             + (f" ({about})" if about else "")
@@ -211,6 +219,7 @@ class AgentRuntime:
     def prune_stash(self) -> list[str]:
         """Drop stashed questions that stopped waiting and bring back those
         whose topic changed since they were stashed."""
+
         def changed(topic_id: str, since) -> bool:
             topic = self.store.topics.get(topic_id)
             return topic is not None and topic.updated_at > since

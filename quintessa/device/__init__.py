@@ -6,4 +6,16 @@ from quintessa.device.island_state import IslandState
 from quintessa.device.stashed_question import StashedQuestion
 from quintessa.device.surface import DeviceSurface
 
-__all__ = ["BRIEF_SOURCE", "BriefAction", "FOCUSED", "FULL", "BriefItem", "DeviceState", "DeviceSurface", "DiscoveryItem", "DocumentFocus", "IslandState", "StashedQuestion"]
+__all__ = [
+    "BRIEF_SOURCE",
+    "BriefAction",
+    "FOCUSED",
+    "FULL",
+    "BriefItem",
+    "DeviceState",
+    "DeviceSurface",
+    "DiscoveryItem",
+    "DocumentFocus",
+    "IslandState",
+    "StashedQuestion",
+]

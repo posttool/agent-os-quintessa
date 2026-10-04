@@ -4,9 +4,10 @@ import asyncio
 import hashlib
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from sqlalchemy import Boolean, Column, Index, Integer, MetaData, String, Table, Text, event, func, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
@@ -35,27 +36,58 @@ def _get(name: str) -> Callable[[dict[str, Any]], Any]:
 
 
 COLLECTIONS = [
-    Collection("nodes", lambda _, d: d["id"], {"type": _get("type"), "topic_id": _get("topic_id"), "updated_at": _get("updated_at")}),
-    Collection("edges", lambda _, d: json.dumps([d["source_id"], d["target_id"], d["type"]]),
-               {"source_id": _get("source_id"), "target_id": _get("target_id"), "type": _get("type")}),
-    Collection("topics", lambda _, d: d["id"], {"archived": _get("archived"), "updated_at": _get("updated_at")},
-               frozenset({"archived"})),
-    Collection("documents", lambda _, d: d["id"],
-               {"topic_id": _get("topic_id"), "status": _get("status"), "updated_at": _get("updated_at")}),
-    Collection("tools", lambda _, d: d["name"],
-               {"kind": _get("kind"), "binding": _get("binding"), "app_id": lambda d: (d.get("listing") or {}).get("app_id")}),
-    Collection("permissions", lambda seq, _: str(seq), {"tool": _get("tool"), "function": _get("function"), "scope": _get("scope")}),
+    Collection(
+        "nodes",
+        lambda _, d: d["id"],
+        {"type": _get("type"), "topic_id": _get("topic_id"), "updated_at": _get("updated_at")},
+    ),
+    Collection(
+        "edges",
+        lambda _, d: json.dumps([d["source_id"], d["target_id"], d["type"]]),
+        {"source_id": _get("source_id"), "target_id": _get("target_id"), "type": _get("type")},
+    ),
+    Collection(
+        "topics",
+        lambda _, d: d["id"],
+        {"archived": _get("archived"), "updated_at": _get("updated_at")},
+        frozenset({"archived"}),
+    ),
+    Collection(
+        "documents",
+        lambda _, d: d["id"],
+        {"topic_id": _get("topic_id"), "status": _get("status"), "updated_at": _get("updated_at")},
+    ),
+    Collection(
+        "tools",
+        lambda _, d: d["name"],
+        {"kind": _get("kind"), "binding": _get("binding"), "app_id": lambda d: (d.get("listing") or {}).get("app_id")},
+    ),
+    Collection(
+        "permissions",
+        lambda seq, _: str(seq),
+        {"tool": _get("tool"), "function": _get("function"), "scope": _get("scope")},
+    ),
     Collection("subscriptions", lambda _, d: d["id"], {"archived": _get("archived")}, frozenset({"archived"})),
-    Collection("events", lambda _, d: d["id"],
-               {"kind": _get("kind"), "source": _get("source"), "occurred_at": _get("occurred_at")}),
-    Collection("sessions", lambda _, d: d["id"],
-               {"status": _get("status"), "started_at": _get("started_at"),
-                "has_jev_decisions": lambda d: bool(d.get("shadow_decisions"))},
-               frozenset({"has_jev_decisions"})),
+    Collection(
+        "events",
+        lambda _, d: d["id"],
+        {"kind": _get("kind"), "source": _get("source"), "occurred_at": _get("occurred_at")},
+    ),
+    Collection(
+        "sessions",
+        lambda _, d: d["id"],
+        {
+            "status": _get("status"),
+            "started_at": _get("started_at"),
+            "has_jev_decisions": lambda d: bool(d.get("shadow_decisions")),
+        },
+        frozenset({"has_jev_decisions"}),
+    ),
 ]
 
 users = Table(
-    "users", metadata,
+    "users",
+    metadata,
     Column("user_id", String, primary_key=True),
     Column("created_at", String, nullable=False),
     Column("saved_at", String),
@@ -69,7 +101,8 @@ users = Table(
 def _item_table(c: Collection) -> Table:
     extra = [Column(name, Boolean if name in c.booleans else String) for name in c.columns]
     return Table(
-        c.name, metadata,
+        c.name,
+        metadata,
         Column("user_id", String, primary_key=True),
         Column("key", String, primary_key=True),
         Column("seq", Integer, nullable=False),
@@ -98,10 +131,13 @@ USER_KEYS = ("device", "preferences", "persona")
 
 def database_url(url: str) -> str:
     """Accept plain URLs (sqlite:///x.db, postgresql://...) and pick the async driver."""
-    for plain, driver in (("sqlite://", "sqlite+aiosqlite://"), ("postgresql://", "postgresql+asyncpg://"),
-                          ("postgres://", "postgresql+asyncpg://")):
+    for plain, driver in (
+        ("sqlite://", "sqlite+aiosqlite://"),
+        ("postgresql://", "postgresql+asyncpg://"),
+        ("postgres://", "postgresql+asyncpg://"),
+    ):
         if url.startswith(plain):
-            return driver + url[len(plain):]
+            return driver + url[len(plain) :]
     return url
 
 
@@ -189,10 +225,13 @@ class SqlStateBackend:
                     data[name] = json.loads(row[name])
             memory, written = {}, {}
             for name, table in TABLES.items():
-                rows = (await conn.execute(
-                    select(table.c.key, table.c.seq, table.c.hash, table.c.body)
-                    .where(table.c.user_id == user_id).order_by(table.c.seq)
-                )).all()
+                rows = (
+                    await conn.execute(
+                        select(table.c.key, table.c.seq, table.c.hash, table.c.body)
+                        .where(table.c.user_id == user_id)
+                        .order_by(table.c.seq)
+                    )
+                ).all()
                 memory[name] = [json.loads(r.body) for r in rows]
                 written[name] = {r.key: (r.seq, r.hash) for r in rows}
             data["memory"] = memory
@@ -220,7 +259,9 @@ class SqlStateBackend:
         await self._setup()
         async with self.engine.connect() as conn:
             return {
-                name: (await conn.execute(select(func.count()).select_from(t).where(t.c.user_id == user_id))).scalar_one()
+                name: (
+                    await conn.execute(select(func.count()).select_from(t).where(t.c.user_id == user_id))
+                ).scalar_one()
                 for name, t in TABLES.items()
             }
 
@@ -238,7 +279,9 @@ class SqlStateBackend:
                     before = await self._read_written(conn, user_id)
                 after: dict[str, dict[str, tuple[int, str]]] = {}
                 for c in COLLECTIONS:
-                    after[c.name] = await self._write_collection(conn, c, user_id, memory.get(c.name, []), before.get(c.name, {}))
+                    after[c.name] = await self._write_collection(
+                        conn, c, user_id, memory.get(c.name, []), before.get(c.name, {})
+                    )
                 await self._write_user(conn, user_id, data)
             self._written[user_id] = after
 
@@ -250,7 +293,12 @@ class SqlStateBackend:
         return written
 
     async def _write_collection(
-        self, conn: AsyncConnection, c: Collection, user_id: str, items: list[dict[str, Any]], before: dict[str, tuple[int, str]]
+        self,
+        conn: AsyncConnection,
+        c: Collection,
+        user_id: str,
+        items: list[dict[str, Any]],
+        before: dict[str, tuple[int, str]],
     ) -> dict[str, tuple[int, str]]:
         table = TABLES[c.name]
         after: dict[str, tuple[int, str]] = {}
@@ -265,7 +313,7 @@ class SqlStateBackend:
                 changed.append({"user_id": user_id, "key": key, "seq": seq, "hash": state[1], "body": body, **columns})
         stale = [k for k in before if k not in after] + [r["key"] for r in changed if r["key"] in before]
         for i in range(0, len(stale), CHUNK):
-            await conn.execute(table.delete().where(table.c.user_id == user_id, table.c.key.in_(stale[i:i + CHUNK])))
+            await conn.execute(table.delete().where(table.c.user_id == user_id, table.c.key.in_(stale[i : i + CHUNK])))
         if changed:
             await conn.execute(table.insert(), changed)
         return after

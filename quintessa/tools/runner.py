@@ -43,9 +43,7 @@ SIMULATED_KINDS = (ToolKind.LLM, ToolKind.MCP, ToolKind.CODE)
 HISTORY_KEPT = 30
 HISTORY_SHOWN = 12
 HISTORY_RESULT_LIMIT = 3000
-CONSISTENCY = (
-    "Stay consistent with earlier_calls: the same places, items, ids, prices, times and order states."
-)
+CONSISTENCY = "Stay consistent with earlier_calls: the same places, items, ids, prices, times and order states."
 SUCCEED_INSTRUCTION = (
     "This call succeeds. " + CONSISTENCY + " You are a simulation, so be forgiving about inputs: when an "
     "argument is empty, loose or a name instead of an id, resolve it to the matching record from earlier_calls "
@@ -81,7 +79,7 @@ _rng = random.Random()
 
 
 async def run_tool(
-    runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str], *, purpose: str = ""
+    runtime: AgentRuntime, tool: Tool, function: ToolFunction, args: dict[str, str], *, purpose: str = ""
 ) -> ToolCallResult:
     """Execute one function call. Builtins run in code, web API tools make a
     real HTTP request, and the rest are a differently grounded model acting
@@ -104,7 +102,7 @@ async def run_tool(
 
 
 async def _call_app(
-    runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str], purpose: str
+    runtime: AgentRuntime, tool: Tool, function: ToolFunction, args: dict[str, str], purpose: str
 ) -> ToolCallResult:
     """Installed apps run through their binding. Only simulated apps exist
     today; a real binding would first need the user signed in."""
@@ -117,7 +115,7 @@ async def _call_app(
 
 
 async def _simulate(
-    runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str], purpose: str
+    runtime: AgentRuntime, tool: Tool, function: ToolFunction, args: dict[str, str], purpose: str
 ) -> ToolCallResult:
     earlier = [
         {"function": r.function, "arguments": r.arguments, "status": r.status, "result": r.result}
@@ -131,25 +129,36 @@ async def _simulate(
     result = await runtime.llm.generate_json(
         system=tool.grounding or f"You act as the service '{tool.name}': {tool.description}",
         prompt=json.dumps(
-            {"function": described, "arguments": args, "why_the_agent_is_calling": purpose,
-             "earlier_calls": earlier, "instruction": FAIL_INSTRUCTION if fails else SUCCEED_INSTRUCTION},
+            {
+                "function": described,
+                "arguments": args,
+                "why_the_agent_is_calling": purpose,
+                "earlier_calls": earlier,
+                "instruction": FAIL_INSTRUCTION if fails else SUCCEED_INSTRUCTION,
+            },
             indent=2,
         ),
         schema=FAIL_SCHEMA if fails else SUCCEED_SCHEMA,
         purpose=f"tool:{tool.name}.{function.name}",
     )
     data = result.data
-    _remember(runtime, tool, ToolCallRecord(function.name, args, purpose, data["status"], data["result"][:HISTORY_RESULT_LIMIT]))
+    _remember(
+        runtime,
+        tool,
+        ToolCallRecord(function.name, args, purpose, data["status"], data["result"][:HISTORY_RESULT_LIMIT]),
+    )
     return ToolCallResult(data["status"], data["result"], data["progress_stages"])
 
 
-def _remember(runtime: "AgentRuntime", tool: Tool, record: ToolCallRecord) -> None:
+def _remember(runtime: AgentRuntime, tool: Tool, record: ToolCallRecord) -> None:
     tool.history = [*tool.history, record][-HISTORY_KEPT:]
     if runtime.store.tools.get(tool.name) is tool:  # not if it was uninstalled meanwhile
         runtime.store.put_tool(tool)
 
 
-async def _call_web_api(runtime: "AgentRuntime", tool: Tool, function: ToolFunction, args: dict[str, str]) -> ToolCallResult:
+async def _call_web_api(
+    runtime: AgentRuntime, tool: Tool, function: ToolFunction, args: dict[str, str]
+) -> ToolCallResult:
     """The model turns the call into an HTTP request against the tool's
     endpoint; the request itself is made here and its response reported."""
     plan = await runtime.llm.generate_json(
@@ -168,7 +177,9 @@ async def _call_web_api(runtime: "AgentRuntime", tool: Tool, function: ToolFunct
         return ToolCallResult("failed", f"{tool.name}.{function.name}: refusing non-http URL {req['url']}")
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
         response = await client.request(
-            req["method"], url, headers={h["name"]: h["value"] for h in req["headers"]},
+            req["method"],
+            url,
+            headers={h["name"]: h["value"] for h in req["headers"]},
             content=req["body"].encode() if req["body"] else None,
         )
     text = response.text

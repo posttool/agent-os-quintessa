@@ -1,10 +1,10 @@
 import asyncio
 
-from quintessa.llm import FatalLLMError
-from quintessa.models import InputEvent, InputKind, SessionStatus, UXResponse
-
 from conftest import decide, until
 from test_memory import doc_op, node_op, section_op, topic_op
+
+from quintessa.llm import FatalLLMError
+from quintessa.models import InputEvent, InputKind, SessionStatus, UXResponse
 
 
 def memory_answer(*ops, summary="saved"):
@@ -13,7 +13,10 @@ def memory_answer(*ops, summary="saved"):
 
 async def test_trigger_to_memory_then_done(script, make_runtime):
     script.on("decide", decide("memory", "save Jane's dinner idea", "Saving"))
-    script.on("capability:memory", memory_answer(node_op("person-jane", "Jane", "person"), topic_op("topic-dinner", "Dinner Plans")))
+    script.on(
+        "capability:memory",
+        memory_answer(node_op("person-jane", "Jane", "person"), topic_op("topic-dinner", "Dinner Plans")),
+    )
     runtime = make_runtime(script)
     islands = []
     runtime.device.listen(lambda kind, state: kind == "island" and islands.append(state["island"]["words"]))
@@ -35,14 +38,26 @@ async def test_disambiguation_pauses_and_returns_to_the_document(script, make_ru
     script.on("decide", decide("memory"), decide("generative_ui", "which day"), decide("memory", "record the day"))
     script.on(
         "capability:memory",
-        memory_answer(topic_op("topic-dinner", "Dinner"), doc_op("doc-dinner", "topic-dinner"), section_op("sec-time", "doc-dinner")),
+        memory_answer(
+            topic_op("topic-dinner", "Dinner"),
+            doc_op("doc-dinner", "topic-dinner"),
+            section_op("sec-time", "doc-dinner"),
+        ),
         lambda payload: memory_answer(summary=f"recorded {payload['steps_so_far'][1]['summary']}"),
     )
     script.on(
         "capability:generative_ui",
-        {"prompt": "Which night works?", "purpose": "disambiguation", "context": "",
-         "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tuesday", "Wednesday"]}],
-         "document_id": "doc-dinner", "section_id": "sec-time", "topic_id": None, "tool": None, "function": None},
+        {
+            "prompt": "Which night works?",
+            "purpose": "disambiguation",
+            "context": "",
+            "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tuesday", "Wednesday"]}],
+            "document_id": "doc-dinner",
+            "section_id": "sec-time",
+            "topic_id": None,
+            "tool": None,
+            "function": None,
+        },
     )
     runtime = make_runtime(script)
     session = runtime.submit(InputEvent(InputKind.TEXT, "plan dinner with Jane"))
@@ -68,8 +83,17 @@ async def test_loops_run_concurrently_over_shared_memory(script, make_runtime):
     script.on("decide", decide("generative_ui"), decide("memory"))
     script.on(
         "capability:generative_ui",
-        {"prompt": "Color?", "purpose": "disambiguation", "context": "", "fields": [{"name": "c", "kind": "option", "label": "", "options": ["red", "blue"]}],
-         "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None},
+        {
+            "prompt": "Color?",
+            "purpose": "disambiguation",
+            "context": "",
+            "fields": [{"name": "c", "kind": "option", "label": "", "options": ["red", "blue"]}],
+            "document_id": None,
+            "section_id": None,
+            "topic_id": None,
+            "tool": None,
+            "function": None,
+        },
     )
     script.on("capability:memory", memory_answer(node_op("pref-color", "Unknown color preference")))
     runtime = make_runtime(script)
@@ -107,7 +131,17 @@ async def test_clear_resets_memory_traces_and_device(script, make_runtime):
     script.on("decide", decide("generative_ui"))
     script.on(
         "capability:generative_ui",
-        {"prompt": "?", "purpose": "information", "context": "", "fields": [], "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None},
+        {
+            "prompt": "?",
+            "purpose": "information",
+            "context": "",
+            "fields": [],
+            "document_id": None,
+            "section_id": None,
+            "topic_id": None,
+            "tool": None,
+            "function": None,
+        },
     )
     runtime = make_runtime(script)
     session = runtime.submit(InputEvent(InputKind.TEXT, "x"))

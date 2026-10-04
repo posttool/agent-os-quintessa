@@ -1,7 +1,8 @@
 """The portable form of one user's agent state: memory (graph, topics,
 documents, tools, permissions, processes, events, traces), what the
-device was showing, the user's preferences and the Aura persona they attached. The same format is used for durable storage and for
-user download / restore."""
+device was showing, the user's preferences and the Aura persona they
+attached. The same format is used for durable storage and for user
+download / restore."""
 
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ class StateFormatError(ValueError):
     """The data is not a Quintessa agent state this version can read."""
 
 
-def take_snapshot(runtime: "AgentRuntime") -> dict[str, Any]:
+def take_snapshot(runtime: AgentRuntime) -> dict[str, Any]:
     return {
         "format": FORMAT,
         "version": VERSION,
@@ -60,7 +61,7 @@ def validate_snapshot(data: Any) -> None:
         raise StateFormatError(f"agent state is damaged: {e}") from e
 
 
-def apply_snapshot(runtime: "AgentRuntime", data: dict[str, Any]) -> None:
+def apply_snapshot(runtime: AgentRuntime, data: dict[str, Any]) -> None:
     """Load a snapshot into an idle runtime. Sessions that were mid-flight
     when it was taken are marked stopped (their in-memory continuation is
     gone); process subscriptions that were still running resume."""
