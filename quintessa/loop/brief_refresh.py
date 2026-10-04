@@ -10,14 +10,12 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from quintessa.clock import now
+from quintessa.clock import now, parse_time
+from quintessa.context import JSON_INSTRUCTION, staleness
 from quintessa.device import Card
-from quintessa.device.freshness import staleness
 from quintessa.device.salience import Salience, clamp
-from quintessa.executors.common import JSON_INSTRUCTION
 from quintessa.llm import schema as s
 from quintessa.models import InputKind, Question, ReasoningSession, TraceStep
-from quintessa.tools.builtin import parse_time
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
@@ -86,11 +84,13 @@ async def refresh_brief(runtime: AgentRuntime, session: ReasoningSession) -> Tra
     Returns the trace step, or None when nothing was stale."""
     device = runtime.device
     device.prune_brief(now())
-    gone = [b for b in device.state.brief if staleness(runtime, b) in ("its topic is gone", "its document is gone")]
-    lines = [f"removed {b.id} ({b.text}): {staleness(runtime, b)}" for b in gone]
+    gone = [
+        b for b in device.state.brief if staleness(runtime.store, b) in ("its topic is gone", "its document is gone")
+    ]
+    lines = [f"removed {b.id} ({b.text}): {staleness(runtime.store, b)}" for b in gone]
     device.remove_cards([b.id for b in gone])
 
-    cards = [b for b in device.state.brief if staleness(runtime, b)]
+    cards = [b for b in device.state.brief if staleness(runtime.store, b)]
     questions = _stale_questions(runtime)
     if not cards and not questions:
         return _step(session, lines) if lines else None

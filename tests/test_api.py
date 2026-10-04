@@ -327,7 +327,7 @@ async def test_stashing_a_question(api, script):
     state = (await api.get("/api/state?user=maya")).json()
     assert [q["question_id"] for q in state["device"]["stashed"]] == [question["id"]]
     assert [q["id"] for q in state["questions"]] == [question["id"]]  # still waiting
-    from quintessa.device.freshness import brief_context
+    from quintessa.context import brief_context
 
     assert brief_context(agent)["questions_waiting"][0]["stashed"] is True
 

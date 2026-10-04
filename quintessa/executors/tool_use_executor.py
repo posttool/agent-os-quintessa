@@ -2,21 +2,19 @@ from __future__ import annotations
 
 from quintessa.clock import now
 from quintessa.executors.common import call_capability
-from quintessa.executors.generative_ui_executor import CONFIRM_YES, question_topic, record_permission
+from quintessa.executors.generative_ui_executor import question_topic
 from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
 from quintessa.llm import schema as s
 from quintessa.models import (
     Answer,
     FieldKind,
-    OversightLevel,
     Question,
     QuestionField,
     QuestionPurpose,
     Subscription,
-    Tool,
-    ToolFunction,
 )
+from quintessa.oversight import CONFIRM_YES, needs_permission, record_permission
 from quintessa.serde import to_dict
 from quintessa.tools.runner import run_tool
 
@@ -36,17 +34,6 @@ def schema_for(tool_names: list[str]) -> dict:
             "permission_prompt": s.string("Question to ask if this call needs the user's approval."),
         }
     )
-
-
-def needs_permission(ctx: StepContext, tool: Tool, function: ToolFunction) -> bool | None:
-    """True: ask first. False: go ahead. None: the user already declined in this session."""
-    session_grants = [p for p in ctx.session.permissions if p.tool == tool.name and p.function == function.name]
-    if session_grants:
-        return None if not session_grants[-1].granted else False
-    if function.oversight in (OversightLevel.AUTO, OversightLevel.AUTO_FROM_MEMORY):
-        return False
-    remembered = ctx.runtime.store.persistent_grant(tool.name, function.name)
-    return not (function.oversight == OversightLevel.CONFIRM_ONCE and remembered)
 
 
 class ToolUseExecutor:
@@ -81,7 +68,7 @@ class ToolUseExecutor:
                 output, f"{tool.name}.{function.name} -> {outcome.status}: {outcome.result}", result.model
             )
 
-        gate = needs_permission(ctx, tool, function)
+        gate = needs_permission(ctx.session, store, tool, function)
         if gate is None:
             return StepOutcome(call, f"Skipped {tool.name}.{function.name}: the user declined it earlier", result.model)
         if gate is False:
@@ -102,7 +89,7 @@ class ToolUseExecutor:
         )
 
         async def on_answer(response: Answer) -> StepOutcome:
-            permission = record_permission(ctx, request, response)
+            permission = record_permission(ctx.session, store, request, response)
             if permission and permission.granted:
                 return await execute()
             return StepOutcome(

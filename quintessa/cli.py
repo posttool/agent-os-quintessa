@@ -6,9 +6,9 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 from pathlib import Path
 
+from quintessa import config
 from quintessa.decide import jev_options_from_env
 from quintessa.decide.report import agreement_report
 from quintessa.host import AgentHost
@@ -122,7 +122,7 @@ async def _run_command(args: argparse.Namespace, backend) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="quintessa")
-    parser.add_argument("--user", default=os.environ.get("QUINTESSA_USER", "local"), help="whose agent to use")
+    parser.add_argument("--user", default=config.default_user(), help="whose agent to use")
     parser.add_argument("--models", help="model chain, e.g. gemini:gemini-3.8-flash,claude:claude-opus-5-5")
     parser.add_argument("--data", default="data", help="where agent state and downloads are kept")
     parser.add_argument("-v", "--verbose", action="store_true")

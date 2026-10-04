@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from fastapi import FastAPI
 
+from quintessa import config
 from quintessa.api.app import create_app
 from quintessa.api.model_settings import ModelSettings
 from quintessa.api.unconfigured import UnconfiguredLLM
@@ -23,7 +23,7 @@ def build_app(data_dir: str | Path = "data") -> FastAPI:
     """The production wiring: per-user state in the database (see
     state_backend_from_env), the model chain from the environment, the
     built web app if present."""
-    chain = os.environ.get("QUINTESSA_MODEL_CHAIN", DEFAULT_CHAIN)
+    chain = config.model_chain(DEFAULT_CHAIN)
     settings = ModelSettings(chain=chain.split(","))
     try:
         llm = build_llm(chain)
@@ -42,7 +42,7 @@ def build_app(data_dir: str | Path = "data") -> FastAPI:
         apps=app_store_from_env(search, llm),
         **jev_options_from_env(),
     )
-    app = create_app(host, settings=settings, static_dir=os.environ.get("QUINTESSA_WEB_DIST", WEB_DIST))
+    app = create_app(host, settings=settings, static_dir=config.web_dist(WEB_DIST))
 
     app.router.on_shutdown.append(host.shutdown)  # save everyone's state on the way down
     if hasattr(backend, "close"):

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import httpx
+
+from quintessa import config
 
 DEFAULT_URL = "https://api.typesafe.ai"
 DEFAULT_MODEL = "jev-latest"
@@ -66,13 +67,13 @@ def client_from_env() -> SystemOneClient | None:
       QUINTESSA_JEV_URL       endpoint base URL (default TypeSafe's; a gev URL works too)
       QUINTESSA_JEV_MODEL     model name (default jev-latest)
     """
-    key = os.environ.get("QUINTESSA_JEV_API_KEY") or os.environ.get("TYPESAFE_API_KEY")
+    key = config.jev_api_key()
     if not key:
         return None
     return SystemOneClient(
         key,
-        base_url=os.environ.get("QUINTESSA_JEV_URL", DEFAULT_URL),
-        model=os.environ.get("QUINTESSA_JEV_MODEL", DEFAULT_MODEL),
+        base_url=config.jev_url(DEFAULT_URL),
+        model=config.jev_model(DEFAULT_MODEL),
     )
 
 

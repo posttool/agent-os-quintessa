@@ -138,7 +138,7 @@ from datetime import timedelta  # noqa: E402
 from test_memory import topic_op  # noqa: E402
 
 from quintessa.clock import now  # noqa: E402
-from quintessa.device.freshness import brief_context  # noqa: E402
+from quintessa.context import brief_context  # noqa: E402
 from quintessa.tools.builtin import _update_brief  # noqa: E402
 
 

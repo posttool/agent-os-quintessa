@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+from quintessa.context import controller_context
 from quintessa.decide.system_one import SystemOneClient, SystemOneError, choice
-from quintessa.executors.common import controller_context
 from quintessa.models import DONE, ReasoningSession, ShadowDecision
 
 if TYPE_CHECKING:

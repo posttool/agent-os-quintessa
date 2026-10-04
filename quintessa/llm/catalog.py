@@ -3,8 +3,9 @@ other `provider:model` still works when typed in by hand."""
 
 from __future__ import annotations
 
-import os
 from typing import Any
+
+from quintessa import config
 
 MODELS: dict[str, list[tuple[str, str]]] = {
     "claude": [
@@ -27,15 +28,13 @@ PROVIDER_LABELS = {"claude": "Claude", "gemini": "Gemini (Vertex)"}
 
 def provider_setup(provider: str) -> str:
     """What is missing before this provider can answer, or "" when it looks configured."""
-    vertex = any(
-        os.environ.get(v) for v in ("GOOGLE_CLOUD_PROJECT", "QUINTESSA_GCP_SA_JSON", "GOOGLE_APPLICATION_CREDENTIALS")
-    )
+    vertex = config.vertex_configured()
     if provider == "gemini":
         return "" if vertex else "set GOOGLE_CLOUD_PROJECT or QUINTESSA_GCP_SA_JSON"
     if provider == "claude":
-        if os.environ.get("QUINTESSA_CLAUDE_ON_VERTEX") == "1":
+        if config.claude_on_vertex():
             return "" if vertex else "set GOOGLE_CLOUD_PROJECT or QUINTESSA_GCP_SA_JSON"
-        keyed = os.environ.get("QUINTESSA_ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+        keyed = config.anthropic_api_key()
         return "" if keyed else "set QUINTESSA_ANTHROPIC_API_KEY"
     return ""
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import httpx
 
+from quintessa import config
 from quintessa.persona.persona_observation import PersonaObservation
 from quintessa.persona.persona_profile import PersonaProfile
 
@@ -19,7 +19,7 @@ class AuraPersonaClient:
     http://localhost:5001/aura-persona/us-central1."""
 
     def __init__(self, base_url: str | None = None, http: httpx.AsyncClient | None = None):
-        self.base_url = (base_url or os.environ.get("AURA_PERSONA_BASE_URL", DEFAULT_BASE_URL)).rstrip("/")
+        self.base_url = (base_url or config.persona_base_url(DEFAULT_BASE_URL)).rstrip("/")
         self.http = http or httpx.AsyncClient(timeout=30)
 
     async def _call(self, function: str, data: dict[str, Any]) -> Any:

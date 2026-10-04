@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import os
 from pathlib import Path
 from typing import Any
 
-
-def user_folder_name(user_id: str) -> str:
-    """A file-system-safe name for anything stored per user."""
-    return hashlib.sha256(user_id.encode()).hexdigest()[:32]
+from quintessa.paths import user_folder_name
 
 
 class FileStateBackend:
