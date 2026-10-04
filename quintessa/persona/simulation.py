@@ -76,7 +76,7 @@ class PersonaSimulation:
             date = days[0]["date"]
         self.date = date
         observations = sorted(await self.client.list_observations(persona_id, date), key=lambda o: o.time)
-        profile = {k: v for k, v in to_dict(persona).items() if k != "raw"}
+        profile = to_dict(persona.summary())
         self.runtime.submit(
             InputEvent(
                 InputKind.TEXT, "This is the user you are serving: " + json.dumps(profile), source="persona:profile"

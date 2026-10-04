@@ -166,13 +166,7 @@ def _archive_document(store: MemoryStore, op: dict[str, Any], _: str | None) -> 
 
 
 def _mark_topic_seen(store: MemoryStore, op: dict[str, Any], _: str | None) -> str:
-    topic = store.topics.get(op["id"])
-    if not topic:
-        return ""
-    topic.last_seen_at = now()
-    topic.new_info = ""
-    store.upsert_topic(topic, touch=False)
-    return f"topic {op['id']} marked seen"
+    return f"topic {op['id']} marked seen" if store.mark_topic_seen(op["id"]) else ""
 
 
 def _merge(existing: list[str], new: list[str]) -> list[str]:

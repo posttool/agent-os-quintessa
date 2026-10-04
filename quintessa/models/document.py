@@ -27,5 +27,9 @@ class Document:
     created_at: datetime = field(default_factory=now)
     updated_at: datetime = field(default_factory=now)
 
+    @property
+    def archived(self) -> bool:
+        return self.status == DocumentStatus.ARCHIVED
+
     def section(self, section_id: str) -> DocumentSection | None:
         return next((s for s in self.sections if s.id == section_id), None)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from google import genai
@@ -8,6 +7,7 @@ from google.auth.exceptions import GoogleAuthError
 from google.genai import errors, types
 
 from quintessa.llm.errors import FatalLLMError, InvalidOutputError, RefusalError, RetryableLLMError
+from quintessa.llm.output import json_object
 
 _BLOCKED = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION"}
 
@@ -63,13 +63,4 @@ class GeminiVertexAdapter:
             raise RefusalError(f"gemini {model} blocked ({reason_name or 'no candidates'})")
         if reason_name == "MAX_TOKENS":
             raise InvalidOutputError(f"gemini {model} hit max tokens")
-        text = response.text
-        if not text:
-            raise InvalidOutputError(f"gemini {model} returned no text")
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError as e:
-            raise InvalidOutputError(f"gemini {model}: invalid JSON") from e
-        if not isinstance(data, dict):
-            raise InvalidOutputError(f"gemini {model}: expected a JSON object")
-        return data
+        return json_object(response.text, f"gemini {model}")

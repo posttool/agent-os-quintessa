@@ -11,7 +11,7 @@ import httpx
 
 from quintessa.device import FOCUSED, FULL, DiscoveryItem
 from quintessa.device.cards import cards_from_entries
-from quintessa.models import Tool, ToolFunction, ToolKind, ToolParameter
+from quintessa.models import Tool, ToolAuthor, ToolCallStatus, ToolFunction, ToolKind, ToolParameter
 from quintessa.paths import user_folder_name
 from quintessa.tools.tool_call_result import ToolCallResult
 
@@ -22,11 +22,19 @@ Impl = Callable[[dict[str, str], "AgentRuntime"], Awaitable[ToolCallResult]]
 
 FETCH_LIMIT = 20_000
 
+
+def clip(text: str) -> str:
+    """A response body cut to FETCH_LIMIT characters, saying so when cut."""
+    if len(text) <= FETCH_LIMIT:
+        return text
+    return f"{text[:FETCH_LIMIT]}\n[truncated to {FETCH_LIMIT} of {len(text)} characters]"
+
+
 WEB_TOOL = Tool(
     name="web",
     description="Web access: Google search, reading pages, downloading files to the device.",
     kind=ToolKind.BUILTIN,
-    created_by="system",
+    created_by=ToolAuthor.SYSTEM,
     functions=[
         ToolFunction("search", "Search the web.", [ToolParameter("query", "string")]),
         ToolFunction("fetch", "Read a web page as text.", [ToolParameter("url", "string")]),
@@ -55,7 +63,7 @@ DEVICE_TOOL = Tool(
         "related topics the user did not ask for."
     ),
     kind=ToolKind.BUILTIN,
-    created_by="system",
+    created_by=ToolAuthor.SYSTEM,
     functions=[
         ToolFunction(
             "set_brief",
@@ -104,16 +112,15 @@ BUILTIN_TOOLS = [WEB_TOOL, DEVICE_TOOL]
 
 async def _search(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     if runtime.search is None:
-        return ToolCallResult("failed", "no web search backend is configured")
-    return ToolCallResult("done", await runtime.search.search(args["query"]))
+        return ToolCallResult(ToolCallStatus.FAILED, "no web search backend is configured")
+    return ToolCallResult(ToolCallStatus.DONE, await runtime.search.search(args["query"]))
 
 
 async def _fetch(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
         response = await client.get(args["url"])
-    text = response.text
-    note = f"\n[truncated to {FETCH_LIMIT} of {len(text)} characters]" if len(text) > FETCH_LIMIT else ""
-    return ToolCallResult("done" if response.is_success else "failed", text[:FETCH_LIMIT] + note)
+    status = ToolCallStatus.DONE if response.is_success else ToolCallStatus.FAILED
+    return ToolCallResult(status, clip(response.text))
 
 
 async def _download(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
@@ -122,10 +129,10 @@ async def _download(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResu
     async with httpx.AsyncClient(follow_redirects=True, timeout=60) as client:
         response = await client.get(args["url"])
     if not response.is_success:
-        return ToolCallResult("failed", f"HTTP {response.status_code}")
+        return ToolCallResult(ToolCallStatus.FAILED, f"HTTP {response.status_code}")
     target = folder / (Path(httpx.URL(args["url"]).path).name or "download")
     target.write_bytes(response.content)
-    return ToolCallResult("done", f"saved {len(response.content)} bytes to {target}")
+    return ToolCallResult(ToolCallStatus.DONE, f"saved {len(response.content)} bytes to {target}")
 
 
 def _json_list(args: dict[str, str], name: str) -> tuple[list, str]:
@@ -142,17 +149,17 @@ def _json_list(args: dict[str, str], name: str) -> tuple[list, str]:
 async def _set_brief(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     raw, problem = _json_list(args, "cards")
     if problem:
-        return ToolCallResult("failed", problem)
+        return ToolCallResult(ToolCallStatus.FAILED, problem)
     cards, notes = cards_from_entries(raw, runtime.store)
     runtime.device.set_brief(cards)
-    return ToolCallResult("done", "; ".join([f"brief shows {len(cards)} cards", *notes]))
+    return ToolCallResult(ToolCallStatus.DONE, "; ".join([f"brief shows {len(cards)} cards", *notes]))
 
 
 async def _update_brief(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     put, problem = _json_list(args, "put")
     remove, problem2 = _json_list(args, "remove")
     if problem or problem2:
-        return ToolCallResult("failed", problem or problem2)
+        return ToolCallResult(ToolCallStatus.FAILED, problem or problem2)
     cards, notes = cards_from_entries(put, runtime.store)
     lines: list[str] = []
     gone = runtime.device.remove_cards([str(i) for i in remove])
@@ -165,16 +172,16 @@ async def _update_brief(args: dict[str, str], runtime: AgentRuntime) -> ToolCall
             f"replaced {card.id} ({replaced.text} -> {card.text})" if replaced else f"added {card.id} ({card.text})"
         )
     lines.append(f"brief shows {len(runtime.device.state.brief)} cards")
-    return ToolCallResult("done", "; ".join([*lines, *notes]))
+    return ToolCallResult(ToolCallStatus.DONE, "; ".join([*lines, *notes]))
 
 
 async def _show_document(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     doc = runtime.store.documents.get(args["document_id"])
     if doc is None:
-        return ToolCallResult("failed", f"no document {args['document_id']}")
+        return ToolCallResult(ToolCallStatus.FAILED, f"no document {args['document_id']}")
     mode = args.get("mode") or FOCUSED
     if mode not in (FOCUSED, FULL):
-        return ToolCallResult("failed", f"mode must be {FOCUSED!r} or {FULL!r}")
+        return ToolCallResult(ToolCallStatus.FAILED, f"mode must be {FOCUSED!r} or {FULL!r}")
     raw = args.get("section_ids") or "[]"
     try:
         section_ids = json.loads(raw)
@@ -184,20 +191,22 @@ async def _show_document(args: dict[str, str], runtime: AgentRuntime) -> ToolCal
         section_ids = [section_ids]
     unknown = [sid for sid in section_ids if doc.section(sid) is None]
     if unknown:
-        return ToolCallResult("failed", f"{doc.id} has no sections {unknown}; it has {[s.id for s in doc.sections]}")
+        return ToolCallResult(
+            ToolCallStatus.FAILED, f"{doc.id} has no sections {unknown}; it has {[s.id for s in doc.sections]}"
+        )
     runtime.device.show_document(doc.id, section_ids, mode, args.get("reason") or "")
     shown = "the whole document" if mode == FULL else (", ".join(section_ids) or "what matters now")
-    return ToolCallResult("done", f"showing {doc.id}: {shown}")
+    return ToolCallResult(ToolCallStatus.DONE, f"showing {doc.id}: {shown}")
 
 
 async def _add_discovery(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     runtime.device.add_discovery(DiscoveryItem(args["title"], args["reason"], args.get("topic_id") or None))
-    return ToolCallResult("done", f"added {args['title']} to Discover")
+    return ToolCallResult(ToolCallStatus.DONE, f"added {args['title']} to Discover")
 
 
 async def _notify(args: dict[str, str], runtime: AgentRuntime) -> ToolCallResult:
     runtime.device.notify(args["text"])
-    return ToolCallResult("done", "notified")
+    return ToolCallResult(ToolCallStatus.DONE, "notified")
 
 
 BUILTIN_IMPLEMENTATIONS: dict[tuple[str, str], Impl] = {

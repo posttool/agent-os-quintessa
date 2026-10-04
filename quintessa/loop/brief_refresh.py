@@ -11,11 +11,11 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from quintessa.clock import now, parse_time
-from quintessa.context import JSON_INSTRUCTION, staleness
-from quintessa.device import Card
+from quintessa.context import JSON_INSTRUCTION, Staleness, card_view, staleness
 from quintessa.device.salience import Salience, clamp
 from quintessa.llm import schema as s
 from quintessa.models import InputKind, Question, ReasoningSession, TraceStep
+from quintessa.serde import to_dict
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
@@ -84,13 +84,11 @@ async def refresh_brief(runtime: AgentRuntime, session: ReasoningSession) -> Tra
     Returns the trace step, or None when nothing was stale."""
     device = runtime.device
     device.prune_brief(now())
-    gone = [
-        b for b in device.state.brief if staleness(runtime.store, b) in ("its topic is gone", "its document is gone")
-    ]
-    lines = [f"removed {b.id} ({b.text}): {staleness(runtime.store, b)}" for b in gone]
+    gone = [b for b in device.state.brief if staleness(runtime.store, b).gone]
+    lines = [f"removed {b.id} ({b.text}): {staleness(runtime.store, b).value}" for b in gone]
     device.remove_cards([b.id for b in gone])
 
-    cards = [b for b in device.state.brief if staleness(runtime.store, b)]
+    cards = [b for b in device.state.brief if staleness(runtime.store, b) != Staleness.FRESH]
     questions = _stale_questions(runtime)
     if not cards and not questions:
         return _step(session, lines) if lines else None
@@ -100,7 +98,7 @@ async def refresh_brief(runtime: AgentRuntime, session: ReasoningSession) -> Tra
     payload = {
         "trigger": {"kind": session.trigger.kind, "content": session.trigger.content},
         "now": now(),
-        "cards": [{**_card(b), "changed": _topic(topics.get(b.topic_id))} for b in cards],
+        "cards": [{**to_dict(card_view(b)), "changed": _topic(topics.get(b.topic_id))} for b in cards],
         "questions": [
             {"id": q.id, "prompt": q.prompt, "asked_at": q.created_at, "changed": _topic(topics.get(q.topic_id))}
             for q in questions
@@ -178,19 +176,6 @@ def _step(session: ReasoningSession, lines: list[str]) -> TraceStep:
     step.ended_at = now()
     session.steps.append(step)
     return step
-
-
-def _card(b: Card) -> dict[str, Any]:
-    return {
-        "id": b.id,
-        "text": b.text,
-        "detail": b.detail,
-        "urgency": b.urgency,
-        "topic_id": b.topic_id,
-        "action": b.action.label if b.action else None,
-        "expires_at": b.expires_at,
-        "written_at": b.updated_at,
-    }
 
 
 def _topic(topic) -> dict[str, Any] | None:

@@ -92,7 +92,7 @@ async def test_grant_from_earlier_disambiguation_carries_forward(script, make_ru
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool())
     asked = []
-    runtime.questions.on_request(asked.append)
+    runtime.questions.on_question(asked.append)
 
     session = runtime.submit(InputEvent(InputKind.TEXT, "order my usual"))
     await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
@@ -127,7 +127,7 @@ async def test_tool_use_asks_and_respects_a_decline(script, make_runtime):
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool())
     asked = []
-    runtime.questions.on_request(asked.append)
+    runtime.questions.on_question(asked.append)
 
     session = runtime.submit(InputEvent(InputKind.TEXT, "order"))
     await until(lambda: bool(asked))
@@ -150,7 +150,7 @@ async def test_confirm_once_is_remembered_across_sessions(script, make_runtime):
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool(OversightLevel.CONFIRM_ONCE))
     asked = []
-    runtime.questions.on_request(lambda r: (asked.append(r), runtime.answer(Answer(r.id, {"approve": "yes"}))))
+    runtime.questions.on_question(lambda r: (asked.append(r), runtime.answer(Answer(r.id, {"approve": "yes"}))))
 
     await runtime.run(InputEvent(InputKind.TEXT, "first"))
     await runtime.run(InputEvent(InputKind.TEXT, "second"))

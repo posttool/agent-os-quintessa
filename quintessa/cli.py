@@ -34,7 +34,7 @@ def _answer_in_terminal(runtime: AgentRuntime):
             values[field.name] = await asyncio.to_thread(input, f"  {field.label or field.name}{hint}: ")
         runtime.answer(Answer(request.id, values))
 
-    runtime.questions.on_request(lambda r: asyncio.get_running_loop().create_task(ask(r)))
+    runtime.questions.on_question(lambda r: asyncio.get_running_loop().create_task(ask(r)))
 
 
 def _print_session(session) -> None:
@@ -92,11 +92,7 @@ async def _run_command(args: argparse.Namespace, backend) -> None:
     elif args.command == "persona":
         sim = PersonaSimulation(agent, AuraPersonaClient(), speed=args.speed)
         profile = await sim.start(args.id, args.date)
-        agent.persona = {
-            "persona_id": args.id,
-            "date": sim.date,
-            "profile": {k: v for k, v in to_dict(profile).items() if k != "raw"},
-        }
+        agent.attach_persona(args.id, sim.date, profile)
         await sim.wait()
         await agent.wait_idle()
     elif args.command == "export":

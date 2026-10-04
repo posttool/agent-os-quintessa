@@ -13,7 +13,6 @@ from quintessa.models import (
     QuestionField,
     QuestionPurpose,
 )
-from quintessa.models.answer import WITHDRAWN
 from quintessa.oversight import record_permission
 from quintessa.serde import to_dict
 
@@ -53,7 +52,7 @@ def question_topic(store: MemoryStore, topic_id: str | None, document_id: str | 
     return doc.topic_id if doc is not None else None
 
 
-def build_request(session_id: str, data: dict, store: MemoryStore) -> Question:
+def build_question(session_id: str, data: dict, store: MemoryStore) -> Question:
     return Question(
         session_id=session_id,
         purpose=QuestionPurpose(data["purpose"]),
@@ -71,27 +70,28 @@ def build_request(session_id: str, data: dict, store: MemoryStore) -> Question:
 class GenerativeUIExecutor:
     async def run(self, ctx: StepContext) -> StepOutcome:
         result = await call_capability(ctx, SCHEMA)
-        request = build_request(ctx.session.id, result.data, ctx.runtime.store)
+        question = build_question(ctx.session.id, result.data, ctx.runtime.store)
 
-        async def on_answer(response: Answer) -> StepOutcome:
-            permission = record_permission(ctx.session, ctx.runtime.store, request, response)
-            answer = "dismissed" if response.dismissed else response.values
-            summary = f"Asked '{request.prompt}'; user answered {answer}"
-            if response.surface_context.startswith(WITHDRAWN):
-                reason = response.surface_context[len(WITHDRAWN) :]
-                summary = f"Asked '{request.prompt}', then withdrew it before the user answered ({reason})"
+        async def on_answer(answer: Answer) -> StepOutcome:
+            permission = record_permission(ctx.session, ctx.runtime.store, question, answer)
+            given = "dismissed" if answer.dismissed else answer.values
+            summary = f"Asked '{question.prompt}'; user answered {given}"
+            if answer.withdrawn:
+                summary = (
+                    f"Asked '{question.prompt}', then withdrew it before the user answered ({answer.withdrawn_reason})"
+                )
             if permission:
-                summary += f"; {request.tool}.{request.function} {'granted' if permission.granted else 'declined'}"
+                summary += f"; {question.tool}.{question.function} {'granted' if permission.granted else 'declined'}"
             return StepOutcome(
-                output={"request": to_dict(request), "response": to_dict(response)},
+                output={"question": to_dict(question), "answer": to_dict(answer)},
                 summary=summary,
                 model=result.model,
             )
 
         return StepOutcome(
-            output={"request": to_dict(request)},
-            summary=f"Asked '{request.prompt}'",
+            output={"question": to_dict(question)},
+            summary=f"Asked '{question.prompt}'",
             model=result.model,
-            question=request,
+            question=question,
             on_answer=on_answer,
         )

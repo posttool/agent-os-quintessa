@@ -9,7 +9,7 @@ from quintessa.executors.common import call_capability
 from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
 from quintessa.llm import schema as s
-from quintessa.models import AppListing, Tool, ToolKind
+from quintessa.models import AppListing, Tool, ToolAuthor, ToolKind
 from quintessa.serde import to_dict
 from quintessa.tools.definitions import FUNCTION_SCHEMA, functions_from
 
@@ -113,7 +113,7 @@ class ToolDiscoveryExecutor:
         removed = []
         for name in names:
             tool = store.tools.get(name)
-            if tool and tool.kind == ToolKind.APP and tool.created_by == "agent" and tool.listing:
+            if tool and tool.kind == ToolKind.APP and tool.created_by == ToolAuthor.AGENT and tool.listing:
                 uninstall_app(store, tool.listing.app_id)
                 removed.append(name)
         return removed

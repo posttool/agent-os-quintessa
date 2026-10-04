@@ -48,7 +48,7 @@ def build_card(entry: dict, store: MemoryStore) -> tuple[Card, list[str]]:
     if document_id is None and topic is not None and topic.document_id:
         document_id = topic.document_id
     doc = store.documents.get(document_id) if document_id else None
-    if document_id and (doc is None or doc.status.value == "archived"):
+    if document_id and (doc is None or doc.archived):
         fixes.append(f"no open document {document_id}, kept as a card")
         document_id, doc = None, None
     section_id = entry.get("section_id") or None

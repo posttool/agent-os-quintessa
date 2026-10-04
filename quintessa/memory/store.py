@@ -11,6 +11,7 @@ from quintessa.models import (
     MemoryEdge,
     MemoryNode,
     Permission,
+    PermissionScope,
     ReasoningSession,
     Subscription,
     Tool,
@@ -102,6 +103,14 @@ class MemoryStore:
         self._emit("topic", to_dict(topic))
         return topic
 
+    def mark_topic_seen(self, topic_id: str) -> Topic | None:
+        """The user looked at the topic: nothing in it is new any more."""
+        topic = self.topics.get(topic_id)
+        if topic is None:
+            return None
+        topic.last_seen_at, topic.new_info = now(), ""
+        return self.upsert_topic(topic, touch=False)
+
     def upsert_document(self, document: Document) -> Document:
         document.updated_at = now()
         self.documents[document.id] = document
@@ -129,7 +138,11 @@ class MemoryStore:
     # --- reads --------------------------------------------------------------
 
     def persistent_grant(self, tool: str, function: str) -> Permission | None:
-        matches = [p for p in self.permissions if p.tool == tool and p.function == function and p.scope == "persistent"]
+        matches = [
+            p
+            for p in self.permissions
+            if p.tool == tool and p.function == function and p.scope == PermissionScope.PERSISTENT
+        ]
         return matches[-1] if matches else None
 
     def snapshot(self) -> dict[str, Any]:
@@ -138,7 +151,7 @@ class MemoryStore:
             "nodes": [to_dict(n) for n in self.nodes.values()],
             "edges": [to_dict(e) for e in self.edges.values()],
             "topics": [to_dict(t) for t in self.topics.values() if not t.archived],
-            "documents": [to_dict(d) for d in self.documents.values() if d.status.value != "archived"],
+            "documents": [to_dict(d) for d in self.documents.values() if not d.archived],
             "tools": [{k: v for k, v in to_dict(t).items() if k != "history"} for t in self.tools.values()],
             "permissions": [to_dict(p) for p in self.permissions],
             "active_processes": [to_dict(s) for s in self.subscriptions.values() if not s.archived],

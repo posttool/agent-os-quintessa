@@ -6,6 +6,7 @@ from datetime import datetime
 from quintessa.clock import now
 from quintessa.models.app_listing import AppListing
 from quintessa.models.auth_requirement import AuthRequirement
+from quintessa.models.tool_author import ToolAuthor
 from quintessa.models.tool_binding import ToolBinding
 from quintessa.models.tool_call_record import ToolCallRecord
 from quintessa.models.tool_function import ToolFunction
@@ -31,7 +32,7 @@ class Tool:
     grounding: str = ""
     endpoint: str = ""
     code: str = ""
-    created_by: str = "agent"
+    created_by: ToolAuthor = ToolAuthor.AGENT
     created_at: datetime = field(default_factory=now)
     listing: AppListing | None = None
     binding: ToolBinding = ToolBinding.SIMULATED

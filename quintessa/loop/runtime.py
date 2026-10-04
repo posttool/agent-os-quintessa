@@ -5,21 +5,34 @@ import copy
 import json
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from quintessa.ambient.bus import AmbientBus
 from quintessa.apps import AppStore, OfflineCatalog
 from quintessa.capabilities.loader import load_capabilities, load_prompt
-from quintessa.decide import AmbientFilter, CardScorer, NextStepDecider
-from quintessa.device import DeviceSurface
-from quintessa.device.focus import resolve_view
+from quintessa.decide import AmbientFilter, CardScorer, JevSwitches, NextStepDecider
+from quintessa.device import DeviceSurface, DocumentFocus, FocusSource
+from quintessa.device.focus import is_stale, resolve_view
 from quintessa.llm import ResilientLLM
 from quintessa.loop.question_broker import QuestionBroker
 from quintessa.loop.reasoning_loop import AgentReasoningLoop
 from quintessa.memory import MemoryStore
-from quintessa.models import Answer, Capability, InputEvent, InputKind, Permission, Preferences, ReasoningSession
+from quintessa.models import (
+    Answer,
+    Capability,
+    InputEvent,
+    InputKind,
+    Permission,
+    PermissionScope,
+    Preferences,
+    ReasoningSession,
+)
+from quintessa.serde import to_dict
 from quintessa.tools import BUILTIN_TOOLS
 from quintessa.tools.search import SearchBackend
+
+if TYPE_CHECKING:
+    from quintessa.persona import PersonaProfile
 
 
 class AgentRuntime:
@@ -57,11 +70,13 @@ class AgentRuntime:
         self.capabilities = capabilities or load_capabilities(capability_dir)
         self.controller_prompt = load_prompt("controller", capability_dir)
         self.max_steps = max_steps
-        # System One models, when configured; each user's preferences switch them on and off
-        self.jev_next_step = jev_next_step  # picks the next step, beside the LLM (shadow) or instead of it (drive)
-        self.jev_ambient_filter = jev_ambient_filter  # skips ambient events that do not matter
-        self.jev_card_scorer = jev_card_scorer  # scores cards' urgency, context fit and person
-        self.jev_defaults = Preferences(True, jev_shadow_default, jev_filter_default, False, True)
+        self.jev = JevSwitches(
+            jev_next_step,
+            jev_ambient_filter,
+            jev_card_scorer,
+            shadow_default=jev_shadow_default,
+            filter_default=jev_filter_default,
+        )
         self.preferences = Preferences()
         self.persona: dict[str, Any] | None = None  # the attached Aura persona: profile, persona_id, date
         self.data_dir = Path(data_dir)
@@ -74,7 +89,7 @@ class AgentRuntime:
         self.watchers: set[Callable[[], None]] = set()
         self.store.listen(lambda *_: self.notify_changed())
         self.device.listen(lambda *_: self.notify_changed())
-        self.questions.on_request(lambda _: self.notify_changed())
+        self.questions.on_question(lambda _: self.notify_changed())
         self.install_builtin_tools()
 
     def notify_changed(self) -> None:
@@ -87,8 +102,7 @@ class AgentRuntime:
 
     def preference(self, name: str) -> bool:
         """The user's setting, or the platform default when they never chose."""
-        value = getattr(self.preferences, name)
-        return getattr(self.jev_defaults, name) if value is None else value
+        return self.jev.setting(self.preferences, name)
 
     def set_preferences(self, **changes: bool | None) -> None:
         for name, value in changes.items():
@@ -97,32 +111,22 @@ class AgentRuntime:
 
     @property
     def active_shadow(self) -> NextStepDecider | None:
-        """Jev asked beside the LLM at each decision, when this user has it on."""
-        return self.jev_next_step if self.preference("jev") and self.preference("jev_shadow") else None
+        return self.jev.shadow(self.preferences)
 
     @property
     def active_driver(self) -> NextStepDecider | None:
-        """Jev, when this user lets it pick the next step instead of the LLM."""
-        return self.jev_next_step if self.preference("jev") and self.preference("jev_drive") else None
+        return self.jev.driver(self.preferences)
 
     @property
     def active_ambient_filter(self) -> AmbientFilter | None:
-        """The Jev ambient filter, when this user has it on."""
-        return self.jev_ambient_filter if self.preference("jev") and self.preference("jev_filter") else None
+        return self.jev.active_ambient_filter(self.preferences)
 
     @property
     def active_card_scorer(self) -> CardScorer | None:
-        """Jev scoring cards, when this user has it on."""
-        return self.jev_card_scorer if self.preference("jev") and self.preference("jev_rank") else None
+        return self.jev.active_card_scorer(self.preferences)
 
     def jev_status(self) -> dict[str, Any]:
-        decider = self.jev_next_step or self.jev_ambient_filter or self.jev_card_scorer
-        return {
-            "available": decider is not None,
-            "model": decider.client.label if decider else "",
-            "threshold": self.jev_ambient_filter.threshold if self.jev_ambient_filter else None,
-            **{name: self.preference(name) for name in ("jev", "jev_shadow", "jev_filter", "jev_drive", "jev_rank")},
-        }
+        return self.jev.status(self.preferences)
 
     @property
     def busy(self) -> bool:
@@ -171,7 +175,9 @@ class AgentRuntime:
             + (f" using {json.dumps(action.arguments)}" if action.arguments else "")
             + ". The tap approves that call."
         )
-        grant = Permission(action.tool, action.function, True, "session", f'tapped "{action.label}" in the brief')
+        grant = Permission(
+            action.tool, action.function, True, PermissionScope.SESSION, f'tapped "{action.label}" in the brief'
+        )
         return self.submit(InputEvent(InputKind.TEXT, content, source="user", device="phone"), grants=[grant])
 
     async def run(self, event: InputEvent) -> ReasoningSession:
@@ -195,16 +201,36 @@ class AgentRuntime:
                 self.store.topics.get(doc.topic_id) if doc.topic_id else None,
             )
             for doc in self.store.documents.values()
-            if doc.status.value != "archived"
+            if not doc.archived
         }
 
     def on_screen(self) -> dict[str, Any] | None:
         """The document open in Spaces and the parts of it the user sees."""
         doc_id = self.device.state.focused_document_id
         doc = self.store.documents.get(doc_id) if doc_id else None
-        if doc is None or doc.status.value == "archived":
+        if doc is None or doc.archived:
             return None
         return self.document_views()[doc.id]
+
+    def mark_topic_seen(self, topic_id: str) -> bool:
+        """The user opened a topic. Spaces keeps showing what they opened to,
+        rather than refocusing the moment those sections stop counting as new."""
+        topic = self.store.topics.get(topic_id)
+        if topic is None:
+            return False
+        doc = self.store.documents.get(topic.document_id or "")
+        if doc is not None:
+            focus = self.device.state.focus.get(doc.id)
+            if focus is None or is_stale(doc, focus):
+                shown = self.document_views()[doc.id]
+                self.device.pin_focus(DocumentFocus(doc.id, shown["section_ids"], shown["mode"], "", FocusSource.RULE))
+        self.store.mark_topic_seen(topic_id)
+        return True
+
+    def attach_persona(self, persona_id: str, date: str, profile: PersonaProfile) -> None:
+        """Remember which Aura persona this agent is serving, for the UI and the saved state."""
+        self.persona = {"persona_id": persona_id, "date": date, "profile": to_dict(profile.summary())}
+        self.notify_changed()
 
     def answer(self, response: Answer) -> bool:
         return self.questions.answer(response)

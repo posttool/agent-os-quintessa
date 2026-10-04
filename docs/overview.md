@@ -351,7 +351,9 @@ Answer {                             // the answer
   question_id: string
   values: { [field name]: string }   // a confirm field sends "yes" to approve
   dismissed: boolean                 // the user chose "Skip"; the session goes on without it
-  surface_context: string            // where it was answered; "withdrawn: <reason>" when the agent took it back
+  surface_context: string            // where it was answered
+  withdrawn: boolean                 // the agent took it back before the user answered
+  withdrawn_reason: string
   answered_at: string
 }
 ```
@@ -713,7 +715,7 @@ State is saved shortly after anything changes. By default it lives in SQLite at 
 
 ### The API
 
-The FastAPI app (`quintessa/api/app.py`) serves the web app and a per-user HTTP API. Every call names a user with `?user=` or the `X-Quintessa-User` header. The API trusts that id; it has no authentication yet.
+The FastAPI app (`quintessa/api/app.py`, one router per area in `quintessa/api/routes/`) serves the web app and a per-user HTTP API. Every call names a user with `?user=` or the `X-Quintessa-User` header. The API trusts that id; it has no authentication yet.
 
 | Area | Endpoints |
 |---|---|

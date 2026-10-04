@@ -9,7 +9,7 @@ from quintessa.device import salience
 from quintessa.device.card import Card
 from quintessa.device.device_state import DeviceState
 from quintessa.device.discovery_item import DiscoveryItem
-from quintessa.device.document_focus import FOCUSED, DocumentFocus
+from quintessa.device.document_focus import FOCUSED, DocumentFocus, FocusSource
 from quintessa.device.salience import Suppression
 from quintessa.device.stashed_question import StashedQuestion
 from quintessa.serde import to_dict
@@ -158,7 +158,9 @@ class DeviceSurface:
         card = next((b for b in self.state.brief if b.id == card_id), None)
         if card is None:
             return None
-        self.state.suppressions.append(Suppression(salience.card_key(card.topic_id, card.text), "dismissed"))
+        self.state.suppressions.append(
+            Suppression(salience.card_key(card.topic_id, card.text), salience.SuppressionKind.DISMISSED)
+        )
         self._trim_suppressions()
         self.remove_cards([card.id])
         return card
@@ -171,7 +173,9 @@ class DeviceSurface:
             return None
         card.snoozed_until = until
         self.state.snoozed.append(card)
-        self.state.suppressions.append(Suppression(salience.card_key(card.topic_id, card.text), "snoozed"))
+        self.state.suppressions.append(
+            Suppression(salience.card_key(card.topic_id, card.text), salience.SuppressionKind.SNOOZED)
+        )
         self._trim_suppressions()
         self.remove_cards([card.id])
         return card
@@ -223,7 +227,7 @@ class DeviceSurface:
         section_ids: list[str] | None = None,
         mode: str = FOCUSED,
         reason: str = "",
-        set_by: str = "agent",
+        set_by: FocusSource = FocusSource.AGENT,
     ) -> None:
         """Open a document in Spaces with these sections expanded (none: let
         the focus rule pick), or the whole document when mode is "full"."""

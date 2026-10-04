@@ -13,7 +13,7 @@ from quintessa.executors import EXECUTORS, StepContext
 from quintessa.llm import LLMUnavailableError
 from quintessa.llm import schema as s
 from quintessa.loop.brief_refresh import refresh_brief, score_cards
-from quintessa.models import DONE, ReasoningSession, SessionStatus, StepDecision, TraceStep
+from quintessa.models import DONE, ReasoningSession, SessionStatus, ShadowDecision, StepDecision, TraceStep
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
@@ -44,37 +44,35 @@ class AgentReasoningLoop:
             }
         )
 
-    async def decide(self) -> tuple[StepDecision, str, str, str]:
-        """The next step, the island's status words, the model that chose
-        and who decided ("jev" or "" for the LLM)."""
+    async def decide(self) -> StepDecision:
+        """The next step. When the user lets Jev drive, Jev chooses and the
+        LLM steps in only if Jev fails; otherwise the LLM chooses, with Jev
+        asked alongside in shadow when that is on."""
         driver = self.runtime.active_driver
-        if driver is not None:
-            record = await driver.ask(self.runtime, self.session)
-            if not record.error and record.choice in (*self.runtime.capabilities, DONE):
-                record.drove = True
-                self.session.shadow_decisions.append(record)
-                capability = "" if record.choice == DONE else record.choice
-                p = record.probabilities.get(record.choice, 0.0)
-                focus = (
-                    "Chosen by Jev with no instructions: decide what this capability should do for the trigger, "
-                    "given the steps so far."
-                )
-                words = capability.replace("_", " ").title()
-                return StepDecision(capability, focus, f"Jev p {p:.2f}"), words, record.model, "jev"
-            # Jev failed: the LLM decides this step, and the failure stays on the record
-            result = await self._ask_llm()
-            record.llm_choice = result.data["capability"]
-            self.session.shadow_decisions.append(record)
-            return (*self._from_llm(result), "")
-        result = await self._ask_llm()
-        return (*self._from_llm(result), "")
+        if driver is None:
+            return await self._ask_llm()
+        record = await driver.ask(self.runtime, self.session)
+        self.session.shadow_decisions.append(record)
+        if not record.error and record.choice in (*self.runtime.capabilities, DONE):
+            return self._follow_jev(record)
+        # Jev failed: the LLM decides this step, and the failure stays on the record
+        decision = await self._ask_llm(shadow=False)
+        record.llm_choice = decision.capability or DONE
+        return decision
 
-    def _from_llm(self, result) -> tuple[StepDecision, str, str]:
-        d = result.data
-        capability = "" if d["capability"] == DONE else d["capability"]
-        return StepDecision(capability, d["focus"], d["rationale"]), d["status_words"], result.model
+    @staticmethod
+    def _follow_jev(record: ShadowDecision) -> StepDecision:
+        record.drove = True
+        capability = "" if record.choice == DONE else record.choice
+        p = record.probabilities.get(record.choice, 0.0)
+        focus = (
+            "Chosen by Jev with no instructions: decide what this capability should do for the trigger, "
+            "given the steps so far."
+        )
+        words = capability.replace("_", " ").title()
+        return StepDecision(capability, focus, f"Jev p {p:.2f}", words, record.model, "jev")
 
-    async def _ask_llm(self):
+    async def _ask_llm(self, shadow: bool = True) -> StepDecision:
         ctx = controller_context(self.runtime, self.session)
         llm_call = self.runtime.llm.generate_json(
             system=f"{self.runtime.controller_prompt}\n\n{JSON_INSTRUCTION}",
@@ -82,14 +80,16 @@ class AgentReasoningLoop:
             schema=self._decision_schema(),
             purpose="decide",
         )
-        shadow = self.runtime.active_shadow
-        if shadow is None or self.runtime.active_driver is not None:
-            return await llm_call
-        # asked alongside the LLM (it is usually much faster); recorded, never followed
-        result, record = await asyncio.gather(llm_call, shadow.ask(self.runtime, self.session))
-        record.llm_choice = result.data["capability"]
-        self.session.shadow_decisions.append(record)
-        return result
+        jev = self.runtime.active_shadow if shadow else None
+        if jev is None:
+            result = await llm_call
+        else:  # asked alongside the LLM (it is usually much faster); recorded, never followed
+            result, record = await asyncio.gather(llm_call, jev.ask(self.runtime, self.session))
+            record.llm_choice = result.data["capability"]
+            self.session.shadow_decisions.append(record)
+        d = result.data
+        capability = "" if d["capability"] == DONE else d["capability"]
+        return StepDecision(capability, d["focus"], d["rationale"], d["status_words"], result.model)
 
     async def run(self) -> ReasoningSession:
         runtime, session = self.runtime, self.session
@@ -101,12 +101,17 @@ class AgentReasoningLoop:
                     session.status = SessionStatus.COMPLETE
                     return session
             for index in range(runtime.max_steps):
-                decision, words, model, decided_by = await self.decide()
+                decision = await self.decide()
                 if not decision.capability:
                     break
-                runtime.device.session_activity(session.id, words)
+                runtime.device.session_activity(session.id, decision.status_words)
                 step = TraceStep(
-                    index, decision.capability, decision.focus, decision.rationale, model=model, decided_by=decided_by
+                    index,
+                    decision.capability,
+                    decision.focus,
+                    decision.rationale,
+                    model=decision.model,
+                    decided_by=decision.decided_by,
                 )
                 session.steps.append(step)
                 capability = runtime.capabilities[decision.capability]
@@ -114,7 +119,7 @@ class AgentReasoningLoop:
                 if outcome.question is not None and outcome.on_answer is not None:
                     step.output, step.summary = outcome.output, outcome.summary
                     outcome = await self._wait_for_user(outcome)
-                step.output, step.summary, step.model = outcome.output, outcome.summary, outcome.model or model
+                step.output, step.summary, step.model = outcome.output, outcome.summary, outcome.model or decision.model
                 step.ended_at = now()
             else:
                 log.info("session %s reached max steps", session.id)

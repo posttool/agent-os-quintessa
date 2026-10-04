@@ -3,6 +3,7 @@ read, and what a granted or declined permission leaves behind."""
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from quintessa.models import (
@@ -10,6 +11,7 @@ from quintessa.models import (
     FieldKind,
     OversightLevel,
     Permission,
+    PermissionScope,
     Question,
     QuestionPurpose,
     ReasoningSession,
@@ -24,15 +26,25 @@ if TYPE_CHECKING:
 CONFIRM_YES = "yes"
 
 
-def needs_permission(session: ReasoningSession, store: MemoryStore, tool: Tool, function: ToolFunction) -> bool | None:
-    """True: ask first. False: go ahead. None: the user already declined in this session."""
+class Gate(Enum):
+    """What may happen with a tool call now."""
+
+    GO = "go"  # run it
+    ASK = "ask"  # ask the user first
+    DECLINED = "declined"  # the user already said no in this session
+
+
+def gate(session: ReasoningSession, store: MemoryStore, tool: Tool, function: ToolFunction) -> Gate:
+    """A grant or refusal earlier in this session decides first, then the
+    function's oversight level, then a confirm_once grant kept in memory."""
     session_grants = [p for p in session.permissions if p.tool == tool.name and p.function == function.name]
     if session_grants:
-        return None if not session_grants[-1].granted else False
+        return Gate.GO if session_grants[-1].granted else Gate.DECLINED
     if function.oversight in (OversightLevel.AUTO, OversightLevel.AUTO_FROM_MEMORY):
-        return False
-    remembered = store.persistent_grant(tool.name, function.name)
-    return not (function.oversight == OversightLevel.CONFIRM_ONCE and remembered)
+        return Gate.GO
+    if function.oversight == OversightLevel.CONFIRM_ONCE and store.persistent_grant(tool.name, function.name):
+        return Gate.GO
+    return Gate.ASK
 
 
 def is_approval(question: Question, answer: Answer) -> bool:
@@ -55,7 +67,7 @@ def record_permission(
         tool=question.tool,
         function=question.function,
         granted=granted,
-        scope="session",
+        scope=PermissionScope.SESSION,
         detail=question.prompt,
         session_id=session.id,
         question_id=question.id,
@@ -65,6 +77,14 @@ def record_permission(
     function = tool.function(question.function) if tool else None
     if granted and function and function.oversight == OversightLevel.CONFIRM_ONCE:
         store.add_permission(
-            Permission(question.tool, question.function, True, "persistent", question.prompt, session.id, question.id)
+            Permission(
+                question.tool,
+                question.function,
+                True,
+                PermissionScope.PERSISTENT,
+                question.prompt,
+                session.id,
+                question.id,
+            )
         )
     return permission

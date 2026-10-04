@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from quintessa.device.document_focus import FOCUSED, FULL, DocumentFocus
+from quintessa.device.document_focus import FOCUSED, FULL, DocumentFocus, FocusSource
 from quintessa.models import Document, Question, Topic
 
 MAX_FOCUSED = 2
@@ -58,12 +58,12 @@ def resolve_view(
     ids = {s.id for s in doc.sections}
     chosen = focus if focus and not is_stale(doc, focus) else None
     sections = [sid for sid in chosen.section_ids if sid in ids] if chosen else []
-    if chosen and chosen.set_by != "user":
+    if chosen and chosen.set_by != FocusSource.USER:
         sections = sections[:MAX_FOCUSED]  # the user may open as many as they like
     mode = chosen.mode if chosen else FOCUSED
-    set_by = chosen.set_by if chosen else "rule"
-    if mode == FOCUSED and not sections and set_by != "user":
-        sections, set_by = rule_sections(doc, questions, changed), "rule"
+    set_by = chosen.set_by if chosen else FocusSource.RULE
+    if mode == FOCUSED and not sections and set_by != FocusSource.USER:
+        sections, set_by = rule_sections(doc, questions, changed), FocusSource.RULE
     return {
         "document_id": doc.id,
         "section_ids": sections,
