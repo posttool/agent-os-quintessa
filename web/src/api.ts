@@ -30,6 +30,9 @@ export function makeApi(user: string) {
     input: (content: string, kind = "text") => call<{ session_id: string }>("POST", "/api/input", { content, kind }),
     answer: (id: string, values: Record<string, string>, dismissed = false) =>
       call("POST", `/api/ux/${encodeURIComponent(id)}`, { values, dismissed }),
+    /** Put a question aside for later; it keeps waiting, out of the stack. */
+    stash: (id: string) => call("POST", `/api/ux/${encodeURIComponent(id)}/stash`),
+    unstash: (id: string) => call("POST", `/api/ux/${encodeURIComponent(id)}/unstash`),
     /** section_ids null drops the user's choice so the agent's focus returns. */
     view: (document_id: string, section_ids: string[] | null, mode: ViewMode = "focused") =>
       call<DocView>("POST", "/api/view", { document_id, section_ids, mode }),

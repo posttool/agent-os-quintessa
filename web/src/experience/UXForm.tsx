@@ -1,21 +1,22 @@
 import { useState } from "react";
 import type { UXRequest } from "../types";
 
-/** Generated UI from the agent, drawn by the skin. Answers go back to the
- * reasoning loop that is waiting on this request. */
+/** The fields and answer buttons of a question from the agent, drawn by the
+ * skin inside the question sheet. Answers go back to the reasoning loop that
+ * is waiting on this request; skipping and stashing belong to the sheet. */
 export default function UXForm({ request, onAnswer }: {
   request: UXRequest;
-  onAnswer: (values: Record<string, string>, dismissed?: boolean) => void;
+  onAnswer: (values: Record<string, string>) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
+  // option fields where the user is typing their own answer instead
+  const [own, setOwn] = useState<Record<string, boolean>>({});
   const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
   const confirms = request.fields.filter((f) => f.kind === "confirm");
   const buttons = request.fields.filter((f) => f.kind === "button");
 
   return (
     <div className="ux">
-      <div className="kind">{request.purpose === "permission" ? "Needs your OK" : "Quick question"}</div>
-      <div className="prompt">{request.prompt}</div>
       {request.fields.map((f) => {
         switch (f.kind) {
           case "display_text":
@@ -37,9 +38,16 @@ export default function UXForm({ request, onAnswer }: {
                 {f.label && <div className="fieldlabel">{f.label}</div>}
                 <div className="choices">
                   {f.options.map((o) => (
-                    <button key={o} className={values[f.name] === o ? "on" : ""} onClick={() => set(f.name, o)}>{o}</button>
+                    <button key={o} className={!own[f.name] && values[f.name] === o ? "on" : ""}
+                      onClick={() => { setOwn((x) => ({ ...x, [f.name]: false })); set(f.name, o); }}>{o}</button>
                   ))}
+                  <button className={`other ${own[f.name] ? "on" : ""}`}
+                    onClick={() => { setOwn((x) => ({ ...x, [f.name]: true })); set(f.name, ""); }}>Something else…</button>
                 </div>
+                {own[f.name] && (
+                  <input autoFocus placeholder="Say what you'd like" value={values[f.name] ?? ""}
+                    onChange={(e) => set(f.name, e.target.value)} />
+                )}
               </div>
             );
           default:
@@ -47,7 +55,6 @@ export default function UXForm({ request, onAnswer }: {
         }
       })}
       <div className="actions">
-        <button onClick={() => onAnswer(values, true)}>Not now</button>
         {confirms.length > 0 ? (
           <>
             <button onClick={() => onAnswer({ ...values, ...Object.fromEntries(confirms.map((c) => [c.name, "no"])) })}>No</button>

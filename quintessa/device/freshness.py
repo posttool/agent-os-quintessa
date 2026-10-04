@@ -31,8 +31,10 @@ def staleness(runtime: "AgentRuntime", card: BriefItem) -> str:
 def brief_context(runtime: "AgentRuntime") -> dict[str, Any]:
     """What the brief shows now and which questions wait on the user, for the
     agent to read before it adds anything, highest salience first (expired
-    cards are dropped first)."""
+    cards are dropped first). A stashed question is one the user put aside
+    for later; it still waits."""
     runtime.device.prune_brief(now())
+    runtime.prune_stash()
     cards = [
         {
             "id": b.id,
@@ -52,7 +54,8 @@ def brief_context(runtime: "AgentRuntime") -> dict[str, Any]:
         for b in runtime.device.state.brief
     ]
     questions = [
-        {"id": r.id, "prompt": r.prompt, "topic_id": r.topic_id, "asked_at": r.created_at}
+        {"id": r.id, "prompt": r.prompt, "topic_id": r.topic_id, "asked_at": r.created_at,
+         "stashed": runtime.device.is_stashed(r.id)}
         for r in runtime.ux.pending.values()
     ]
     return to_dict({"brief": cards, "questions_waiting": questions})  # plain JSON, for Jev too

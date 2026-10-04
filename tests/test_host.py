@@ -76,7 +76,7 @@ async def test_restart_stops_interrupted_sessions_and_resumes_processes(script, 
     script.on("decide", decide("tool_use"), decide("generative_ui"))
     script.on("capability:tool_use", call("food_delivery", "checkout"))
     script.on("tool:food_delivery.checkout", {"status": "in_progress", "result": "placed", "progress_stages": ["cooking", "delivered"]})
-    script.on("capability:generative_ui", {"prompt": "Tip?", "purpose": "information", "fields": [],
+    script.on("capability:generative_ui", {"prompt": "Tip?", "purpose": "information", "context": "", "fields": [],
                                            "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None})
     host = make_host(script, backend)
     agent = await host.agent("maya")
@@ -171,7 +171,7 @@ async def test_clear_is_per_user_and_durable(script, make_host, make_backend):
 
 async def test_answers_go_to_the_right_user(script, make_host):
     script.on("decide", decide("generative_ui"))
-    script.on("capability:generative_ui", {"prompt": "Which?", "purpose": "information", "fields": [],
+    script.on("capability:generative_ui", {"prompt": "Which?", "purpose": "information", "context": "", "fields": [],
                                            "document_id": None, "section_id": None, "topic_id": None, "tool": None, "function": None})
     host = make_host(script, InMemoryStateBackend())
     session = await host.submit("maya", InputEvent(InputKind.TEXT, "x"))

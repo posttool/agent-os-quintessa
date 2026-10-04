@@ -9,6 +9,10 @@
   --line: #e2e0da;
   --glow: #3b5bdb;
   --hot: #d9480f;
+  --card: #ffffff;
+  --peek-1: #efede8;
+  --peek-2: #e4e2dc;
+  --on-glow: #ffffff;
   --ok: #2b8a3e;
   font-family: Inter, system-ui, -apple-system, sans-serif;
   color: var(--ink);
@@ -183,3 +187,52 @@ button, input { font: inherit; color: inherit; }
 .sheet-args { font-size: 11.5px; color: var(--ink-3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .sheet-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .sheet-buttons button { border: 1px solid var(--line); background: var(--glass); border-radius: 14px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+
+/* every question is answered in the question sheet: a deck, top card first */
+.island.tappable { cursor: pointer; }
+.brief-item.stack { box-shadow: 0 6px 0 -3px var(--peek-1), 0 12px 0 -6px var(--peek-2); margin-bottom: 10px; }
+.brief-item .more { display: block; font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.brief-item .count {
+  min-width: 22px; height: 22px; border-radius: 11px; padding: 0 7px; display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; background: var(--glow); color: var(--on-glow);
+}
+.stash-chip {
+  justify-self: center; border: 1px dashed var(--ink-3); background: transparent; border-radius: 14px;
+  padding: 5px 12px; font-size: 12px; color: var(--ink-2); cursor: pointer;
+}
+.waiting-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--ink);
+  background: var(--glass); border: 1px solid var(--glow); border-radius: 14px; padding: 9px 14px;
+}
+.waiting-row .kind { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--glow); flex: none; }
+.waiting-row .text { flex: 1; font-size: 13.5px; }
+.waiting-row .cta { color: var(--ink-3); font-size: 16px; }
+.deck-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.deck-head .kind { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--glow); }
+.deck-count { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.deck-count button {
+  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--glass);
+  cursor: pointer; font-size: 15px; line-height: 1; padding: 0;
+}
+.deck-count button:disabled { opacity: 0.35; cursor: default; }
+.deck-stack { position: relative; display: grid; }
+.deck-stack.behind-1 { margin-top: 8px; }
+.deck-stack.behind-2 { margin-top: 16px; }
+.deck-peek { position: absolute; height: 30px; border-radius: 20px 20px 0 0; border: 1px solid var(--line); border-bottom: none; }
+.deck-peek.peek-1 { top: -8px; left: 10px; right: 10px; background: var(--peek-1); }
+.deck-peek.peek-2 { top: -16px; left: 20px; right: 20px; background: var(--peek-2); }
+.deck-card {
+  position: relative; display: grid; gap: 10px; padding: 14px; border-radius: 20px;
+  background: var(--card); border: 1px solid var(--line); animation: deck-in .22s ease-out;
+}
+@keyframes deck-in { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+.deck-why { margin: -4px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.4; }
+.deck-card .ux { background: none; border: none; box-shadow: none; padding: 0; }
+.deck-card .choices { flex-direction: column; }
+.deck-card .choices button { text-align: left; padding: 10px 14px; border-radius: 14px; font-size: 14px; }
+.deck-card .choices button.other { color: var(--ink-2); border-style: dashed; }
+.deck-card .choices button.other.on { color: var(--on-glow); border-style: solid; }
+.deck-card .choices + input { margin-top: 8px; }
+.deck-card .ux .actions button { padding: 10px 18px; }
+.waiting-row.stashed { border-style: dashed; border-color: var(--ink-3); }
+.waiting-row.stashed .kind { color: var(--ink-3); }

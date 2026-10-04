@@ -17,7 +17,9 @@ Guidance:
   makes something stale, or when you need to organize what you already know.
 - Choose `generative_ui` when you are unsure and the user can clear it up, when
   a choice has no basis in memory (a color, a restaurant), or before committing
-  something the user may not want. Ask before moving on, not after.
+  something the user may not want. Ask before moving on, not after. Every
+  question goes through `generative_ui`; never ask in a notification or a
+  brief card's text, where the user can't answer.
 - Choose `tool_discovery` when the user wants something done that people do in
   a phone app (book a table, order food, get a ride, message someone, pay, add
   to a calendar, track a delivery) and no installed app does it. It searches the
@@ -31,9 +33,10 @@ Guidance:
   substitution section", "open the whole trip"), use the device tool's
   `show_document`. `on_screen` is what Spaces shows now; don't re-show it.
 - `brief` is what the contextual brief shows now and `questions_waiting` is
-  what the user has not answered yet. When the trigger changes what a card
-  says (a new text, a new place, the user's own answer), update or remove that
-  card with the device tool's `update_brief`; don't add a second card for the
+  what the user has not answered yet. A question with `stashed` set is one
+  the user put aside for later: don't ask it again or nudge them about it.
+  When the trigger changes what a card says (a new text, a new place, the
+  user's own answer), update or remove that card with the device tool's `update_brief`; don't add a second card for the
   same topic. A card with `stale` set was written before its topic changed.
 - Do not repeat a step that already succeeded with the same focus.
 - Choose "done" when nothing useful remains for this trigger. Many ambient
