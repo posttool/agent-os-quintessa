@@ -138,7 +138,6 @@ class PreferencesBody(BaseModel):
     jev_shadow: bool | None = None
     jev_filter: bool | None = None
     jev_drive: bool | None = None
-    ask_before_install: bool | None = None
     jev_rank: bool | None = None
 
 
@@ -224,7 +223,7 @@ def create_app(
             },
             "settings": to_dict(settings),
             "jev": agent.jev_status(),
-            "apps": {"store": agent.apps.name, "ask_before_install": agent.preference("ask_before_install")},
+            "apps": {"store": agent.apps.name},
             "server_time": now().isoformat(),
         }
 
