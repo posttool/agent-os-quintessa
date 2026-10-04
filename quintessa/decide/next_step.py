@@ -5,12 +5,11 @@ from typing import TYPE_CHECKING, Any
 
 from quintessa.decide.system_one import SystemOneClient, SystemOneError, choice
 from quintessa.executors.common import controller_context
-from quintessa.models import ReasoningSession, ShadowDecision
+from quintessa.models import DONE, ReasoningSession, ShadowDecision
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
 
-DONE = "done"
 QUESTION = "next_step"
 INSTRUCTIONS = (
     "A personal agent is working through what to do about the trigger, one step at a time. "
@@ -25,8 +24,9 @@ DONE_WHEN = (
 
 class NextStepDecider:
     """Asks a System One model which capability should run next, as a
-    Choice over the capabilities and "done". Used in shadow mode: the LLM
-    still decides, and this answer is recorded beside it."""
+    Choice over the capabilities and "done". In shadow mode the LLM still
+    decides and this answer is recorded beside it; when the user lets Jev
+    drive, the loop follows it."""
 
     def __init__(self, client: SystemOneClient):
         self.client = client
@@ -47,7 +47,7 @@ class NextStepDecider:
         context.pop("capabilities")
         return context
 
-    async def shadow(self, runtime: AgentRuntime, session: ReasoningSession) -> ShadowDecision:
+    async def ask(self, runtime: AgentRuntime, session: ReasoningSession) -> ShadowDecision:
         """Never raises: a failed call is recorded with its error."""
         decision = ShadowDecision(step_index=len(session.steps), llm_choice="", model=self.client.label)
         started = time.perf_counter()

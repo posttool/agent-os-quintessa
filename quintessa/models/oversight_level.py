@@ -7,9 +7,9 @@ class OversightLevel(str, Enum):
     AUTO              run without asking
     AUTO_FROM_MEMORY  run, filling arguments from memory
     CONFIRM_ONCE      ask the first time; the answer is kept in memory
-    ALWAYS_ASK        needs a grant within the current reasoning chain (for
+    ALWAYS_ASK        needs a grant within the current reasoning session (for
                       example spending money); a grant given earlier in the
-                      same chain carries forward
+                      same session carries forward
     """
 
     AUTO = "auto"

@@ -9,7 +9,7 @@ from quintessa.models.trigger_spec import TriggerSpec
 
 @dataclass
 class Topic:
-    """An entry in the index of the user's world (a "card"). Topics nest via
+    """An entry in the topic index of the user's world. Topics nest via
     parent_id and carry the metadata the agent uses to decide when to show them."""
 
     id: str

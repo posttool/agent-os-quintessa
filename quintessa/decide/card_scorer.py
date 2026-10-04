@@ -66,7 +66,7 @@ def normalized(answer: dict[str, Any], levels: int) -> float:
     return min(max(float(answer["score"]) / (levels - 1), 0.0), 1.0)
 
 
-class BriefRanker:
+class CardScorer:
     def __init__(self, client: SystemOneClient):
         self.client = client
 

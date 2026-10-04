@@ -15,7 +15,7 @@ from quintessa.models.trace_step import TraceStep
 @dataclass
 class ReasoningSession:
     """One run of the reasoning loop, started by one trigger. Its steps are
-    the trace; its permissions carry forward to later steps in the chain."""
+    the trace; its permissions carry forward to later steps in the session."""
 
     trigger: InputEvent
     status: SessionStatus = SessionStatus.RUNNING

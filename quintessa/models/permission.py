@@ -9,7 +9,7 @@ from quintessa.clock import now
 @dataclass
 class Permission:
     """A user's answer at a decision boundary. Session-scoped grants carry
-    forward through the rest of a reasoning chain; persistent ones are kept
+    forward through the rest of a reasoning session; persistent ones are kept
     in memory for future reasoning."""
 
     tool: str

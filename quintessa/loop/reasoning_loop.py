@@ -12,8 +12,8 @@ from quintessa.executors import EXECUTORS, StepContext
 from quintessa.executors.common import JSON_INSTRUCTION, controller_context
 from quintessa.llm import LLMUnavailableError
 from quintessa.llm import schema as s
-from quintessa.loop.brief_refresh import refresh_brief, score_brief
-from quintessa.models import ReasoningSession, SessionStatus, StepDecision, TraceStep
+from quintessa.loop.brief_refresh import refresh_brief, score_cards
+from quintessa.models import DONE, ReasoningSession, SessionStatus, StepDecision, TraceStep
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
@@ -24,12 +24,10 @@ USER_WAITING_SECONDS = 120
 
 log = logging.getLogger(__name__)
 
-DONE = "done"
-
 
 class AgentReasoningLoop:
-    """Chain-of-thought control loop. Each step the model picks one capability
-    (or decides the chain is done); the capability runs; its result joins the
+    """Runs one reasoning session. Each step the controller picks one
+    capability (or decides the session is done); the capability runs; its result joins the
     session context for the next decision. Every step is kept as a trace."""
 
     def __init__(self, runtime: AgentRuntime, session: ReasoningSession):
@@ -49,9 +47,9 @@ class AgentReasoningLoop:
     async def decide(self) -> tuple[StepDecision, str, str, str]:
         """The next step, the island's status words, the model that chose
         and who decided ("jev" or "" for the LLM)."""
-        driver = self.runtime.driver
+        driver = self.runtime.active_driver
         if driver is not None:
-            record = await driver.shadow(self.runtime, self.session)
+            record = await driver.ask(self.runtime, self.session)
             if not record.error and record.choice in (*self.runtime.capabilities, DONE):
                 record.drove = True
                 self.session.shadow_decisions.append(record)
@@ -84,11 +82,11 @@ class AgentReasoningLoop:
             schema=self._decision_schema(),
             purpose="decide",
         )
-        shadow = self.runtime.shadow
-        if shadow is None or self.runtime.driver is not None:
+        shadow = self.runtime.active_shadow
+        if shadow is None or self.runtime.active_driver is not None:
             return await llm_call
         # asked alongside the LLM (it is usually much faster); recorded, never followed
-        result, record = await asyncio.gather(llm_call, shadow.shadow(self.runtime, self.session))
+        result, record = await asyncio.gather(llm_call, shadow.ask(self.runtime, self.session))
         record.llm_choice = result.data["capability"]
         self.session.shadow_decisions.append(record)
         return result
@@ -97,8 +95,8 @@ class AgentReasoningLoop:
         runtime, session = self.runtime, self.session
         BRIEF_SOURCE.set(session.trigger.id)  # cards written in this session remember their cause
         try:
-            if runtime.ambient_filter is not None and is_ambient(session.trigger):
-                session.prefilter = await runtime.ambient_filter.check(runtime, session.trigger)
+            if runtime.active_ambient_filter is not None and is_ambient(session.trigger):
+                session.prefilter = await runtime.active_ambient_filter.check(runtime, session.trigger)
                 if session.prefilter.skipped:  # nothing worth a step; no LLM call is made
                     session.status = SessionStatus.COMPLETE
                     return session
@@ -121,7 +119,7 @@ class AgentReasoningLoop:
             else:
                 log.info("session %s reached max steps", session.id)
             await refresh_brief(runtime, session)
-            await score_brief(runtime, session)
+            await score_cards(runtime, session)
             session.status = SessionStatus.COMPLETE
         except LLMUnavailableError as e:
             self._fail(f"LLM unavailable: {e}")

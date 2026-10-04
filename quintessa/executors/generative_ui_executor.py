@@ -80,7 +80,7 @@ def is_approval(request: UXRequest, response: UXResponse) -> bool:
 
 
 def record_permission(ctx: StepContext, request: UXRequest, response: UXResponse) -> Permission | None:
-    """A permission answer carries forward through this chain, and is kept in
+    """A permission answer carries forward through this session, and is kept in
     memory when the function only needs confirming once."""
     if request.purpose != UXPurpose.PERMISSION or not request.tool or not request.function:
         return None

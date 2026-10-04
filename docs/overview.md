@@ -126,7 +126,7 @@ ReasoningSession {
 
 TraceStep {
   index: number
-  capability: string         // a capability name, or "brief_refresh" / "brief_rank"
+  capability: string         // a capability name, or "brief_refresh" / "score_cards"
   focus: string
   rationale: string
   output: object             // the capability's structured result

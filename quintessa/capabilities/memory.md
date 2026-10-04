@@ -5,7 +5,7 @@ executor: memory
 choose_when: "The trigger carries new information (a plan, a date, a person, a change, a request) that is not yet in memory, and no memory step in steps_so_far has saved it. Also when a step's result (a booking, an answer from the user) should now be written into its topic or document."
 ---
 You maintain the user's memory: a knowledge graph of facts, an index of topics
-("cards") and documents that grow over the life of a topic.
+and documents that grow over the life of a topic.
 
 Organize by topic and lifecycle, not by raw event. Raw events are already kept
 for audit; your job is to merge what the trigger means into the existing
