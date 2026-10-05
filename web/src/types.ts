@@ -18,13 +18,21 @@ export interface Topic {
 export interface DocumentSection {
   id: string; title: string; overview: string; status: string; details: string;
   actions_taken: string[]; suggested_actions: string[]; updated_at: string;
+  /** good pictures of what the user chose in a question about this section */
+  pictures?: Picture[];
+}
+/** A picture a tool returned. Simulated services have no url: skins draw an
+ * illustration from the emoji and caption. */
+export interface Picture {
+  id: string; caption: string; kind: "photo" | "thumbnail" | "logo" | "diagram"; url: string; emoji: string;
+  width: number; height: number; source: string;
 }
 export interface KeyDate { when: string; label: string; tentative: boolean }
 export interface Doc {
   id: string; title: string; topic_id: string | null; description: string;
   status: "draft" | "active" | "waiting" | "complete" | "archived";
   progress_overview: string; sections: DocumentSection[]; links: string[]; key_dates: KeyDate[];
-  observations: string[]; created_at: string; updated_at: string;
+  observations: string[]; created_at: string; updated_at: string; pictures?: Picture[];
 }
 export interface ToolParameter { name: string; type: string; description: string; required: boolean }
 export interface ToolFunction {
@@ -70,7 +78,13 @@ export interface Session {
   steps: TraceStep[]; permissions: Permission[]; shadow_decisions?: ShadowDecision[]; ambient_filter?: AmbientFilterDecision | null;
   pending_question_id: string | null; started_at: string; ended_at: string | null;
 }
-export interface QuestionField { name: string; kind: string; label: string; options: string[] }
+/** A picture and/or a quantity for one option of a choice field. */
+export interface QuestionOption { option: string; picture: Picture | null; takes_quantity: boolean }
+export interface QuestionField {
+  name: string; kind: string; label: string; options: string[]; option_details?: QuestionOption[];
+}
+/** One option picked in a multi_option field, and how many. */
+export interface Selection { option: string; quantity: number }
 export interface Question {
   id: string; session_id: string; purpose: "disambiguation" | "permission" | "information"; prompt: string;
   fields: QuestionField[]; document_id: string | null; section_id: string | null; tool: string | null; function: string | null;

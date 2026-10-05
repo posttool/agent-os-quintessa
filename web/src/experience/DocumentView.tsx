@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Doc, DocumentSection, DocView, Question, ViewMode } from "../types";
+import type { Doc, DocumentSection, DocView, Picture, Question, ViewMode } from "../types";
+import PictureView from "./PictureView";
 import { WaitingRow } from "./QuestionDeck";
 
 /** A document in Spaces. Only the sections that matter now are expanded;
@@ -61,6 +62,7 @@ export default function DocumentView({ doc, view, questions, stashedIds, onQuest
       {full && doc.description && <p className="desc">{doc.description}</p>}
       {doc.progress_overview && <p className="desc">{doc.progress_overview}</p>}
       {!full && view?.reason && <p className="why">{view.reason}</p>}
+      <Pictures pictures={doc.pictures} />
       {loose.map((q) => <WaitingRow key={q.id} request={q} stashed={stashedIds.has(q.id)} onOpen={() => onQuestion(q)} />)}
       {dates.length > 0 && (
         <div className="block">
@@ -124,6 +126,17 @@ export default function DocumentView({ doc, view, questions, stashedIds, onQuest
   );
 }
 
+/** Good pictures of what the user chose in a question about this part of
+ * the document, newest last. */
+function Pictures({ pictures }: { pictures?: Picture[] }) {
+  if (!pictures?.length) return null;
+  return (
+    <div className={`chosen-pictures n-${Math.min(pictures.length, 4)}`}>
+      {pictures.map((p) => <PictureView key={p.id} picture={p} size="large" showCaption />)}
+    </div>
+  );
+}
+
 function SectionBlock({ section: s, focused, fresh, onFold }: {
   section: DocumentSection; focused: boolean; fresh: boolean; onFold?: () => void;
 }) {
@@ -133,6 +146,7 @@ function SectionBlock({ section: s, focused, fresh, onFold }: {
         <span>{fresh && <span className="new" />}{s.title}</span>
         {s.status && <small>{s.status}</small>}
       </h4>
+      <Pictures pictures={s.pictures} />
       {s.overview && <p>{s.overview}</p>}
       {s.details && <p>{s.details}</p>}
       {s.actions_taken.length > 0 && (

@@ -9,14 +9,16 @@ from fastapi import APIRouter, HTTPException
 from quintessa.api.bodies import AnswerBody
 from quintessa.api.deps import Agent
 from quintessa.loop.runtime import AgentRuntime
-from quintessa.models import Answer
+from quintessa.models import Answer, Selection
 
 router = APIRouter(prefix="/api")
 
 
 @router.post("/questions/{question_id}")
 async def answer(question_id: str, body: AnswerBody, agent: AgentRuntime = Agent) -> dict[str, Any]:
-    response = Answer(question_id, body.values, body.dismissed, body.surface_context)
+    selections = {name: [Selection(s.option, s.quantity) for s in picked] for name, picked in body.selections.items()}
+    values = {**{name: selection_text(picked) for name, picked in selections.items()}, **body.values}
+    response = Answer(question_id, values, selections, body.dismissed, body.surface_context)
     if not agent.answer(response):
         raise HTTPException(404, "that question is no longer waiting for an answer")
     return {"ok": True}
@@ -34,3 +36,8 @@ async def stash(question_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]
 async def unstash(question_id: str, agent: AgentRuntime = Agent) -> dict[str, Any]:
     """Back to the needs-you stack."""
     return {"ok": bool(agent.device.unstash([question_id]))}
+
+
+def selection_text(picked: list[Selection]) -> str:
+    """A multi-select answer as the agent reads it: "2 × Margherita, Coke"."""
+    return ", ".join(f"{s.quantity} × {s.option}" if s.quantity > 1 else s.option for s in picked) or "none"

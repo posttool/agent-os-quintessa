@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from quintessa.clock import now
+from quintessa.models.selection import Selection
 
 
 @dataclass
@@ -13,6 +14,9 @@ class Answer:
 
     question_id: str
     values: dict[str, str] = field(default_factory=dict)
+    # what was picked in each multi_option field, with quantities; `values`
+    # holds the same as text ("2 × Margherita, Coke")
+    selections: dict[str, list[Selection]] = field(default_factory=dict)
     dismissed: bool = False
     surface_context: str = ""  # where it was answered
     withdrawn: bool = False

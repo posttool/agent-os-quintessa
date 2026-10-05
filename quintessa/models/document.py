@@ -7,6 +7,7 @@ from quintessa.clock import now
 from quintessa.models.document_section import DocumentSection
 from quintessa.models.document_status import DocumentStatus
 from quintessa.models.key_date import KeyDate
+from quintessa.models.picture import Picture
 
 
 @dataclass
@@ -24,6 +25,8 @@ class Document:
     links: list[str] = field(default_factory=list)
     key_dates: list[KeyDate] = field(default_factory=list)
     observations: list[str] = field(default_factory=list)
+    # good pictures of what the user chose in a question about this
+    pictures: list[Picture] = field(default_factory=list)
     created_at: datetime = field(default_factory=now)
     updated_at: datetime = field(default_factory=now)
 

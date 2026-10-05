@@ -51,7 +51,15 @@ async def test_disambiguation_pauses_and_returns_to_the_document(script, make_ru
             "prompt": "Which night works?",
             "purpose": "disambiguation",
             "context": "",
-            "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tuesday", "Wednesday"]}],
+            "fields": [
+                {
+                    "name": "night",
+                    "kind": "option",
+                    "label": "Night",
+                    "options": ["Tuesday", "Wednesday"],
+                    "option_details": [],
+                }
+            ],
             "document_id": "doc-dinner",
             "section_id": "sec-time",
             "topic_id": None,
@@ -87,7 +95,7 @@ async def test_loops_run_concurrently_over_shared_memory(script, make_runtime):
             "prompt": "Color?",
             "purpose": "disambiguation",
             "context": "",
-            "fields": [{"name": "c", "kind": "option", "label": "", "options": ["red", "blue"]}],
+            "fields": [{"name": "c", "kind": "option", "label": "", "options": ["red", "blue"], "option_details": []}],
             "document_id": None,
             "section_id": None,
             "topic_id": None,

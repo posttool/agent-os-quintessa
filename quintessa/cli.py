@@ -16,7 +16,7 @@ from quintessa.llm import LLMError
 from quintessa.llm.factory import build_llm
 from quintessa.loop import AgentRuntime
 from quintessa.memory import MemoryStore
-from quintessa.models import Answer, FieldKind, InputEvent, InputKind, Question
+from quintessa.models import Answer, FieldKind, InputEvent, InputKind, Question, Selection
 from quintessa.persona import AuraPersonaClient, PersonaSimulation
 from quintessa.serde import to_dict
 from quintessa.state import StateFormatError, state_backend_from_env
@@ -26,15 +26,27 @@ from quintessa.tools.search import search_backend_from_env
 def _answer_in_terminal(runtime: AgentRuntime):
     async def ask(request: Question) -> None:
         print(f"\n? {request.prompt}")
-        values = {}
+        values, selections = {}, {}
         for field in request.fields:
             if field.kind in (FieldKind.DISPLAY_TEXT, FieldKind.BUTTON):
                 continue
             hint = f" {field.options}" if field.options else ""
+            if field.kind == FieldKind.MULTI_OPTION:
+                hint += " (comma separated, '2 x Item' for a quantity)"
             values[field.name] = await asyncio.to_thread(input, f"  {field.label or field.name}{hint}: ")
-        runtime.answer(Answer(request.id, values))
+            if field.kind == FieldKind.MULTI_OPTION:
+                selections[field.name] = _parse_selections(values[field.name])
+        runtime.answer(Answer(request.id, values, selections))
 
     runtime.questions.on_question(lambda r: asyncio.get_running_loop().create_task(ask(r)))
+
+
+def _parse_selections(text: str) -> list[Selection]:
+    picked = []
+    for part in filter(None, (p.strip() for p in text.split(","))):
+        count, sep, rest = part.partition(" x ")
+        picked.append(Selection(rest.strip(), int(count)) if sep and count.isdigit() else Selection(part))
+    return picked
 
 
 def _print_session(session) -> None:

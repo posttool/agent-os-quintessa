@@ -158,7 +158,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
       stash={deck.stash}
       topics={topics}
       docs={docs}
-      onAnswer={(r, values) => void act(() => api.answer(r.id, values))}
+      onAnswer={(r, values, selections) => void act(() => api.answer(r.id, values, false, selections))}
       onSkip={(r) => void act(() => api.answer(r.id, {}, true))}
       onStash={(rs) => rs.forEach((r) => void act(() => api.stash(r.id)))}
       onUnstash={(r) => void act(() => api.unstash(r.id))}

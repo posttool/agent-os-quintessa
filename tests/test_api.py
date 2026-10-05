@@ -58,7 +58,9 @@ async def test_answering_a_question(api, script):
             "prompt": "Which night?",
             "purpose": "disambiguation",
             "context": "",
-            "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"]}],
+            "fields": [
+                {"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"], "option_details": []}
+            ],
             "document_id": None,
             "section_id": None,
             "topic_id": None,
@@ -308,7 +310,9 @@ async def test_stashing_a_question(api, script):
             "prompt": "Which night?",
             "purpose": "disambiguation",
             "context": "So I can book a table.",
-            "fields": [{"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"]}],
+            "fields": [
+                {"name": "night", "kind": "option", "label": "Night", "options": ["Tue", "Wed"], "option_details": []}
+            ],
             "document_id": None,
             "section_id": None,
             "topic_id": "topic-dinner",

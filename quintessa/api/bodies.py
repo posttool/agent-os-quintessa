@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quintessa.device import FOCUSED
 from quintessa.models import InputKind, OversightLevel, ToolKind
@@ -15,8 +15,14 @@ class InputBody(BaseModel):
     device: str = "phone"
 
 
+class SelectionBody(BaseModel):
+    option: str
+    quantity: int = Field(1, ge=1)
+
+
 class AnswerBody(BaseModel):
     values: dict[str, str] = {}
+    selections: dict[str, list[SelectionBody]] = {}  # multi_option fields
     dismissed: bool = False
     surface_context: str = ""
 

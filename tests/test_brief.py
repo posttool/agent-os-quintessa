@@ -87,7 +87,10 @@ async def test_a_tapped_action_carries_its_approval(script, make_runtime):
     script.on("decide", decide("tool_use"), decide("generative_ui"), decide("tool_use"))
     script.on("capability:tool_use", call("food_delivery", "checkout", {"total": "32"}), call("groceries", "checkout"))
     script.on("capability:generative_ui", permission_ui("groceries", "checkout"))
-    script.on("tool:food_delivery.checkout", {"status": "done", "result": "order placed", "progress_stages": []})
+    script.on(
+        "tool:food_delivery.checkout",
+        {"status": "done", "result": "order placed", "progress_stages": [], "pictures": []},
+    )
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool(OversightLevel.ALWAYS_ASK))
     groceries = delivery_tool()

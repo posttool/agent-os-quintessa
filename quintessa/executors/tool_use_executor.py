@@ -59,9 +59,11 @@ class ToolUseExecutor:
                 ctx.runtime.ambient.follow(subscription)
                 output["subscription_id"] = subscription.id
             self._note_action(ctx, call, f"{tool.name}.{function.name}: {outcome.status} - {outcome.result}")
-            return StepOutcome(
-                output, f"{tool.name}.{function.name} -> {outcome.status}: {outcome.result}", result.model
-            )
+            summary = f"{tool.name}.{function.name} -> {outcome.status}: {outcome.result}"
+            if outcome.pictures:
+                listed = "; ".join(f"{p.id} '{p.caption}' ({p.kind.value})" for p in outcome.pictures)
+                summary += f"\nPictures: {listed}"
+            return StepOutcome(output, summary, result.model)
 
         verdict = gate(ctx.session, store, tool, function)
         if verdict == Gate.DECLINED:
