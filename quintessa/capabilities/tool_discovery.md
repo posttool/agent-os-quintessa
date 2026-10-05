@@ -16,8 +16,9 @@ First call (you get the focus, memory and installed tools):
 - Otherwise give 1 to 3 short app store searches in `app_queries`, such as
   "restaurant reservations" or the name of an app the user mentioned or is known
   (from memory) to use.
-- List in `uninstall` apps you installed earlier (created_by "agent") that are no
-  longer useful. Never uninstall an app the user installed.
+- Leave `uninstall` empty unless the user, in this request, asked to uninstall
+  or remove an app; then list exactly the apps they named. Never uninstall an
+  app on your own, even one you installed that seems no longer useful.
 
 Second call (you also get `candidates`, the store's results):
 - Pick the app or apps to install in `install`, by `app_id`. Prefer an app the

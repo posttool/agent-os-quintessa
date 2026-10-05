@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from importlib import resources
 
 from quintessa.apps.installer import install_app, installed_app, uninstall_app
@@ -9,18 +10,20 @@ from quintessa.executors.common import call_capability
 from quintessa.executors.step_context import StepContext
 from quintessa.executors.step_outcome import StepOutcome
 from quintessa.llm import schema as s
-from quintessa.models import AppListing, Tool, ToolAuthor, ToolKind
+from quintessa.models import AppListing, InputKind, ReasoningSession, Tool, ToolKind
 from quintessa.serde import to_dict
 from quintessa.tools.definitions import FUNCTION_SCHEMA, functions_from
 
 _KINDS = [k.value for k in ToolKind if k not in (ToolKind.BUILTIN, ToolKind.APP)]
 RESULTS_PER_QUERY = 8
+# Words a user's own request needs before the agent may remove an app.
+_UNINSTALL_ASK = re.compile(r"\b(uninstall|remove|delete|get rid of)\b", re.IGNORECASE)
 
 SEARCH_SCHEMA = s.obj(
     {
         "reuse": s.array(s.string(), "Names of installed apps or tools that already fit."),
         "app_queries": s.array(s.string(), "1 to 3 app store searches; empty when nothing new is needed."),
-        "uninstall": s.array(s.string(), "Names of agent-installed apps that are no longer useful."),
+        "uninstall": s.array(s.string(), "Apps the user asked to uninstall in this request; empty otherwise."),
         "notes": s.string(),
     }
 )
@@ -49,6 +52,15 @@ CHOOSE_SCHEMA = s.obj(
 
 def tool_suggestions() -> list[dict]:
     return json.loads(resources.files("quintessa.samples").joinpath("tool_suggestions.json").read_text())
+
+
+def user_asked_to_uninstall(session: ReasoningSession) -> bool:
+    trigger = session.trigger
+    return (
+        trigger.source == "user"
+        and trigger.kind in (InputKind.TEXT, InputKind.SPEECH)
+        and bool(_UNINSTALL_ASK.search(trigger.content))
+    )
 
 
 class ToolDiscoveryExecutor:
@@ -109,11 +121,15 @@ class ToolDiscoveryExecutor:
 
     @staticmethod
     def _uninstall(ctx: StepContext, names: list[str]) -> list[str]:
+        """Remove apps only when the user's own request asked for it; the
+        agent never uninstalls on its own."""
+        if not user_asked_to_uninstall(ctx.session):
+            return []
         store = ctx.runtime.store
         removed = []
         for name in names:
             tool = store.tools.get(name)
-            if tool and tool.kind == ToolKind.APP and tool.created_by == ToolAuthor.AGENT and tool.listing:
+            if tool and tool.kind == ToolKind.APP and tool.listing:
                 uninstall_app(store, tool.listing.app_id)
                 removed.append(name)
         return removed
