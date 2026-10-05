@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from quintessa.clock import now, parse_time
@@ -20,6 +21,7 @@ from quintessa.serde import to_dict
 
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
+    from quintessa.memory.store import MemoryStore
 
 log = logging.getLogger(__name__)
 
@@ -58,14 +60,29 @@ SCHEMA = s.obj(
 )
 
 
+def question_changed(store: MemoryStore, question: Question, since: datetime) -> bool:
+    """New information reached what the question is about after `since`: its
+    topic, the section it asks about, or (with no section) its document."""
+    topic = store.topics.get(question.topic_id) if question.topic_id else None
+    if topic is not None and topic.updated_at > since:
+        return True
+    doc = store.documents.get(question.document_id) if question.document_id else None
+    if doc is None:
+        return False
+    section = doc.section(question.section_id) if question.section_id else None
+    if section is not None:
+        return section.updated_at > since
+    return doc.updated_at > since
+
+
 def _stale_questions(runtime: AgentRuntime) -> list[Question]:
-    store = runtime.store
-    stale = []
-    for request in runtime.questions.pending.values():
-        topic = store.topics.get(request.topic_id) if request.topic_id else None
-        if topic is not None and topic.updated_at > request.created_at:
-            stale.append(request)
-    return stale
+    """Waiting questions whose subject changed since they were asked, or
+    since the last refresh kept them."""
+    return [
+        q
+        for q in runtime.questions.pending.values()
+        if question_changed(runtime.store, q, max(q.created_at, q.checked_at or q.created_at))
+    ]
 
 
 async def refresh_brief(runtime: AgentRuntime, session: ReasoningSession) -> TraceStep | None:
@@ -90,7 +107,15 @@ async def refresh_brief(runtime: AgentRuntime, session: ReasoningSession) -> Tra
         "now": now(),
         "cards": [{**to_dict(card_view(b)), "changed": _topic(topics.get(b.topic_id))} for b in cards],
         "questions": [
-            {"id": q.id, "prompt": q.prompt, "asked_at": q.created_at, "changed": _topic(topics.get(q.topic_id))}
+            {
+                "id": q.id,
+                "prompt": q.prompt,
+                "context": q.context,
+                "options": [o for f in q.fields for o in f.options],
+                "asked_at": q.created_at,
+                "changed": _topic(topics.get(q.topic_id)),
+                "section": _section(runtime.store, q),
+            }
             for q in questions
         ],
         "memory": runtime.store.snapshot(),
@@ -110,7 +135,7 @@ async def refresh_brief(runtime: AgentRuntime, session: ReasoningSession) -> Tra
         return step
     step.model = result.model
     lines += _apply_cards(runtime, result.data["cards"], seen)
-    lines += _apply_questions(runtime, result.data["questions"], {q.id for q in questions})
+    lines += _apply_questions(runtime, result.data["questions"], questions)
     step.output = result.data
     step.summary = "; ".join(lines) or "nothing to change"
     step.ended_at = now()
@@ -150,11 +175,14 @@ def _apply_cards(runtime: AgentRuntime, verdicts: list[dict[str, Any]], seen: di
     return lines
 
 
-def _apply_questions(runtime: AgentRuntime, verdicts: list[dict[str, Any]], asked: set[str]) -> list[str]:
+def _apply_questions(runtime: AgentRuntime, verdicts: list[dict[str, Any]], asked: list[Question]) -> list[str]:
     lines = []
-    for v in verdicts:
-        if v["withdraw"] and v["id"] in asked and runtime.questions.withdraw(v["id"], v["reason"]):
-            lines.append(f"withdrew question {v['id']}: {v['reason']}")
+    withdraw = {v["id"]: v["reason"] for v in verdicts if v["withdraw"]}
+    for q in asked:
+        if q.id in withdraw and runtime.questions.withdraw(q.id, withdraw[q.id]):
+            lines.append(f"withdrew question {q.id}: {withdraw[q.id]}")
+        else:  # kept: not asked about again until something else changes
+            q.checked_at = now()
     return lines
 
 
@@ -166,6 +194,19 @@ def _step(session: ReasoningSession, lines: list[str]) -> TraceStep:
     step.ended_at = now()
     session.steps.append(step)
     return step
+
+
+def _section(store: MemoryStore, question: Question) -> dict[str, Any] | None:
+    doc = store.documents.get(question.document_id) if question.document_id else None
+    section = doc.section(question.section_id) if doc and question.section_id else None
+    if section is None:
+        return None
+    return {
+        "title": section.title,
+        "overview": section.overview,
+        "status": section.status,
+        "updated_at": section.updated_at,
+    }
 
 
 def _topic(topic) -> dict[str, Any] | None:

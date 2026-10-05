@@ -332,3 +332,93 @@ async def test_seeing_a_topic_does_not_make_its_card_stale(script, make_runtime)
     runtime.device.set_brief([Card("Call Mom", "topic-mom")])
     apply_operations(runtime.store, [{"op": "mark_topic_seen", "id": "topic-mom"}], None)
     assert brief_context(runtime)["brief"][0]["stale"] == ""
+
+
+async def test_a_question_goes_stale_when_its_section_changes(script, make_runtime):
+    """News written into the section a question asks about (not only its
+    topic) gets the question looked at again; once kept, it is not sent to
+    the refresh again until something else changes."""
+    from test_memory import section_op
+
+    script.on("decide", decide("generative_ui"))
+    script.on(
+        "capability:generative_ui",
+        {
+            **permission_ui(None, None),
+            "purpose": "disambiguation",
+            "prompt": "Tuesday or Thursday for the cleaning?",
+            "document_id": "doc-dentist",
+            "section_id": "sec-confirm",
+        },
+    )
+    runtime = make_runtime(script)
+    seed(runtime)
+    asking = runtime.submit(InputEvent(InputKind.TEXT, "book the dentist"))
+    await until(lambda: asking.status == SessionStatus.WAITING_FOR_USER)
+    question = next(iter(runtime.questions.pending.values()))
+    assert question.topic_id == "topic-dentist"
+
+    script.on("decide", decide("memory"))
+    script.on("capability:memory", {"summary": "s", "operations": [section_op("sec-confirm", "doc-dentist")]})
+    script.on("brief_refresh", refresh())
+    news = runtime.submit(InputEvent(InputKind.MESSAGE, "Dentist: we only have Friday open", source="ambient"))
+    await until(lambda: news.status == SessionStatus.COMPLETE)
+
+    sent = script.prompts["brief_refresh"][0]["questions"]
+    assert [q["id"] for q in sent] == [question.id]
+    assert sent[0]["section"]["title"] == "Pick a place"
+    assert question.checked_at is not None and question.id in runtime.questions.pending
+
+    later = runtime.submit(InputEvent(InputKind.TEXT, "what's the weather"))
+    await until(lambda: later.status == SessionStatus.COMPLETE)
+    assert len(script.prompts["brief_refresh"]) == 1  # kept; nothing new since
+
+
+async def test_a_withdrawn_approval_is_not_a_decline(script, make_runtime):
+    """New information can withdraw an approval whose call no longer fits;
+    the session is told why and may ask again, since the user said no to nothing."""
+    script.on("decide", decide("tool_use"))
+    script.on(
+        "capability:tool_use",
+        {**call("food_delivery", "checkout", {"dish": "pad thai"}), "topic_id": "topic-mom"},
+    )
+    runtime = make_runtime(script)
+    seed(runtime)
+    asking = runtime.submit(InputEvent(InputKind.TEXT, "order pad thai"))
+    await until(lambda: asking.status == SessionStatus.WAITING_FOR_USER)
+    question = next(iter(runtime.questions.pending))
+
+    runtime.questions.withdraw(question, "the restaurant closed")
+    await until(lambda: asking.status == SessionStatus.COMPLETE)
+
+    assert asking.permissions == []
+    assert "withdrew it before the user answered (the restaurant closed)" in asking.steps[0].summary
+    assert asking.steps[0].output["permission"] == "withdrawn"
+
+
+async def test_a_stashed_question_comes_back_when_its_section_changes(script, make_runtime):
+    from test_memory import section_op
+
+    script.on("decide", decide("generative_ui"))
+    script.on(
+        "capability:generative_ui",
+        {
+            **permission_ui(None, None),
+            "purpose": "disambiguation",
+            "prompt": "Tuesday or Thursday?",
+            "document_id": "doc-dentist",
+            "section_id": "sec-confirm",
+        },
+    )
+    runtime = make_runtime(script)
+    seed(runtime)
+    asking = runtime.submit(InputEvent(InputKind.TEXT, "book the dentist"))
+    await until(lambda: asking.status == SessionStatus.WAITING_FOR_USER)
+    question = next(iter(runtime.questions.pending))
+    runtime.stash_question(question)
+    assert runtime.prune_stash() == []
+
+    from quintessa.memory.apply import apply_operations
+
+    apply_operations(runtime.store, [section_op("sec-confirm", "doc-dentist")], None)
+    assert runtime.prune_stash() == [question]

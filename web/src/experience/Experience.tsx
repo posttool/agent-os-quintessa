@@ -7,7 +7,7 @@ import ShadowHost from "./ShadowHost";
 import { DEFAULT_SKIN, SKINS } from "./skins";
 import DocumentView from "./DocumentView";
 import CardSheet from "./CardSheet";
-import QuestionDeck, { QuestionStack, SheetPeek, WaitingRow, deckOrder } from "./QuestionDeck";
+import QuestionDeck, { QuestionStack, SheetPeek, WaitingRow, deckOrder, questionGroups } from "./QuestionDeck";
 
 type Act = (fn: () => Promise<unknown>) => Promise<void>;
 const PAGES = ["Discover", "Home", "Spaces"] as const;
@@ -44,8 +44,9 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
   const [page, setPage] = useState(1);
   const [openDoc, setOpenDoc] = useState<string | null>(null);
   const [sheet, setSheet] = useState<Card | null>(null);
-  // the question sheet: the waiting questions, or the stash, tapped one first
-  const [deck, setDeck] = useState<{ stash: boolean; first: string | null } | null>(null);
+  // the question sheet: the waiting questions, or the stash, tapped one
+  // first; opened from one topic's brief item, only that topic's questions
+  const [deck, setDeck] = useState<{ stash: boolean; first: string | null; group?: string | null } | null>(null);
   const pages = useRef<HTMLDivElement>(null);
   const now = useClock();
   const device = state.device;
@@ -88,6 +89,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
   const stashedIds = new Set((device.stashed ?? []).map((q) => q.question_id));
   const waiting = state.questions.filter((r) => !stashedIds.has(r.id));
   const stashed = state.questions.filter((r) => stashedIds.has(r.id));
+  const groups = questionGroups(waiting, topics, docs);
 
   function openQuestion(r: Question | null, stash = stashedIds.has(r?.id ?? "")) {
     setSheet(null);
@@ -137,10 +139,11 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
     />
   );
 
-  const deckQuestions = !deck ? [] : deckOrder(deck.stash ? stashed : waiting, deck.first);
+  const pool = !deck ? [] : deck.stash ? stashed : deck.group ? groups.find((g) => g.key === deck.group)?.questions ?? [] : waiting;
+  const deckQuestions = !deck ? [] : deckOrder(pool, deck.first);
   const deckView = deck && deckQuestions.length > 0 && (
     <QuestionDeck
-      key={deck.stash ? "stash" : "waiting"}
+      key={deck.stash ? "stash" : deck.group ?? "waiting"}
       questions={deckQuestions}
       stash={deck.stash}
       topics={topics}
@@ -163,7 +166,10 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
   const briefList = (
     <div className="brief">
       {waiting.length === 0 && live.length === 0 && <div className="brief-empty">Nothing needs you right now.</div>}
-      <QuestionStack questions={waiting} onOpen={() => openQuestion(waiting[0], false)} />
+      {groups.map((g) => (
+        <QuestionStack key={g.key} group={g}
+          onOpen={() => { setSheet(null); setDeck({ stash: false, first: g.questions[0].id, group: g.key }); }} />
+      ))}
       {live.map((b) => (
         <button key={b.id} className={`brief-item ${b.urgency}`} onClick={() => tapCard(b)}>
           <span className="mark" />
