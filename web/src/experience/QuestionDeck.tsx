@@ -106,15 +106,37 @@ export default function QuestionDeck({ questions, stash, topics, docs, onAnswer,
 
 const KIND: Partial<Record<Question["purpose"], string>> = { permission: "Needs your OK", next_step: "Next step" };
 
-/** The agent waits on the user: a stack of the questions waiting, with the
- * oldest on top, that opens the deck. */
-export function QuestionStack({ questions, onOpen }: { questions: Question[]; onOpen: () => void }) {
+/** Waiting questions about one thing: a topic, else a document, else
+ * nothing in particular. */
+export type QuestionGroup = { key: string; label: string | null; questions: Question[] };
+
+/** Split waiting questions by what they are about, so each brief item holds
+ * only one topic's questions. Groups keep the order of their oldest question. */
+export function questionGroups(questions: Question[], topics: Map<string, Topic>, docs: Doc[]): QuestionGroup[] {
+  const groups = new Map<string, QuestionGroup>();
+  for (const q of questions) {
+    const doc = q.document_id ? docs.find((d) => d.id === q.document_id) : undefined;
+    const topicId = q.topic_id ?? doc?.topic_id ?? null;
+    const key = topicId ? `topic:${topicId}` : doc ? `doc:${doc.id}` : "other";
+    const label = (topicId ? topics.get(topicId)?.title : undefined) ?? doc?.title ?? null;
+    const group = groups.get(key) ?? { key, label, questions: [] };
+    group.questions.push(q);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
+
+/** The agent waits on the user about one topic: a stack of that topic's
+ * waiting questions, with the oldest on top, that opens the deck. */
+export function QuestionStack({ group, onOpen }: { group: QuestionGroup; onOpen: () => void }) {
+  const { questions, label } = group;
   if (questions.length === 0) return null;
   const many = questions.length > 1;
   return (
     <button className={`brief-item needs-you ${many ? "stack" : ""}`} onClick={onOpen}>
       <span className="mark" />
       <span className="text">
+        {label && <span className="about">{label}</span>}
         {questions[0].prompt}
         {many && <span className="more">{questions.length - 1} more {questions.length === 2 ? "question" : "questions"}</span>}
       </span>

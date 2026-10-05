@@ -13,7 +13,9 @@ from quintessa.capabilities.loader import load_capabilities, load_prompt
 from quintessa.decide import AmbientFilter, CardScorer, JevSwitches, NextStepDecider
 from quintessa.device import DeviceSurface, DocumentFocus, FocusSource
 from quintessa.device.focus import is_stale, resolve_view
+from quintessa.device.stashed_question import StashedQuestion
 from quintessa.llm import ResilientLLM
+from quintessa.loop.brief_refresh import question_changed
 from quintessa.loop.question_broker import QuestionBroker
 from quintessa.loop.reasoning_loop import AgentReasoningLoop
 from quintessa.memory import MemoryStore
@@ -259,13 +261,14 @@ class AgentRuntime:
 
     def prune_stash(self) -> list[str]:
         """Drop stashed questions that stopped waiting and bring back those
-        whose topic changed since they were stashed."""
+        whose topic, section or document changed since they were stashed."""
+        pending = self.questions.pending
 
-        def changed(topic_id: str, since) -> bool:
-            topic = self.store.topics.get(topic_id)
-            return topic is not None and topic.updated_at > since
+        def changed(stashed: StashedQuestion) -> bool:
+            question = pending.get(stashed.question_id)
+            return question is not None and question_changed(self.store, question, stashed.stashed_at)
 
-        return self.device.prune_stash(set(self.questions.pending), changed)
+        return self.device.prune_stash(set(pending), changed)
 
     async def cancel_tasks(self) -> None:
         tasks = [*self._tasks, *self._follow_ups]

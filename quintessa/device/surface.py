@@ -212,14 +212,12 @@ class DeviceSurface:
     def is_stashed(self, question_id: str) -> bool:
         return any(q.question_id == question_id for q in self.state.stashed)
 
-    def prune_stash(self, waiting: set[str], topic_changed: Callable[[str, datetime], bool]) -> list[str]:
+    def prune_stash(self, waiting: set[str], changed: Callable[[StashedQuestion], bool]) -> list[str]:
         """Forget stashed questions nobody waits on any more, and bring back
-        those whose topic changed after they were stashed: that is when they
+        those whose subject changed after they were stashed: that is when they
         may matter again. Returns the ids brought back."""
         self.state.stashed = [q for q in self.state.stashed if q.question_id in waiting]
-        return self.unstash(
-            [q.question_id for q in self.state.stashed if q.topic_id and topic_changed(q.topic_id, q.stashed_at)]
-        )
+        return self.unstash([q.question_id for q in self.state.stashed if changed(q)])
 
     def show_document(
         self,

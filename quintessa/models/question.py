@@ -28,3 +28,5 @@ class Question:
     arguments: dict[str, str] = field(default_factory=dict)
     id: str = field(default_factory=lambda: new_id("q"))
     created_at: datetime = field(default_factory=now)
+    # last time a brief refresh looked at it against new information and kept it
+    checked_at: datetime | None = None

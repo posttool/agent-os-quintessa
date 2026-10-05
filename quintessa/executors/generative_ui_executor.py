@@ -141,7 +141,10 @@ def show_chosen_pictures(store: MemoryStore, question: Question, answer: Answer)
 
 def answer_summary(question: Question, answer: Answer) -> str:
     if answer.withdrawn:
-        return f"Asked '{question.prompt}', then withdrew it before the user answered ({answer.withdrawn_reason})"
+        return (
+            f"Asked '{question.prompt}', then withdrew it before the user answered ({answer.withdrawn_reason}); "
+            "ask again only if it still needs an answer"
+        )
     return f"Asked '{question.prompt}'; user answered {'dismissed' if answer.dismissed else answer.values}"
 
 

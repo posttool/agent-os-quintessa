@@ -86,6 +86,13 @@ class ToolUseExecutor:
         )
 
         async def on_answer(answer: Answer) -> StepOutcome:
+            if answer.withdrawn:  # new information outdated the ask; the user declined nothing
+                return StepOutcome(
+                    {**call, "permission": "withdrawn"},
+                    f"Asked to run {tool.name}.{function.name}, then withdrew it before the user answered "
+                    f"({answer.withdrawn_reason}); ask again only if it still fits what is known now",
+                    result.model,
+                )
             permission = record_permission(ctx.session, store, question, answer)
             if permission and permission.granted:
                 return await execute()

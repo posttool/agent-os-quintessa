@@ -341,6 +341,7 @@ Question {                   // a question
   context: string            // why the agent asks, one sentence, shown under the question
   arguments: { [name]: string }  // for a permission: the call it would run
   created_at: string
+  checked_at: string | null  // last time the brief refresh kept it against new information
 }
 
 QuestionField {              // design-system-agnostic; the skin decides how to draw it
@@ -408,7 +409,7 @@ What happens when a question is asked and answered:
 2. The user answers in the question sheet (`POST /api/questions/{id}`). The waiting session resumes with the values, and the device closes the form and returns to the document section the question came from.
 3. If the session asks another question, the same thing happens again, until the session is done.
 
-A question can also be **withdrawn**: when a later session changes the question's topic, the brief refresh may decide the news already answers it. The waiting session then resumes as if the question were dismissed, and is told why.
+A question can also be **withdrawn**: when a later session changes the question's topic, or the section it asks about (its document, when it names no section), the brief refresh looks at it again. It withdraws the question when the news answers it or makes it moot, or when its premise, options or call no longer match what is known. The waiting session then resumes as if the question were dismissed, is told why, and asks again if it still needs an answer. A withdrawn approval is not a decline, so the session may ask for that call again. A question the refresh keeps gets `checked_at` and is not looked at again until something else changes.
 
 ### Permissions
 
@@ -431,10 +432,10 @@ A grant given in a session carries forward to every later step of that session, 
 
 Every question is answered in one place, the **question sheet**: a bottom sheet holding a **deck** of the waiting questions. The top question is full size with the next two peeking behind it ("1 of N"); answering, skipping or stashing it brings up the next, and a sideways swipe moves through the deck without answering. Option fields offer "Something else…" for a typed answer.
 
-- The brief shows waiting questions as one **stack** at its top, oldest first; tapping it, a "Waiting on you" row, or the dynamic island opens the deck.
+- The brief shows waiting questions at its top as one **stack** per topic (else per document), labeled with the topic's title, oldest first. Tapping a stack opens a deck of just that topic's questions; a "Waiting on you" row, the peeking sheet or the dynamic island opens the deck of all waiting questions.
 - The sheet never opens by itself. While questions wait and no sheet is open, it **peeks** in from the bottom edge: one line with the oldest question and the count, with nothing dimmed or covered (the input bar moves up above it). Tapping it or swiping it up opens the deck.
 - **Skip** answers with `dismissed`, and the session goes on without the answer. Closing the sheet leaves the question waiting.
-- **Stash** puts a question aside: it stays unanswered and its session keeps waiting, but it leaves the stack for an "N stashed questions" chip at the end of the brief, and the agent does not ask it again. A stashed question comes back to the stack when its topic changes after it was stashed.
+- **Stash** puts a question aside: it stays unanswered and its session keeps waiting, but it leaves the stack for an "N stashed questions" chip at the end of the brief, and the agent does not ask it again. A stashed question comes back to the stack when its topic or section changes after it was stashed.
 
 ```ts
 StashedQuestion { question_id: string, topic_id: string | null, stashed_at: string }
@@ -585,7 +586,7 @@ The agent never interrupts the user: nothing takes over the screen unless the us
 
 ## The contextual brief
 
-The **brief** is a short ranked list of glanceable **cards**: calls to action, not details. The stack of questions waiting on the user leads it, then the agent's cards ordered by salience, then a chip for stashed questions. Tapping a card opens its topic's document in Spaces, focused on the section it is about; a card with no document opens the card sheet with its detail, its topic's summary, its open questions and its action.
+The **brief** is a short ranked list of glanceable **cards**: calls to action, not details. The stacks of questions waiting on the user, one per topic, lead it, then the agent's cards ordered by salience, then a chip for stashed questions. Tapping a card opens its topic's document in Spaces, focused on the section it is about; a card with no document opens the card sheet with its detail, its topic's summary, its open questions and its action.
 
 ```ts
 Card {                       // a brief card
@@ -620,7 +621,7 @@ Tapping an action starts a session that already holds the user's approval for th
 
 ### Keeping the brief true
 
-A card is a snapshot of what was true when it was written. The agent sees the current brief and the waiting questions in every step, edits single cards with `device.update_brief` (one card per topic), and gives cards an `expires_at` when they stop applying at a time. When a session changes a topic that has a card, the card becomes **stale**. At the end of the session the **brief refresh** (one model call over just the stale cards) keeps, rewrites or removes each one, and withdraws waiting questions the news answered. A sheet open on a card follows it.
+A card is a snapshot of what was true when it was written. The agent sees the current brief and the waiting questions in every step, edits single cards with `device.update_brief` (one card per topic), and gives cards an `expires_at` when they stop applying at a time. When a session changes a topic that has a card, the card becomes **stale**. At the end of the session the **brief refresh** (one model call over just the stale cards) keeps, rewrites or removes each one, and withdraws waiting questions the news answered or outdated (see Questions). A sheet open on a card follows it.
 
 ### Salience
 
