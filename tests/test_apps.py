@@ -114,7 +114,10 @@ async def test_agent_installs_an_app_then_uses_it(script, make_runtime):
     script.on("capability:tool_discovery:choose", choose("com.opentable"))
     script.on("app_manifest:com.opentable", manifest())
     script.on("capability:tool_use", call("opentable", "search", {"query": "sushi for 2 at 7"}))
-    script.on("tool:opentable.search", {"status": "done", "result": "Nobu 7:00, Sushi Ran 7:15", "progress_stages": []})
+    script.on(
+        "tool:opentable.search",
+        {"status": "done", "result": "Nobu 7:00, Sushi Ran 7:15", "progress_stages": [], "pictures": []},
+    )
     runtime = make_runtime(script)
 
     session = await runtime.run(InputEvent(InputKind.TEXT, "book sushi for two at 7"))
@@ -266,10 +269,11 @@ async def test_simulated_app_sees_its_earlier_calls(script, make_runtime):
     )
     script.on(
         "tool:uber_eats.search",
-        {"status": "done", "result": "Kin Khao (store_77), Lers Ros (store_12)", "progress_stages": []},
+        {"status": "done", "result": "Kin Khao (store_77), Lers Ros (store_12)", "progress_stages": [], "pictures": []},
     )
     script.on(
-        "tool:uber_eats.search", {"status": "done", "result": "Kin Khao menu: pad thai $16", "progress_stages": []}
+        "tool:uber_eats.search",
+        {"status": "done", "result": "Kin Khao menu: pad thai $16", "progress_stages": [], "pictures": []},
     )
     runtime = make_runtime(script)
     await install_app(runtime, (await runtime.apps.search("uber eats"))[0])
@@ -289,7 +293,9 @@ async def test_tool_history_is_capped_and_saved(script, make_runtime):
     runtime = make_runtime(script)
     tool = await install_app(runtime, (await runtime.apps.search("opentable"))[0])
     for i in range(runner.HISTORY_KEPT + 5):
-        script.on("tool:opentable.search", {"status": "done", "result": f"result {i}", "progress_stages": []})
+        script.on(
+            "tool:opentable.search", {"status": "done", "result": f"result {i}", "progress_stages": [], "pictures": []}
+        )
         await runner.run_tool(runtime, tool, tool.function("search"), {"query": str(i)})
     assert len(tool.history) == runner.HISTORY_KEPT and tool.history[-1].result == f"result {runner.HISTORY_KEPT + 4}"
     assert len(script.prompts["tool:opentable.search"][-1]["earlier_calls"]) == runner.HISTORY_SHOWN
@@ -310,7 +316,7 @@ async def test_simulated_calls_fail_about_one_in_five(script, make_runtime, monk
         failing = "realistic problem" in payload["instruction"]
         seen.append(failing)
         assert "oversight" not in payload["function"]  # the agent already handled approval
-        return {"status": "failed" if failing else "done", "result": "ok", "progress_stages": []}
+        return {"status": "failed" if failing else "done", "result": "ok", "progress_stages": [], "pictures": []}
 
     script.on("app_manifest:com.opentable", manifest())
     runtime = make_runtime(script)
@@ -329,7 +335,9 @@ async def test_a_succeeding_call_cannot_report_failure(script, make_runtime):
     from quintessa.llm import LLMError
 
     script.on("app_manifest:com.opentable", manifest())
-    script.on("tool:opentable.book", {"status": "failed", "result": "missing time", "progress_stages": []})
+    script.on(
+        "tool:opentable.book", {"status": "failed", "result": "missing time", "progress_stages": [], "pictures": []}
+    )
     runtime = make_runtime(script)
     tool = await install_app(runtime, (await runtime.apps.search("opentable"))[0])
     with pytest.raises(LLMError):

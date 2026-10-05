@@ -289,6 +289,7 @@ Document {
   links: string[]            // useful apps, sites, other documents
   key_dates: KeyDate[]
   observations: string[]     // "Message from Jerry: Did you finish the homework?"
+  pictures: Picture[]        // good pictures of what the user chose (see Questions)
   created_at: string
   updated_at: string
 }
@@ -301,6 +302,7 @@ DocumentSection {
   details: string
   actions_taken: string[]    // tool calls write a line here automatically
   suggested_actions: string[]
+  pictures: Picture[]        // good pictures of what the user chose for this section
   updated_at: string         // drives "changed since you last looked"
 }
 
@@ -343,22 +345,62 @@ Question {                   // a question
 
 QuestionField {              // design-system-agnostic; the skin decides how to draw it
   name: string
-  kind: "display_text" | "free_text" | "option" | "suggestion" | "number"
-      | "location" | "confirm" | "button"
+  kind: "display_text" | "free_text" | "option" | "multi_option" | "suggestion"
+      | "number" | "location" | "confirm" | "button"
   label: string
   options: string[]
+  option_details: QuestionOption[]   // only options with a picture or a quantity
+}
+
+QuestionOption {
+  option: string             // one of the field's options
+  picture: Picture | null    // what a tool returned for it, shown beside the option
+  takes_quantity: boolean    // multi_option only: the user says how many
 }
 
 Answer {                             // the answer
   question_id: string
-  values: { [field name]: string }   // a confirm field sends "yes" to approve
+  values: { [field name]: string }   // a confirm field sends "yes" to approve;
+                                     // a multi_option field reads "2 × Margherita, Coke"
+  selections: { [field name]: Selection[] }  // multi_option fields: what was picked
   dismissed: boolean                 // the user chose "Skip"; the session goes on without it
   surface_context: string            // where it was answered
   withdrawn: boolean                 // the agent took it back before the user answered
   withdrawn_reason: string
   answered_at: string
 }
+
+Selection { option: string, quantity: number }   // quantity is 1 unless the option takes one
 ```
+
+A `multi_option` field lets the user pick any number of its options, each a row with a checkbox; an option that `takes_quantity` gets a − / + stepper once picked (1 to 99). The answer carries the picks in `selections` and the same as text in `values`, which is what the agent reads.
+
+**Pictures.** When a tool's result lists things to look at (dishes, products, places), it returns them as pictures, and the step summary lists their ids for the agent (`Pictures: pic_… 'Margherita' (photo)`). When the agent asks about those things it gives each option its `picture_id`; an option it gave none gets the picture whose caption is exactly its name. The option is then drawn with the picture beside it.
+
+```ts
+Picture {
+  id: string                 // "pic_..."
+  caption: string            // the item's name as the tool gave it
+  kind: "photo" | "thumbnail" | "logo" | "diagram"
+  url: string                // the real image; empty when none was found
+  emoji: string              // with no image, the picture is drawn as this emoji on a colour wash
+  width: number              // 0 when unknown
+  height: number
+  source: string             // the tool that returned it
+  page_url: string           // the web page the image is published on
+  credit: string             // "Wikimedia Commons"; shown with the picture in Spaces
+}
+```
+
+Pictures are real images when possible (`quintessa/tools/picture_search.py`):
+
+1. An image the app passes through is kept if its URL answers with an image. A web API tool's JSON response is read for them: each object with an image URL under a key like `image`, `photo` or `thumbnail_url`, named by its `name` or `title` (a `logo` or `icon` key makes it a logo). A simulated app may give an `image_url` it knows is real.
+2. Otherwise the picture is searched on Wikimedia Commons (free, no key, credited to its file page) by the `search_query` the tool gave it ("margherita pizza"), taking the first JPEG, PNG or WebP at least 320 px on its short side, scaled to 800 px wide. Lookups are cached and give up after 6 seconds.
+3. With nothing found, the picture has no `url` and is drawn; so is an image that fails to load in the browser.
+
+`QUINTESSA_PICTURE_SEARCH=off` turns the web lookup off.
+
+A picture is **good** when it is a photo and, if its size is known, at least 320 px on its short side. When the user picks an option with a good picture, the picture goes into the document the question belongs to: its section when the question names one, else the document (its own, or its topic's). Spaces shows it at the top of that section or document, newest last, up to four. Logos, thumbnails and diagrams stay beside the choice only.
 
 What happens when a question is asked and answered:
 
@@ -442,7 +484,7 @@ Oversight levels, from least to most:
 
 The rule lives in `quintessa/oversight.py`: a grant or refusal earlier in the session decides first, then the level, then a `confirm_once` grant kept in memory.
 
-A tool call returns a **tool result**: `{ status: "done" | "in_progress" | "needs_user" | "failed", result, progress_stages }`.
+A tool call returns a **tool result**: `{ status: "done" | "in_progress" | "needs_user" | "failed", result, progress_stages, pictures }`. Simulated tools and web API tools return `pictures` (at most 8 per call; a simulated tool keeps them in the call's `history` record); see [Questions](#questions) for how they reach a choice and a document.
 
 ### Built-in tools
 
@@ -811,6 +853,7 @@ One term per idea. The right-hand column lists words used for the same thing in 
 | **brief** | The contextual brief: the ranked list of cards and waiting questions. | contextual brief, dashboard |
 | **card** | One item in the brief (`Card`). Not a topic. | indicator, brief item (`BriefItem` before agent state v2) |
 | **card sheet** | The bottom sheet a card opens when it has no document or has an action. | sheet |
+| **picture** | An image a tool returned for one item (`Picture`); drawn beside a choice, and in the document once chosen if it is good. | |
 | **question sheet** | The bottom sheet where every question is answered, as a deck. | disambiguation sheet, form |
 | **stash** | Questions the user put aside; still waiting, out of the stack. | |
 | **salience** | A card's ranking score. | priority |

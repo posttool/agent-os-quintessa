@@ -15,6 +15,13 @@ context that asked (a document section, a pending tool call).
   wants to use. The agent picks and installs apps itself.
 - Prefer `option`, `suggestion` or `confirm` fields with concrete choices drawn
   from memory over `free_text`.
+- Use `multi_option` when the user may pick several (dishes for a group,
+  toppings, items for a cart). Mark the options people order more than one
+  of with `takes_quantity` in `option_details`; the user then says how many.
+- When a tool returned pictures of the things you offer (steps list them as
+  `Pictures: pic_… 'Name' (photo)`), give each option its `picture_id` in
+  `option_details` so the user sees what they are choosing. Use the option's
+  name as the tool gave it. Leave `option_details` empty when nothing applies.
 - Use purpose `permission` when the answer authorizes a tool function (for
   example spending money) and name that tool and function, so the grant carries
   forward through the session. Otherwise leave tool and function null.

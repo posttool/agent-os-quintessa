@@ -8,10 +8,21 @@ import httpx
 
 from quintessa import config
 from quintessa.llm import schema as s
-from quintessa.models import AuthState, Tool, ToolBinding, ToolCallRecord, ToolCallStatus, ToolFunction, ToolKind
+from quintessa.models import (
+    AuthState,
+    Picture,
+    PictureKind,
+    Tool,
+    ToolBinding,
+    ToolCallRecord,
+    ToolCallStatus,
+    ToolFunction,
+    ToolKind,
+)
 from quintessa.prompts import prompt
 from quintessa.serde import to_dict
 from quintessa.tools.builtin import BUILTIN_IMPLEMENTATIONS, clip
+from quintessa.tools.picture_search import find_real_pictures, pictures_in_json
 from quintessa.tools.tool_call_result import ToolCallResult
 
 if TYPE_CHECKING:
@@ -22,8 +33,26 @@ LLM_TOOL_SCHEMA = s.obj(
         "status": s.enum_of(ToolCallStatus),
         "result": s.string("What happened, as the tool would report it."),
         "progress_stages": s.array(s.string(), "Stages still to come if the process continues."),
+        "pictures": s.array(
+            s.obj(
+                {
+                    "caption": s.string("The item's name, exactly as the result names it."),
+                    "kind": s.enum_of(PictureKind),
+                    "emoji": s.string("One emoji that looks like the item."),
+                    "image_url": s.nullable(
+                        s.string("The service's own image of it, only a real URL you know; else null.")
+                    ),
+                    "search_query": s.string(
+                        "Words that find a real photo of it on the web: what it is, then any name "
+                        "('margherita pizza', 'Golden Gate Bridge')."
+                    ),
+                }
+            ),
+            "Pictures the service would show with this result, one per item (a dish, a product, a place).",
+        ),
     }
 )
+MAX_PICTURES = 8
 
 
 WEB_API_REQUEST_SCHEMA = s.obj(
@@ -130,12 +159,27 @@ async def _simulate(
         purpose=f"tool:{tool.name}.{function.name}",
     )
     data = result.data
+    wanted = [
+        (
+            Picture(p["caption"], PictureKind(p["kind"]), p["image_url"] or "", p["emoji"], source=tool.name),
+            p["search_query"],
+        )
+        for p in data["pictures"][:MAX_PICTURES]
+        if p["caption"].strip()
+    ]
+    await find_real_pictures(runtime.picture_search, wanted)
+    pictures = [p for p, _ in wanted]
     _remember(
         runtime,
         tool,
-        ToolCallRecord(function.name, args, purpose, data["status"], data["result"][:HISTORY_RESULT_LIMIT]),
+        ToolCallRecord(function.name, args, purpose, data["status"], data["result"][:HISTORY_RESULT_LIMIT], pictures),
     )
-    return ToolCallResult(data["status"], data["result"], data["progress_stages"])
+    return ToolCallResult(data["status"], data["result"], data["progress_stages"], pictures)
+
+
+def recent_pictures(runtime: AgentRuntime) -> dict[str, Picture]:
+    """Pictures installed tools returned in the calls they still remember, by id."""
+    return {p.id: p for tool in runtime.store.tools.values() for record in tool.history for p in record.pictures}
 
 
 def _remember(runtime: AgentRuntime, tool: Tool, record: ToolCallRecord) -> None:
@@ -173,4 +217,7 @@ async def _call_web_api(
             content=req["body"].encode() if req["body"] else None,
         )
     status = ToolCallStatus.DONE if response.is_success else ToolCallStatus.FAILED
-    return ToolCallResult(status, f"{req['method']} {url} -> HTTP {response.status_code}\n{clip(response.text)}")
+    pictures = pictures_in_json(response.text, tool.name) if response.is_success else []
+    await find_real_pictures(runtime.picture_search, [(p, "") for p in pictures])
+    result = f"{req['method']} {url} -> HTTP {response.status_code}\n{clip(response.text)}"
+    return ToolCallResult(status, result, pictures=pictures)

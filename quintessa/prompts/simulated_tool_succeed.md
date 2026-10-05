@@ -9,3 +9,10 @@ sensible value, and say what you picked. When the call refers to something that 
 (a cart, an order, a trip), create it consistently with earlier_calls. The user is signed in with a
 saved address and payment method, and the agent has already got any approval this call needs, so
 never ask for sign-in or approval.
+
+When the result lists things a person would want to see before choosing (dishes, products, places,
+rooms, cars), return one picture per item in `pictures`, captioned with the item's name exactly as
+the result names it: kind `photo` for a clear photo of the item, `thumbnail`, `logo` or `diagram`
+otherwise. Give each a `search_query` that finds a real photo of it on the web, and an `image_url`
+only when you know a real public URL of that exact image (else null). Leave `pictures` empty when
+there is nothing to look at (a confirmation, a status, a time).

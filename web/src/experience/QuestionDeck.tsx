@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Doc, Topic, Question } from "../types";
+import type { Doc, Topic, Question, Selection } from "../types";
 import QuestionForm from "./QuestionForm";
 
 /** The one place the agent's questions are answered: a sheet holding a deck
@@ -12,7 +12,7 @@ export default function QuestionDeck({ questions, stash, topics, docs, onAnswer,
   stash: boolean;
   topics: Map<string, Topic>;
   docs: Doc[];
-  onAnswer: (r: Question, values: Record<string, string>) => void;
+  onAnswer: (r: Question, values: Record<string, string>, selections: Record<string, Selection[]>) => void;
   onSkip: (r: Question) => void;
   onStash: (rs: Question[]) => void;
   onUnstash: (r: Question) => void;
@@ -83,7 +83,7 @@ export default function QuestionDeck({ questions, stash, topics, docs, onAnswer,
                 {args.map(([k, v]) => <div key={k}>{k}: {v}</div>)}
               </div>
             )}
-            <QuestionForm key={top.id} request={top} onAnswer={(values) => { done([top]); onAnswer(top, values); }} />
+            <QuestionForm key={top.id} request={top} onAnswer={(values, selections) => { done([top]); onAnswer(top, values, selections); }} />
           </div>
         </div>
         <div className="sheet-buttons">

@@ -129,6 +129,7 @@ All of these are read through `quintessa/config.py`.
 | `QUINTESSA_SEARCH_MODEL` | `claude-opus-5-5` | model for Claude web search |
 | `QUINTESSA_APP_STORE` | `auto` | `play`, `search`, `offline` or `auto` (see [Apps](#apps)) |
 | `QUINTESSA_SIM_FAILURE_RATE` | `0.2` | how often a simulated app call runs into a problem |
+| `QUINTESSA_PICTURE_SEARCH` | `wikimedia` | where real pictures for tool results come from; `off` draws them instead |
 | `QUINTESSA_JEV_API_KEY` | | turns on Jev (`TYPESAFE_API_KEY` also works) |
 | `QUINTESSA_JEV_URL`, `QUINTESSA_JEV_MODEL` | TypeSafe's API, `jev-latest` | another `/v1/systemone` endpoint, such as gev |
 | `QUINTESSA_DECIDER` | `shadow` | `llm` starts users with the Jev shadow off |

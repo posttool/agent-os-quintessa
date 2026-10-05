@@ -52,7 +52,9 @@ def permission_ui(tool, function):
         "prompt": "Spend $32 on pad thai?",
         "purpose": "permission",
         "context": "",
-        "fields": [{"name": "ok", "kind": "confirm", "label": "Approve", "options": ["yes", "no"]}],
+        "fields": [
+            {"name": "ok", "kind": "confirm", "label": "Approve", "options": ["yes", "no"], "option_details": []}
+        ],
         "document_id": None,
         "section_id": None,
         "topic_id": None,
@@ -87,6 +89,7 @@ async def test_grant_from_earlier_disambiguation_carries_forward(script, make_ru
             "status": "in_progress",
             "result": "order placed",
             "progress_stages": ["cooking", "driver on the way", "delivered"],
+            "pictures": [],
         },
     )
     runtime = make_runtime(script)
@@ -146,7 +149,9 @@ async def test_tool_use_asks_and_respects_a_decline(script, make_runtime):
 async def test_confirm_once_is_remembered_across_sessions(script, make_runtime):
     script.on("decide", decide("tool_use"), decide("done"), decide("tool_use"))
     script.on("capability:tool_use", call("food_delivery", "checkout"), call("food_delivery", "checkout"))
-    script.on("tool:food_delivery.checkout", *[{"status": "done", "result": "ok", "progress_stages": []}] * 2)
+    script.on(
+        "tool:food_delivery.checkout", *[{"status": "done", "result": "ok", "progress_stages": [], "pictures": []}] * 2
+    )
     runtime = make_runtime(script)
     runtime.store.put_tool(delivery_tool(OversightLevel.CONFIRM_ONCE))
     asked = []
@@ -241,7 +246,10 @@ async def test_device_tool_updates_the_brief_and_spaces(script, make_runtime):
 async def test_mcp_tools_are_played_by_a_model_until_they_have_a_runtime(script, make_runtime):
     script.on("decide", decide("tool_use"))
     script.on("capability:tool_use", call("messaging", "read_thread"))
-    script.on("tool:messaging.read_thread", {"status": "done", "result": "Jane: see you at 7", "progress_stages": []})
+    script.on(
+        "tool:messaging.read_thread",
+        {"status": "done", "result": "Jane: see you at 7", "progress_stages": [], "pictures": []},
+    )
     runtime = make_runtime(script)
     runtime.store.put_tool(Tool("messaging", "chat", ToolKind.MCP, [ToolFunction("read_thread")]))
     session = await runtime.run(InputEvent(InputKind.TEXT, "what did Jane say"))

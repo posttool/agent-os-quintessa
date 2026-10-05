@@ -80,7 +80,7 @@ async def test_restart_stops_interrupted_sessions_and_resumes_processes(script, 
     script.on("capability:tool_use", call("food_delivery", "checkout"))
     script.on(
         "tool:food_delivery.checkout",
-        {"status": "in_progress", "result": "placed", "progress_stages": ["cooking", "delivered"]},
+        {"status": "in_progress", "result": "placed", "progress_stages": ["cooking", "delivered"], "pictures": []},
     )
     script.on(
         "capability:generative_ui",

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from quintessa.clock import now
+from quintessa.models.picture import Picture
 from quintessa.models.tool_call_status import ToolCallStatus
 
 
@@ -17,4 +18,5 @@ class ToolCallRecord:
     purpose: str = ""
     status: ToolCallStatus = ToolCallStatus.DONE
     result: str = ""
+    pictures: list[Picture] = field(default_factory=list)
     at: datetime = field(default_factory=now)

@@ -236,3 +236,43 @@ button, input { font: inherit; color: inherit; }
 .deck-card .question .actions button { padding: 10px 18px; }
 .waiting-row.stashed { border-style: dashed; border-color: var(--ink-3); }
 .waiting-row.stashed .kind { color: var(--ink-3); }
+
+/* Pictures from tools: a thumbnail beside a choice, large in a document. */
+.picture { margin: 0; flex: none; }
+.picture img, .picture .illustration { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.picture .illustration { display: grid; place-items: center; }
+.picture.thumb { width: 44px; height: 44px; border-radius: 10px; overflow: hidden; }
+.picture.thumb .emoji { font-size: 24px; }
+.picture.kind-logo .illustration, .picture.kind-diagram .illustration { filter: saturate(0.35); }
+.picture.large { border-radius: 14px; overflow: hidden; background: var(--glass-2); }
+.picture.large img, .picture.large .illustration { aspect-ratio: 16 / 9; height: auto; }
+.chosen-pictures.n-2 .picture.large .illustration, .chosen-pictures.n-4 .picture.large .illustration, .chosen-pictures.n-3 > :not(:first-child) .illustration { aspect-ratio: 4 / 3; }
+.chosen-pictures.n-2 .emoji, .chosen-pictures.n-4 .emoji, .chosen-pictures.n-3 > :not(:first-child) .emoji { font-size: 36px; }
+.picture.large .emoji { font-size: 56px; }
+.picture figcaption { font-size: 12px; padding: 6px 10px; color: var(--ink-2); }
+.chosen-pictures { display: grid; gap: 8px; margin: 8px 0 4px; }
+.chosen-pictures.n-2, .chosen-pictures.n-3, .chosen-pictures.n-4 { grid-template-columns: 1fr 1fr; }
+.chosen-pictures.n-3 > :first-child { grid-column: span 2; }
+
+/* Choices with pictures, and multi-select rows with quantities. */
+.choices button, .choice-row .pick { display: flex; align-items: center; gap: 10px; }
+.choices.pictured button { padding: 6px 12px 6px 6px; }
+.choices.multi { flex-direction: column; }
+.choice-row { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--glass); border-radius: 14px; }
+.choice-row.on { border-color: var(--glow); box-shadow: 0 0 0 1px var(--glow); }
+.choices .choice-row button { border: none; background: none; border-radius: 14px; }
+.choices .choice-row .pick { flex: 1; min-width: 0; text-align: left; padding: 8px 12px; font-size: 14px; }
+.choices.pictured .choice-row .pick { padding: 6px 12px 6px 6px; }
+.choice-row .check {
+  flex: none; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--ink-3);
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+}
+.choice-row.on .check { background: var(--glow); border-color: var(--glow); color: var(--on-glow); }
+.choice-row .stepper { display: flex; align-items: center; gap: 2px; padding-right: 6px; }
+.choices .choice-row .stepper button { width: 30px; height: 30px; padding: 0; justify-content: center; background: var(--glass-2); border-radius: 50%; font-size: 16px; }
+.choices .choice-row .stepper button:disabled { opacity: 0.4; }
+.choice-row .qty { min-width: 22px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.choices.multi > button.other { align-self: stretch; }
+.choice-label { min-width: 0; overflow-wrap: anywhere; }
+.picture figcaption { display: flex; justify-content: space-between; gap: 8px; }
+.picture .credit { font-size: 10.5px; color: var(--ink-3); text-decoration: none; white-space: nowrap; }

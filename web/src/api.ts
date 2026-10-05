@@ -1,4 +1,4 @@
-import type { AgentState, AppListing, AppSearchResult, DocView, JevStatus, ModelProvider, ModelSettings, PersonaProfile, ViewMode } from "./types";
+import type { AgentState, AppListing, AppSearchResult, DocView, JevStatus, ModelProvider, ModelSettings, PersonaProfile, Selection, ViewMode } from "./types";
 
 export class ApiError extends Error {}
 
@@ -28,8 +28,8 @@ export function makeApi(user: string) {
     exportUrl: q("/api/export"),
     state: () => call<AgentState>("GET", "/api/state"),
     input: (content: string, kind = "text") => call<{ session_id: string }>("POST", "/api/input", { content, kind }),
-    answer: (id: string, values: Record<string, string>, dismissed = false) =>
-      call("POST", `/api/questions/${encodeURIComponent(id)}`, { values, dismissed }),
+    answer: (id: string, values: Record<string, string>, dismissed = false, selections: Record<string, Selection[]> = {}) =>
+      call("POST", `/api/questions/${encodeURIComponent(id)}`, { values, selections, dismissed }),
     /** Put a question aside for later; it keeps waiting, out of the stack. */
     stash: (id: string) => call("POST", `/api/questions/${encodeURIComponent(id)}/stash`),
     unstash: (id: string) => call("POST", `/api/questions/${encodeURIComponent(id)}/unstash`),

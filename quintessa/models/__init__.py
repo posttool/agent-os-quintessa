@@ -22,11 +22,15 @@ from quintessa.models.node_type import NodeType
 from quintessa.models.oversight_level import OversightLevel
 from quintessa.models.permission import Permission
 from quintessa.models.permission_scope import PermissionScope
+from quintessa.models.picture import Picture
+from quintessa.models.picture_kind import PictureKind
 from quintessa.models.preferences import Preferences
 from quintessa.models.question import Question
 from quintessa.models.question_field import QuestionField
+from quintessa.models.question_option import QuestionOption
 from quintessa.models.question_purpose import QuestionPurpose
 from quintessa.models.reasoning_session import ReasoningSession
+from quintessa.models.selection import Selection
 from quintessa.models.session_status import SessionStatus
 from quintessa.models.shadow_decision import ShadowDecision
 from quintessa.models.step_decision import DONE, StepDecision
@@ -67,7 +71,11 @@ __all__ = [
     "NodeType",
     "OversightLevel",
     "Permission",
+    "Picture",
+    "PictureKind",
     "Preferences",
+    "QuestionOption",
+    "Selection",
     "AmbientFilterDecision",
     "ReasoningSession",
     "SessionStatus",

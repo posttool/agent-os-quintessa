@@ -30,6 +30,7 @@ from quintessa.models import (
 from quintessa.prompts import prompt
 from quintessa.serde import to_dict
 from quintessa.tools import BUILTIN_TOOLS
+from quintessa.tools.picture_search import PictureSearch
 from quintessa.tools.search import SearchBackend
 
 if TYPE_CHECKING:
@@ -55,6 +56,7 @@ class AgentRuntime:
         max_steps: int = 12,
         data_dir: str | Path = "data",
         search: SearchBackend | None = None,
+        picture_search: PictureSearch | None = None,
         apps: AppStore | None = None,
         process_interval: float = 5.0,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
@@ -82,6 +84,7 @@ class AgentRuntime:
         self.persona: dict[str, Any] | None = None  # the attached Aura persona: profile, persona_id, date
         self.data_dir = Path(data_dir)
         self.search = search
+        self.picture_search = picture_search  # real pictures for what simulated tools describe
         self.apps = apps or OfflineCatalog()  # where tool discovery finds apps to install
         self.questions = QuestionBroker()
         self.ambient = AmbientBus(self, process_interval=process_interval, sleep=sleep)
