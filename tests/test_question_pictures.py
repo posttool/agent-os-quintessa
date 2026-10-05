@@ -1,6 +1,9 @@
 """Multi-select questions with quantities, tool pictures next to options, and
 the chosen option's picture shown in the document."""
 
+import json
+
+import httpx
 from conftest import decide, until
 from test_api import api  # noqa: F401  (fixture)
 from test_memory import doc_op, section_op, topic_op
@@ -20,16 +23,17 @@ from quintessa.models import (
     ToolFunction,
     ToolKind,
 )
+from quintessa.tools.picture_search import FoundPicture, WebPictures, find_real_pictures, pictures_in_json
 
 MENU = {
     "status": "done",
     "result": "Margherita $14, Diavola $16, Coke $3",
     "progress_stages": [],
     "pictures": [
-        {"caption": "Margherita", "kind": "photo", "emoji": "🍕"},
-        {"caption": "Diavola", "kind": "photo", "emoji": "🌶️"},
-        {"caption": "Coke", "kind": "logo", "emoji": "🥤"},
-        {"caption": " ", "kind": "photo", "emoji": ""},
+        {"caption": "Margherita", "kind": "photo", "emoji": "🍕", "image_url": None, "search_query": ""},
+        {"caption": "Diavola", "kind": "photo", "emoji": "🌶️", "image_url": None, "search_query": ""},
+        {"caption": "Coke", "kind": "logo", "emoji": "🥤", "image_url": None, "search_query": ""},
+        {"caption": " ", "kind": "photo", "emoji": "", "image_url": None, "search_query": ""},
     ],
 }
 
@@ -159,3 +163,102 @@ def test_good_pictures_are_photos_that_are_not_tiny():
     assert not Picture("Logo", PictureKind.LOGO).good
     assert not Picture("Tiny", url="https://x.test/a.jpg", width=120, height=90).good
     assert Picture("Big", url="https://x.test/a.jpg", width=800, height=600).good
+
+
+def commons_transport(seen):
+    """Wikimedia Commons answering a file search, plus image hosts: real.jpg
+    loads, broken.jpg is a page, not an image."""
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.host == "commons.wikimedia.org":
+            pages = {
+                "1": {"index": 2, "imageinfo": [info("big.jpg", 1600, 1200)]},
+                "2": {"index": 1, "imageinfo": [info("tiny.jpg", 100, 80)]},
+                "3": {"index": 3, "imageinfo": [{**info("drawing.svg", 900, 900), "mime": "image/svg+xml"}]},
+            }
+            if "nothing" in request.url.params["gsrsearch"]:
+                pages = {}
+            return httpx.Response(200, json={"query": {"pages": pages}})
+        if request.url.path.endswith("real.jpg"):
+            return httpx.Response(200, headers={"content-type": "image/jpeg"}, content=b"jpeg")
+        return httpx.Response(200, headers={"content-type": "text/html"}, content=b"<html>")
+
+    return httpx.MockTransport(handle)
+
+
+def info(name, width, height):
+    return {
+        "mime": "image/jpeg",
+        "width": width,
+        "height": height,
+        "url": f"https://upload.wikimedia.org/{name}",
+        "thumburl": f"https://upload.wikimedia.org/800px-{name}",
+        "thumbwidth": 800,
+        "thumbheight": int(800 * height / width),
+        "descriptionurl": f"https://commons.wikimedia.org/wiki/File:{name}",
+    }
+
+
+async def test_web_pictures_keep_app_images_that_load_and_search_for_the_rest():
+    seen = []
+    search = WebPictures(httpx.AsyncClient(transport=commons_transport(seen)))
+    passed = Picture("Margherita", url="https://app.test/real.jpg")
+    broken = Picture("Diavola", url="https://app.test/broken.jpg")
+    plain = Picture("Funghi")
+    missing = Picture("Nothing")
+    await find_real_pictures(
+        search,
+        [(passed, "margherita pizza"), (broken, "diavola pizza"), (plain, "funghi pizza"), (missing, "nothing")],
+    )
+
+    assert passed.url == "https://app.test/real.jpg"  # passed through, no search
+    # the first usable search result: big enough and a photo format
+    assert broken.url == plain.url == "https://upload.wikimedia.org/800px-big.jpg"
+    assert (plain.width, plain.height, plain.credit) == (800, 600, "Wikimedia Commons")
+    assert plain.page_url.endswith("File:big.jpg")
+    assert missing.url == "" and missing.good  # nothing found: drawn instead
+    searches = [r for r in seen if r.url.host == "commons.wikimedia.org"]
+    assert len(searches) == 3
+
+    await find_real_pictures(search, [(Picture("Funghi"), "Funghi Pizza ")])
+    assert len([r for r in seen if r.url.host == "commons.wikimedia.org"]) == 3  # cached
+
+
+async def test_simulated_tools_get_real_pictures(script, make_runtime):
+    class Found:
+        async def find(self, query):
+            return FoundPicture(f"https://img.test/{query.replace(' ', '-')}.jpg", 800, 600, "", "Test")
+
+        async def loads(self, url):
+            return False
+
+    pictured = {**MENU, "pictures": [{**MENU["pictures"][0], "search_query": "margherita pizza"}]}
+    script.on("decide", decide("tool_use"))
+    script.on("capability:tool_use", call("pizzeria", "menu"))
+    script.on("tool:pizzeria.menu", pictured)
+    runtime = make_runtime(script, picture_search=Found())
+    runtime.store.put_tool(menu_tool())
+    session = runtime.submit(InputEvent(InputKind.TEXT, "menu"))
+    await until(lambda: session.status == SessionStatus.COMPLETE)
+
+    picture = runtime.store.tools["pizzeria"].history[-1].pictures[0]
+    assert picture.url == "https://img.test/margherita-pizza.jpg" and picture.width == 800
+
+
+def test_web_api_images_pass_through():
+    body = {
+        "results": [
+            {"name": "Kin Khao", "photo": {"url": "https://cdn.test/kk.jpg", "width": 1200, "height": 800}},
+            {"title": "Lers Ros", "thumbnail_url": "https://cdn.test/lr.jpg"},
+            {"name": "No image", "rating": 4.5},
+            {"brand": {"name": "Uber", "logo": "https://cdn.test/logo.png"}},
+        ]
+    }
+    pictures = pictures_in_json(json.dumps(body), "places")
+    assert [(p.caption, p.kind, p.width) for p in pictures] == [
+        ("Kin Khao", PictureKind.PHOTO, 1200),
+        ("Lers Ros", PictureKind.THUMBNAIL, 0),
+        ("Uber", PictureKind.LOGO, 0),
+    ]
+    assert pictures_in_json("not json", "places") == []

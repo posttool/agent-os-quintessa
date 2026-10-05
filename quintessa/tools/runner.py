@@ -22,6 +22,7 @@ from quintessa.models import (
 from quintessa.prompts import prompt
 from quintessa.serde import to_dict
 from quintessa.tools.builtin import BUILTIN_IMPLEMENTATIONS, clip
+from quintessa.tools.picture_search import find_real_pictures, pictures_in_json
 from quintessa.tools.tool_call_result import ToolCallResult
 
 if TYPE_CHECKING:
@@ -38,6 +39,13 @@ LLM_TOOL_SCHEMA = s.obj(
                     "caption": s.string("The item's name, exactly as the result names it."),
                     "kind": s.enum_of(PictureKind),
                     "emoji": s.string("One emoji that looks like the item."),
+                    "image_url": s.nullable(
+                        s.string("The service's own image of it, only a real URL you know; else null.")
+                    ),
+                    "search_query": s.string(
+                        "Words that find a real photo of it on the web: what it is, then any name "
+                        "('margherita pizza', 'Golden Gate Bridge')."
+                    ),
                 }
             ),
             "Pictures the service would show with this result, one per item (a dish, a product, a place).",
@@ -151,11 +159,16 @@ async def _simulate(
         purpose=f"tool:{tool.name}.{function.name}",
     )
     data = result.data
-    pictures = [
-        Picture(p["caption"], PictureKind(p["kind"]), emoji=p["emoji"], source=tool.name)
+    wanted = [
+        (
+            Picture(p["caption"], PictureKind(p["kind"]), p["image_url"] or "", p["emoji"], source=tool.name),
+            p["search_query"],
+        )
         for p in data["pictures"][:MAX_PICTURES]
         if p["caption"].strip()
     ]
+    await find_real_pictures(runtime.picture_search, wanted)
+    pictures = [p for p, _ in wanted]
     _remember(
         runtime,
         tool,
@@ -204,4 +217,7 @@ async def _call_web_api(
             content=req["body"].encode() if req["body"] else None,
         )
     status = ToolCallStatus.DONE if response.is_success else ToolCallStatus.FAILED
-    return ToolCallResult(status, f"{req['method']} {url} -> HTTP {response.status_code}\n{clip(response.text)}")
+    pictures = pictures_in_json(response.text, tool.name) if response.is_success else []
+    await find_real_pictures(runtime.picture_search, [(p, "") for p in pictures])
+    result = f"{req['method']} {url} -> HTTP {response.status_code}\n{clip(response.text)}"
+    return ToolCallResult(status, result, pictures=pictures)

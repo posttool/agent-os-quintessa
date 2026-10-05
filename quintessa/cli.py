@@ -20,6 +20,7 @@ from quintessa.models import Answer, FieldKind, InputEvent, InputKind, Question,
 from quintessa.persona import AuraPersonaClient, PersonaSimulation
 from quintessa.serde import to_dict
 from quintessa.state import StateFormatError, state_backend_from_env
+from quintessa.tools.picture_search import picture_search_from_env
 from quintessa.tools.search import search_backend_from_env
 
 
@@ -94,7 +95,14 @@ async def _run_command(args: argparse.Namespace, backend) -> None:
         llm = build_llm(args.models)
     except LLMError as e:
         raise SystemExit(f"quintessa: {e}") from e
-    host = AgentHost(llm, backend, data_dir=args.data, search=search_backend_from_env(), **jev_options_from_env())
+    host = AgentHost(
+        llm,
+        backend,
+        data_dir=args.data,
+        search=search_backend_from_env(),
+        picture_search=picture_search_from_env(),
+        **jev_options_from_env(),
+    )
     agent = await host.agent(args.user)
     _answer_in_terminal(agent)
     before = set(agent.store.sessions)

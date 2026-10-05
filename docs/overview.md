@@ -382,13 +382,23 @@ Picture {
   id: string                 // "pic_..."
   caption: string            // the item's name as the tool gave it
   kind: "photo" | "thumbnail" | "logo" | "diagram"
-  url: string                // empty for a simulated service
-  emoji: string              // simulated pictures are drawn as this emoji on a colour wash
+  url: string                // the real image; empty when none was found
+  emoji: string              // with no image, the picture is drawn as this emoji on a colour wash
   width: number              // 0 when unknown
   height: number
   source: string             // the tool that returned it
+  page_url: string           // the web page the image is published on
+  credit: string             // "Wikimedia Commons"; shown with the picture in Spaces
 }
 ```
+
+Pictures are real images when possible (`quintessa/tools/picture_search.py`):
+
+1. An image the app passes through is kept if its URL answers with an image. A web API tool's JSON response is read for them: each object with an image URL under a key like `image`, `photo` or `thumbnail_url`, named by its `name` or `title` (a `logo` or `icon` key makes it a logo). A simulated app may give an `image_url` it knows is real.
+2. Otherwise the picture is searched on Wikimedia Commons (free, no key, credited to its file page) by the `search_query` the tool gave it ("margherita pizza"), taking the first JPEG, PNG or WebP at least 320 px on its short side, scaled to 800 px wide. Lookups are cached and give up after 6 seconds.
+3. With nothing found, the picture has no `url` and is drawn; so is an image that fails to load in the browser.
+
+`QUINTESSA_PICTURE_SEARCH=off` turns the web lookup off.
 
 A picture is **good** when it is a photo and, if its size is known, at least 320 px on its short side. When the user picks an option with a good picture, the picture goes into the document the question belongs to: its section when the question names one, else the document (its own, or its topic's). Spaces shows it at the top of that section or document, newest last, up to four. Logos, thumbnails and diagrams stay beside the choice only.
 
@@ -474,7 +484,7 @@ Oversight levels, from least to most:
 
 The rule lives in `quintessa/oversight.py`: a grant or refusal earlier in the session decides first, then the level, then a `confirm_once` grant kept in memory.
 
-A tool call returns a **tool result**: `{ status: "done" | "in_progress" | "needs_user" | "failed", result, progress_stages, pictures }`. Only simulated tools return `pictures` today (at most 8 per call, kept in the call's `history` record); see [Questions](#questions) for how they reach a choice and a document.
+A tool call returns a **tool result**: `{ status: "done" | "in_progress" | "needs_user" | "failed", result, progress_stages, pictures }`. Simulated tools and web API tools return `pictures` (at most 8 per call; a simulated tool keeps them in the call's `history` record); see [Questions](#questions) for how they reach a choice and a document.
 
 ### Built-in tools
 

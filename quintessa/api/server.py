@@ -14,6 +14,7 @@ from quintessa.host import AgentHost
 from quintessa.llm import LLMError, ModelRoute, ResilientLLM
 from quintessa.llm.factory import DEFAULT_CHAIN, build_llm
 from quintessa.state import state_backend_from_env
+from quintessa.tools.picture_search import picture_search_from_env
 from quintessa.tools.search import search_backend_from_env
 
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
@@ -39,6 +40,7 @@ def build_app(data_dir: str | Path = "data") -> FastAPI:
         backend,
         data_dir=data_dir,
         search=search,
+        picture_search=picture_search_from_env(),
         apps=app_store_from_env(search, llm),
         **jev_options_from_env(),
     )

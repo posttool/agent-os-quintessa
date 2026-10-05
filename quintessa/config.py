@@ -102,6 +102,11 @@ def app_store() -> str:
     return _get("QUINTESSA_APP_STORE", "auto").lower()
 
 
+def picture_search() -> str:
+    """QUINTESSA_PICTURE_SEARCH: where real pictures for tool results come from (wikimedia or off)."""
+    return _get("QUINTESSA_PICTURE_SEARCH", "wikimedia").lower()
+
+
 def persona_base_url(default: str) -> str:
     return _get("AURA_PERSONA_BASE_URL", default)
 

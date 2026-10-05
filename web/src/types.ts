@@ -21,11 +21,14 @@ export interface DocumentSection {
   /** good pictures of what the user chose in a question about this section */
   pictures?: Picture[];
 }
-/** A picture a tool returned. Simulated services have no url: skins draw an
- * illustration from the emoji and caption. */
+/** A picture a tool returned: an image the app passed through or one found
+ * on the web. With no url (nothing found), skins draw an illustration from
+ * the emoji and caption. */
 export interface Picture {
   id: string; caption: string; kind: "photo" | "thumbnail" | "logo" | "diagram"; url: string; emoji: string;
   width: number; height: number; source: string;
+  /** where a real image is published, and who publishes it ("Wikimedia Commons") */
+  page_url: string; credit: string;
 }
 export interface KeyDate { when: string; label: string; tentative: boolean }
 export interface Doc {
