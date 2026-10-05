@@ -71,6 +71,7 @@ def brief_context(runtime: AgentRuntime) -> dict[str, Any]:
         {
             "id": r.id,
             "prompt": r.prompt,
+            "purpose": r.purpose,
             "topic_id": r.topic_id,
             "asked_at": r.created_at,
             "stashed": runtime.device.is_stashed(r.id),

@@ -99,12 +99,12 @@ ControllerContext {
   memory: MemorySnapshot          // see Memory; archived topics and documents left out
   on_screen: DocumentView | null  // what Spaces shows now
   brief: BriefCardContext[]       // the brief as it stands, with a `stale` reason per card
-  questions_waiting: { id, prompt, topic_id, asked_at, stashed }[]
+  questions_waiting: { id, prompt, purpose, topic_id, asked_at, stashed }[]
   max_steps_left: number
 }
 ```
 
-After the last step the session runs two housekeeping steps when needed: the **brief refresh** (see [The contextual brief](#the-contextual-brief)) and, when Jev scoring is on, **brief scoring**.
+After the last step the session runs up to three housekeeping steps when needed: the **brief refresh** (see [The contextual brief](#the-contextual-brief)), **brief scoring** when Jev scoring is on, and **next steps**, which offers the suggested actions the session left open as a question (see [Next steps](#next-steps)).
 
 ### Sessions and traces
 
@@ -126,7 +126,7 @@ ReasoningSession {
 
 TraceStep {
   index: number
-  capability: string         // a capability name, or "brief_refresh" / "score_cards"
+  capability: string         // a capability name, or "brief_refresh" / "score_cards" / "next_steps"
   focus: string
   rationale: string
   output: object             // the capability's structured result
@@ -319,17 +319,18 @@ The math test example from the first brief maps directly: title, description, pr
 
 When only the user can settle something, the agent asks a **question**: generated UI that the session waits on. The answer goes back to the context that asked (a document section, a pending tool call), so the session continues where it left off.
 
-There are three kinds, by `purpose`:
+There are four kinds, by `purpose`:
 
 - `disambiguation`: the agent is unsure what the user means or wants, or a choice has no basis in memory (a color, a restaurant).
 - `information`: the agent needs a fact it does not have.
 - `permission`: a tool function needs the user's approval (spending money, messaging someone). This kind is also called a **permission prompt**; `tool_use` creates one automatically when a function's oversight level requires it.
+- `next_step`: a finished session offers what the user can do next. Only the loop asks these (see [Next steps](#next-steps)); no session waits on them.
 
 ```ts
 Question {                   // a question
   id: string                 // "q_..."
   session_id: string         // the session waiting on it
-  purpose: "disambiguation" | "permission" | "information"
+  purpose: "disambiguation" | "permission" | "information" | "next_step"
   prompt: string
   fields: QuestionField[]
   document_id: string | null // the context it returns to
@@ -339,7 +340,7 @@ Question {                   // a question
   topic_id: string | null    // so the brief and sheets can show it with its topic
   context: string            // why the agent asks, one sentence, shown under the question
   arguments: { [name]: string }  // for a permission: the call it would run
-  user_waiting: boolean      // asked by a session the user started in the last 2 minutes; the skin opens it at once
+  user_waiting: boolean      // the user started its session, or answered one of its questions, in the last 2 minutes; the skin opens it at once
   created_at: string
 }
 
@@ -432,7 +433,7 @@ A grant given in a session carries forward to every later step of that session, 
 Every question is answered in one place, the **question sheet**: a bottom sheet holding a **deck** of the waiting questions. The top question is full size with the next two peeking behind it ("1 of N"); answering, skipping or stashing it brings up the next, and a sideways swipe moves through the deck without answering. Option fields offer "Something else…" for a typed answer.
 
 - The brief shows waiting questions as one **stack** at its top, oldest first; tapping it, a "Waiting on you" row, or the dynamic island opens the deck.
-- A question from a session the user started moments ago (`user_waiting`) opens the sheet by itself, since they are likely still looking.
+- A question from a session the user started or answered moments ago (`user_waiting`) opens the sheet by itself, since they are likely still looking.
 - **Skip** answers with `dismissed`, and the session goes on without the answer. Closing the sheet leaves the question waiting.
 - **Stash** puts a question aside: it stays unanswered and its session keeps waiting, but it leaves the stack for an "N stashed questions" chip at the end of the brief, and the agent does not ask it again. A stashed question comes back to the stack when its topic changes after it was stashed.
 
@@ -441,6 +442,16 @@ StashedQuestion { question_id: string, topic_id: string | null, stashed_at: stri
 ```
 
 The prompts tell the agent never to ask in a notification, a card's text or a Discover item, where the user cannot answer.
+
+### Next steps
+
+When a session ends with next steps left for the user, they come up in the question sheet like any other question. A section the session changed that is still open (its status is not complete) and lists `suggested_actions` has next steps. Each such document gets one `next_step` question, "What next for {document}?", with up to four of those actions as options (plus "Something else…"); it names the section when all the actions come from one. It shows as "Next step" in the deck, and tapping an option answers at once, with no Send.
+
+- The session is already complete; the question waits on its own. Its trace gets a `next_steps` step listing what was offered and, later, what the user did with it.
+- Picking a step (or typing one) starts a new session as user input, "The user picked the next step …" with the document and section ids. Skip starts nothing. Stash works as for any question.
+- The same set of steps is not offered again for a document. A different set replaces the next-step question still waiting for that document.
+- `user_waiting` follows the usual rule, so the sheet opens by itself when the user asked for the work, or answered the session's question, in the last 2 minutes.
+- The memory capability writes `suggested_actions` as short actions in the user's words, since they become buttons.
 
 ## Tools and apps
 
@@ -838,7 +849,7 @@ One term per idea. The right-hand column lists words used for the same thing in 
 | **topic** | An entry in the topic index, with trigger rules, summary, progress and due date. | card (in the first brief), wiki entry, category entry |
 | **topic index** | All of a user's topics, organized by category and nesting. | index, wiki, personal wiki, graph of topics |
 | **document** | The progressively built record of a topic's lifecycle, made of sections. | page, personal document, card (when growing) |
-| **question** | Generated UI the session waits on (`Question`), of purpose disambiguation, information or permission. | disambiguation, ux_disambiguation, form, generative UX, UX request (`UXRequest` before agent state v2) |
+| **question** | Generated UI the session waits on (`Question`), of purpose disambiguation, information or permission; or a next step a finished session offers. | disambiguation, ux_disambiguation, form, generative UX, UX request (`UXRequest` before agent state v2) |
 | **permission prompt** | A question with purpose `permission`, asking to approve one tool function. | use gate, decision boundary |
 | **permission** | A recorded answer to a permission prompt, scoped to a session or persistent. | grant |
 | **tool** | A group of typed functions with oversight levels. | |
@@ -856,6 +867,7 @@ One term per idea. The right-hand column lists words used for the same thing in 
 | **picture** | An image a tool returned for one item (`Picture`); drawn beside a choice, and in the document once chosen if it is good. | |
 | **question sheet** | The bottom sheet where every question is answered, as a deck. | disambiguation sheet, form |
 | **stash** | Questions the user put aside; still waiting, out of the stack. | |
+| **next step** | A section's suggested action, offered in the question sheet as a `next_step` question when a session ends. | suggested action (the field keeps this name) |
 | **salience** | A card's ranking score. | priority |
 | **Spaces** | The device screen that shows documents. | intent space, intent screen |
 | **focus** | Which sections of a document Spaces expands. | |

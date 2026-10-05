@@ -47,7 +47,7 @@ export default function QuestionDeck({ questions, stash, topics, docs, onAnswer,
       <div className="sheet deck" role="dialog" aria-label={top.prompt} onClick={(e) => e.stopPropagation()}>
         <div className="grip" />
         <div className="deck-head">
-          <span className="kind">{stash ? "Stashed" : top.purpose === "permission" ? "Needs your OK" : "Quick question"}</span>
+          <span className="kind">{stash ? "Stashed" : KIND[top.purpose] ?? "Quick question"}</span>
           {deck.length > 1 && (
             <span className="deck-count">
               <button aria-label="Previous question" disabled={at === 0} onClick={() => step(-1)}>‹</button>
@@ -103,6 +103,8 @@ export default function QuestionDeck({ questions, stash, topics, docs, onAnswer,
     </div>
   );
 }
+
+const KIND: Partial<Record<Question["purpose"], string>> = { permission: "Needs your OK", next_step: "Next step" };
 
 /** The agent waits on the user: a stack of the questions waiting, with the
  * oldest on top, that opens the deck. */

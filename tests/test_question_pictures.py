@@ -153,7 +153,7 @@ async def test_answer_api_turns_selections_into_text(api, script):  # noqa: F811
     assert (await api.post(f"/api/questions/{question.id}?user=maya", json=body)).status_code == 200
     await agent.wait_idle()
     session = next(iter(agent.store.sessions.values()))
-    assert "3 × Diavola, Coke" in session.steps[-1].summary
+    assert "3 × Diavola, Coke" in next(s for s in session.steps if s.capability == "generative_ui").summary
     pictures = agent.store.documents["doc-dinner"].section("sec-order").pictures
     assert [p.caption for p in pictures] == ["Diavola"]
 

@@ -51,7 +51,9 @@ _SECTION = s.obj(
         "status": s.string(),
         "details": s.string(),
         "actions_taken": s.array(s.string()),
-        "suggested_actions": s.array(s.string()),
+        "suggested_actions": s.array(
+            s.string(), "Next steps the user can tap to start, a few words each, in their words; at most 4."
+        ),
     }
 )
 

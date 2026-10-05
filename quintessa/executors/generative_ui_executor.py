@@ -26,7 +26,7 @@ SCHEMA = s.obj(
     {
         "prompt": s.string("The question, in a few words."),
         "context": s.string("One short sentence on why you are asking, shown under the question."),
-        "purpose": s.enum_of(QuestionPurpose),
+        "purpose": s.enum_of([p.value for p in QuestionPurpose if p != QuestionPurpose.NEXT_STEP]),
         "fields": s.array(
             s.obj(
                 {
