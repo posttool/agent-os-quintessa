@@ -53,7 +53,7 @@ def next_step_options(sections: list[DocumentSection]) -> dict[str, str]:
     return options
 
 
-def offer_next_steps(runtime: AgentRuntime, session: ReasoningSession, user_waiting: bool) -> TraceStep | None:
+def offer_next_steps(runtime: AgentRuntime, session: ReasoningSession) -> TraceStep | None:
     """Ask a next-step question for each document this session left with
     next steps. A set of steps already offered for a document is not offered
     again; a different set replaces the question still waiting. Returns the
@@ -79,7 +79,6 @@ def offer_next_steps(runtime: AgentRuntime, session: ReasoningSession, user_wait
             section_id=next(iter(options.values())) if len({*options.values()}) == 1 else None,
             topic_id=doc.topic_id,
             context="Done for now. Pick a next step and I'll get on it.",
-            user_waiting=user_waiting,
         )
         runtime.follow_up(_wait_for_pick(runtime, session, question, options))
         lines.append(f"{doc.title}: {', '.join(options)}")

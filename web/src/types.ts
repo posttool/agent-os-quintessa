@@ -94,8 +94,6 @@ export interface Question {
   topic_id: string | null; created_at: string;
   /** why the agent asks; for an approval, the arguments of the call it runs */
   context: string; arguments: Record<string, string>;
-  /** asked by a session the user started moments ago: open it at once */
-  user_waiting: boolean;
 }
 /** A waiting question the user put aside; its session still waits on it. */
 export interface StashedQuestion { question_id: string; topic_id: string | null; stashed_at: string }

@@ -340,7 +340,6 @@ Question {                   // a question
   topic_id: string | null    // so the brief and sheets can show it with its topic
   context: string            // why the agent asks, one sentence, shown under the question
   arguments: { [name]: string }  // for a permission: the call it would run
-  user_waiting: boolean      // the user started its session, or answered one of its questions, in the last 2 minutes; the skin opens it at once
   created_at: string
 }
 
@@ -433,7 +432,7 @@ A grant given in a session carries forward to every later step of that session, 
 Every question is answered in one place, the **question sheet**: a bottom sheet holding a **deck** of the waiting questions. The top question is full size with the next two peeking behind it ("1 of N"); answering, skipping or stashing it brings up the next, and a sideways swipe moves through the deck without answering. Option fields offer "Something else…" for a typed answer.
 
 - The brief shows waiting questions as one **stack** at its top, oldest first; tapping it, a "Waiting on you" row, or the dynamic island opens the deck.
-- A question from a session the user started or answered moments ago (`user_waiting`) opens the sheet by itself, since they are likely still looking.
+- The sheet never opens by itself. While questions wait and no sheet is open, it **peeks** in from the bottom edge: one line with the oldest question and the count, with nothing dimmed or covered (the input bar moves up above it). Tapping it or swiping it up opens the deck.
 - **Skip** answers with `dismissed`, and the session goes on without the answer. Closing the sheet leaves the question waiting.
 - **Stash** puts a question aside: it stays unanswered and its session keeps waiting, but it leaves the stack for an "N stashed questions" chip at the end of the brief, and the agent does not ask it again. A stashed question comes back to the stack when its topic changes after it was stashed.
 
@@ -450,7 +449,7 @@ When a session ends with next steps left for the user, they come up in the quest
 - The session is already complete; the question waits on its own. Its trace gets a `next_steps` step listing what was offered and, later, what the user did with it.
 - Picking a step (or typing one) starts a new session as user input, "The user picked the next step …" with the document and section ids. Skip starts nothing. Stash works as for any question.
 - The same set of steps is not offered again for a document. A different set replaces the next-step question still waiting for that document.
-- `user_waiting` follows the usual rule, so the sheet opens by itself when the user asked for the work, or answered the session's question, in the last 2 minutes.
+- Like every question, it peeks in at the bottom edge and waits for the user to open it.
 - The memory capability writes `suggested_actions` as short actions in the user's words, since they become buttons.
 
 ## Tools and apps
@@ -564,7 +563,7 @@ DeviceState {
   open_question_ids: string[]        // questions on screen now
   stashed: StashedQuestion[]         // questions the user put aside, still waiting
   space_document_ids: string[]       // documents opened in Spaces
-  focused_document_id: string | null // the document Spaces shows now
+  focused_document_id: string | null // the document Spaces shows next (never swapped in while the user reads Spaces)
   focus: { [document_id]: DocumentFocus }
   discovery: { title, reason, topic_id }[]      // the Discover screen
   notifications: string[]
@@ -581,6 +580,8 @@ The screens, as the first brief describes them:
 - **Spaces** (right): the workspace. A tab per live document, and the open document with its questions.
 
 Two bottom sheets open over the current screen: the **card sheet**, when the user taps a brief card that has no document or that has a one-tap action, and the **question sheet** (see [Questions](#the-question-sheet)).
+
+The agent never interrupts the user: nothing takes over the screen unless the user taps it. Sheets open only on a tap; waiting questions show as the question sheet peeking in at the bottom edge. When the agent focuses a document while the user is reading Spaces, the document they are reading stays put, and Spaces shows the focused one the next time they come to it.
 
 ## The contextual brief
 

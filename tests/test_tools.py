@@ -138,7 +138,6 @@ async def test_tool_use_asks_and_respects_a_decline(script, make_runtime):
     assert asked[0].prompt == "Pay $32?" and asked[0].fields[0].kind.value == "confirm"
     # the sheet shows what the approval runs and why
     assert asked[0].arguments == {"total": "$32"} and asked[0].context == "test"
-    assert asked[0].user_waiting  # the user just asked for this
     runtime.answer(Answer(asked[0].id, {"approve": "no"}))
     await runtime.wait_idle()
 

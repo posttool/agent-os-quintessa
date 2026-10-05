@@ -124,6 +124,31 @@ export function QuestionStack({ questions, onOpen }: { questions: Question[]; on
   );
 }
 
+/** The question sheet resting at the bottom edge, peeking in: the oldest
+ * waiting question in one line. It covers nothing and takes no focus; a tap
+ * or an upward swipe opens the deck. */
+export function SheetPeek({ questions, onOpen }: { questions: Question[]; onOpen: () => void }) {
+  const touch = useRef<number | null>(null);
+  const top = questions[0];
+  return (
+    <button className="sheet sheet-peek" aria-label={`Open ${questions.length === 1 ? "question" : `${questions.length} questions`}: ${top.prompt}`}
+      onClick={onOpen}
+      onTouchStart={(e) => { touch.current = e.touches[0].clientY; }}
+      onTouchEnd={(e) => {
+        const dy = e.changedTouches[0].clientY - (touch.current ?? e.changedTouches[0].clientY);
+        if (dy < -20) onOpen();
+        touch.current = null;
+      }}>
+      <span className="grip" />
+      <span className="peek-line">
+        <span className="kind">{KIND[top.purpose] ?? "Quick question"}</span>
+        <span className="text">{top.prompt}</span>
+        {questions.length > 1 && <span className="count">{questions.length}</span>}
+      </span>
+    </button>
+  );
+}
+
 /** Where a question used to be drawn inline: one row that opens it. */
 export function WaitingRow({ request, stashed = false, onOpen }: { request: Question; stashed?: boolean; onOpen: () => void }) {
   return (

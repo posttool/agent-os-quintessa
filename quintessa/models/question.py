@@ -26,8 +26,5 @@ class Question:
     # why the agent asks, in one sentence; for an approval, the call it runs
     context: str = ""
     arguments: dict[str, str] = field(default_factory=dict)
-    # asked by a session the user started moments ago, so they are likely
-    # looking at the screen; a skin may open the question at once
-    user_waiting: bool = False
     id: str = field(default_factory=lambda: new_id("q"))
     created_at: datetime = field(default_factory=now)

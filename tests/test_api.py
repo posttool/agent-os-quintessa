@@ -324,7 +324,7 @@ async def test_stashing_a_question(api, script):
     agent = await api.host.agent("maya")
     await until(lambda: bool(agent.questions.pending))
     question = (await api.get("/api/state?user=maya")).json()["questions"][0]
-    assert question["context"] == "So I can book a table." and question["user_waiting"] is True
+    assert question["context"] == "So I can book a table."
 
     assert (await api.post("/api/questions/nope/stash?user=maya")).status_code == 404
     assert (await api.post(f"/api/questions/{question['id']}/stash?user=maya")).status_code == 200
