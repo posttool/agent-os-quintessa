@@ -7,7 +7,7 @@ import ShadowHost from "./ShadowHost";
 import { DEFAULT_SKIN, SKINS } from "./skins";
 import DocumentView from "./DocumentView";
 import CardSheet from "./CardSheet";
-import QuestionDeck, { QuestionStack, WaitingRow, deckOrder } from "./QuestionDeck";
+import QuestionDeck, { QuestionStack, SheetPeek, WaitingRow, deckOrder } from "./QuestionDeck";
 
 type Act = (fn: () => Promise<unknown>) => Promise<void>;
 const PAGES = ["Discover", "Home", "Spaces"] as const;
@@ -53,10 +53,11 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
   const topics = new Map(state.memory.topics.map((t) => [t.id, t]));
 
   // When the agent focuses a document (after a question is answered, or via
-  // the device tool), follow it.
+  // the device tool), Spaces shows it next time the user comes to it; it
+  // never swaps the document out from under someone reading Spaces.
   useEffect(() => {
-    if (device.focused_document_id) setOpenDoc(device.focused_document_id);
-  }, [device.focused_document_id]);
+    if (device.focused_document_id && (locked || page !== 2)) setOpenDoc(device.focused_document_id);
+  }, [device.focused_document_id, locked, page]);
 
   function go(index: number) {
     setPage(index);
@@ -92,20 +93,6 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
     setSheet(null);
     setDeck({ stash, first: r?.id ?? null });
   }
-
-  // A question from something the user just asked for opens by itself: they
-  // are still looking. Questions already here when the phone loads don't.
-  const seen = useRef<Set<string> | null>(null);
-  useEffect(() => {
-    const ids = state.questions.map((r) => r.id);
-    if (seen.current === null) {
-      seen.current = new Set(ids);
-      return;
-    }
-    const fresh = waiting.find((r) => !seen.current!.has(r.id) && r.user_waiting);
-    ids.forEach((id) => seen.current!.add(id));
-    if (fresh && !deck && !sheet) openQuestion(fresh, false);
-  }, [state.questions.map((r) => r.id).join(",")]);
 
   // A card past its expires_at is gone even before the server drops it.
   const live = device.brief.filter((b) => !b.expires_at || Date.parse(b.expires_at) > now.getTime());
@@ -167,6 +154,12 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
     />
   );
 
+  // The agent never opens a sheet by itself. While questions wait, the
+  // question sheet peeks in from the bottom edge; the user pulls it up.
+  const peekView = !deck && !sheet && waiting.length > 0 && (
+    <SheetPeek questions={waiting} onOpen={() => openQuestion(waiting[0], false)} />
+  );
+
   const briefList = (
     <div className="brief">
       {waiting.length === 0 && live.length === 0 && <div className="brief-empty">Nothing needs you right now.</div>}
@@ -200,7 +193,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
 
   if (locked) {
     return (
-      <div className="phone">
+      <div className={`phone ${peekView ? "peeking" : ""}`}>
         {island}
         <div className="lock">
           <div className="clock">{clock.replace(/\s?[AP]M$/i, "")}</div>
@@ -213,6 +206,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
           )}
           <button className="unlock" onClick={() => setLocked(false)}>Swipe up to unlock</button>
         </div>
+        {peekView}
         {sheetView}
         {deckView}
       </div>
@@ -224,7 +218,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
   const apps = [...state.memory.tools].sort((a, b) => Number(b.kind === "builtin") - Number(a.kind === "builtin"));
 
   return (
-    <div className="phone">
+    <div className={`phone ${peekView ? "peeking" : ""}`}>
       <div className="statusbar">
         <span>{clock}</span>
         <span onClick={() => setLocked(true)} style={{ cursor: "pointer" }} title="Lock">🔒</span>
@@ -295,6 +289,7 @@ function Phone({ state, api, act }: { state: AgentState; api: Api; act: Act }) {
         ))}
       </div>
       <InputBar onSend={(text, kind) => act(() => api.input(text, kind))} />
+      {peekView}
       {sheetView}
       {deckView}
     </div>

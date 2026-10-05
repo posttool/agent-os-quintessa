@@ -276,3 +276,22 @@ button, input { font: inherit; color: inherit; }
 .choice-label { min-width: 0; overflow-wrap: anywhere; }
 .picture figcaption { display: flex; justify-content: space-between; gap: 8px; }
 .picture .credit { font-size: 10.5px; color: var(--ink-3); text-decoration: none; white-space: nowrap; }
+
+/* the question sheet peeking in at the bottom edge: no scrim, nothing covered */
+.sheet.sheet-peek {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; height: 64px; padding: 8px 18px 0; gap: 8px;
+  align-content: start; border: none; border-top: 1px solid var(--line); cursor: pointer; text-align: left;
+  overflow: hidden; animation: peek-in .3s ease-out;
+}
+@keyframes peek-in { from { transform: translateY(100%); } to { transform: none; } }
+.sheet-peek .peek-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sheet-peek .kind { flex: none; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--glow); }
+.sheet-peek .text { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-peek .count {
+  flex: none; min-width: 22px; height: 22px; border-radius: 11px; padding: 0 7px; display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; background: var(--glow); color: var(--on-glow);
+}
+.phone.peeking .inputbar { bottom: 76px; }
+.phone.peeking .dots { bottom: 132px; }
+.phone.peeking .page { padding-bottom: 178px; }
+.phone.peeking .lock { padding-bottom: 80px; }

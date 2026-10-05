@@ -20,10 +20,6 @@ from quintessa.prompts import prompt
 if TYPE_CHECKING:
     from quintessa.loop.runtime import AgentRuntime
 
-# A question from a session the user started this recently finds them still
-# looking at the screen, so a skin may open it at once.
-USER_WAITING_SECONDS = 120
-
 log = logging.getLogger(__name__)
 
 
@@ -35,7 +31,6 @@ class AgentReasoningLoop:
     def __init__(self, runtime: AgentRuntime, session: ReasoningSession):
         self.runtime = runtime
         self.session = session
-        self._user_seen_at = None  # when the user last answered this session's question
 
     def _decision_schema(self) -> dict:
         return s.obj(
@@ -125,7 +120,7 @@ class AgentReasoningLoop:
                 log.info("session %s reached max steps", session.id)
             await refresh_brief(runtime, session)
             await score_cards(runtime, session)
-            offer_next_steps(runtime, session, self._user_waiting())
+            offer_next_steps(runtime, session)
             session.status = SessionStatus.COMPLETE
         except LLMUnavailableError as e:
             self._fail(f"LLM unavailable: {e}")
@@ -141,28 +136,17 @@ class AgentReasoningLoop:
     async def _wait_for_user(self, outcome):
         runtime, session = self.runtime, self.session
         request = outcome.question
-        request.user_waiting = self._user_waiting()
         session.status = SessionStatus.WAITING_FOR_USER
         session.pending_question_id = request.id
         runtime.store.put_session(session)
         runtime.device.show_question(request.id)
         runtime.device.session_activity(session.id, "Waiting for you")
         response = await runtime.questions.ask(request)
-        if not response.withdrawn:
-            self._user_seen_at = response.answered_at
         runtime.device.close_question(request.id, request.document_id, request.section_id)
         session.status = SessionStatus.RUNNING
         session.pending_question_id = None
         runtime.store.put_session(session)
         return await outcome.on_answer(response)
-
-    def _user_waiting(self) -> bool:
-        """The user started this session or answered its question moments
-        ago, so they are likely still looking."""
-        seen = self._user_seen_at
-        if seen is None and self.session.trigger.source == "user":
-            seen = self.session.started_at
-        return seen is not None and (now() - seen).total_seconds() <= USER_WAITING_SECONDS
 
     def _fail(self, message: str) -> None:
         self.session.status = SessionStatus.FAILED

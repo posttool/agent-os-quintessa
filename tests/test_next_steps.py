@@ -35,7 +35,6 @@ async def test_finished_session_offers_its_next_steps_in_the_sheet(script, make_
     assert question.prompt == "What next for Dinner?"
     assert question.fields[0].options == ["Book Zuni for 7pm", "Text Jane the plan"]
     assert (question.document_id, question.section_id, question.topic_id) == ("doc-dinner", "sec-place", "topic-dinner")
-    assert question.user_waiting  # the user just asked, so the sheet opens by itself
     assert session.steps[-1].capability == "next_steps"
     assert "Book Zuni for 7pm" in session.steps[-1].summary
 
@@ -82,7 +81,6 @@ async def test_new_next_steps_replace_the_waiting_ones(script, make_runtime):
 
     [new] = next_step_questions(runtime)
     assert new.id != old.id and new.fields[0].options == ["Book Nopa"]
-    assert not new.user_waiting  # an incoming message: the user is not looking
     await until(lambda: "withdrew" in first.steps[-1].summary)
 
 
@@ -124,39 +122,3 @@ async def test_clear_drops_waiting_next_steps(script, make_runtime):
 
 def test_the_model_cannot_ask_a_next_step_question():
     assert "next_step" not in SCHEMA["properties"]["purpose"]["enum"]
-
-
-async def test_next_steps_open_at_once_after_the_user_answered_the_session(script, make_runtime):
-    script.on("decide", decide("generative_ui", "which night"), decide("memory", "save the night"))
-    script.on(
-        "capability:generative_ui",
-        {
-            "prompt": "Which night?",
-            "purpose": "disambiguation",
-            "context": "",
-            "fields": [{"name": "n", "kind": "option", "label": "", "options": ["Tue", "Wed"], "option_details": []}],
-            "document_id": None,
-            "section_id": None,
-            "topic_id": None,
-            "tool": None,
-            "function": None,
-        },
-    )
-    script.on(
-        "capability:memory",
-        memory_answer(
-            topic_op("topic-dinner", "Dinner"),
-            doc_op("doc-dinner", "topic-dinner"),
-            section_with("sec-place", "doc-dinner", ["Book Zuni"]),
-        ),
-    )
-    runtime = make_runtime(script)
-    session = runtime.submit(InputEvent(InputKind.MESSAGE, "Jane: dinner this week?", source="sms", sender="Jane"))
-    await until(lambda: session.status == SessionStatus.WAITING_FOR_USER)
-    asked = runtime.questions.pending[session.pending_question_id]
-    assert not asked.user_waiting  # Jane's text: the user was not looking
-
-    runtime.answer(Answer(asked.id, {"n": "Wed"}))
-    await runtime.wait_idle()
-    [question] = next_step_questions(runtime)
-    assert question.user_waiting  # they just answered, so they are still looking
