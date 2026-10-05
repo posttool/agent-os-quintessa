@@ -165,7 +165,7 @@ The four capabilities today:
 |---|---|---|
 | `memory` | Merges what the trigger means into the graph, topics and documents; deletes what is out of date; retrieves facts a task needs. | A list of memory operations (see below) and a summary. |
 | `generative_ui` | Asks the user one clear question with generated UI, then the session waits. | A question (`Question`); the answer resumes the step. |
-| `tool_discovery` | Equips the agent: reuses an installed tool, or searches an app store and installs an app, or defines a tool when no app fits. Two model calls: plan (queries), then choose (from store candidates). | Installed apps, defined tools, uninstalled apps. |
+| `tool_discovery` | Equips the agent: reuses an installed tool, or searches an app store and installs an app, or defines a tool when no app fits. Two model calls: plan (queries), then choose (from store candidates). | Installed apps, defined tools, apps uninstalled at the user's request. |
 | `tool_use` | Calls exactly one function of one tool, gated by its oversight level; can start a process. | The call, its result and any process subscription. |
 
 The capability set is configurable with `load_capabilities(dir, names=[...])`.
@@ -527,7 +527,7 @@ Every app is **simulated** today: a model grounded in the listing plays the app,
 
 Agent-defined tools run by kind: `web_api` tools make a real HTTP request; `llm`, `mcp` and `code` tools are played by a model grounded in the tool's description, since nothing can run MCP or agent-written code yet.
 
-The agent installs apps without asking, and never asks which app or service to use: it picks one (an app memory says the user uses, otherwise the best-known one) and only asks about details of the task. Installing never grants an app's risky functions; those still go through their oversight levels.
+The agent installs apps without asking, and never asks which app or service to use: it picks one (an app memory says the user uses, otherwise the best-known one) and only asks about details of the task. Installing never grants an app's risky functions; those still go through their oversight levels. The agent never uninstalls an app on its own: it removes one only when the user's own text or speech asks to uninstall, remove or delete it, and the Tools panel's Uninstall button does the same.
 
 ## Processes
 

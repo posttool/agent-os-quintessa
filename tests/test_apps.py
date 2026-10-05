@@ -163,17 +163,29 @@ async def test_app_name_never_replaces_a_builtin(script, make_runtime):
     assert tool.name == "web_2" and runtime.store.tools["web"].kind == ToolKind.BUILTIN
 
 
-async def test_agent_uninstalls_only_its_own_apps(script, make_runtime):
+async def test_agent_never_uninstalls_on_its_own(script, make_runtime):
+    """Even an app the agent installed stays until the user asks."""
+    script.on("app_manifest:com.ubercab", manifest(name="uber"))
+    runtime = make_runtime(script)
+    await install_app(runtime, (await runtime.apps.search("uber ride"))[0])
+    script.on("decide", decide("tool_discovery", "find a dinner app"))
+    script.on("capability:tool_discovery", search_plan(uninstall=["uber"]))
+    session = await runtime.run(InputEvent(InputKind.TEXT, "book sushi for two at 7"))
+    assert session.steps[0].output["uninstalled"] == []
+    assert "uber" in runtime.store.tools
+
+
+async def test_agent_uninstalls_when_the_user_asks(script, make_runtime):
     script.on("app_manifest:com.opentable", manifest())
     script.on("app_manifest:com.ubercab", manifest(name="uber"))
     runtime = make_runtime(script)
     await install_app(runtime, (await runtime.apps.search("opentable"))[0], created_by="user")
     await install_app(runtime, (await runtime.apps.search("uber ride"))[0])
-    script.on("decide", decide("tool_discovery", "clean up"))
+    script.on("decide", decide("tool_discovery", "remove apps"))
     script.on("capability:tool_discovery", search_plan(uninstall=["opentable", "uber"]))
-    session = await runtime.run(InputEvent(InputKind.TEXT, "tidy apps"))
-    assert session.steps[0].output["uninstalled"] == ["uber"]
-    assert "opentable" in runtime.store.tools and "uber" not in runtime.store.tools
+    session = await runtime.run(InputEvent(InputKind.TEXT, "uninstall uber and opentable"))
+    assert session.steps[0].output["uninstalled"] == ["opentable", "uber"]
+    assert "opentable" not in runtime.store.tools and "uber" not in runtime.store.tools
 
 
 async def test_installing_never_asks(script, make_runtime):
