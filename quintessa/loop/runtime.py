@@ -89,6 +89,9 @@ class AgentRuntime:
         self.questions = QuestionBroker()
         self.ambient = AmbientBus(self, process_interval=process_interval, sleep=sleep)
         self._tasks: set[asyncio.Task] = set()
+        # next-step questions from finished sessions; wait_idle does not wait on them
+        self._follow_ups: set[asyncio.Task] = set()
+        self.offered_steps: dict[str, tuple[str, ...]] = {}  # by document: the next steps last offered
         self.on_change: Callable[[], None] | None = None
         self.watchers: set[Callable[[], None]] = set()
         self.store.listen(lambda *_: self.notify_changed())
@@ -185,6 +188,12 @@ class AgentRuntime:
         )
         return self.submit(InputEvent(InputKind.TEXT, content, source="user", device="phone"), grants=[grant])
 
+    def follow_up(self, work: Awaitable[None]) -> None:
+        """Wait on the user after a session ended, without keeping it running."""
+        task = asyncio.ensure_future(work)
+        self._follow_ups.add(task)
+        task.add_done_callback(self._follow_ups.discard)
+
     async def run(self, event: InputEvent) -> ReasoningSession:
         """Start a session and wait for it (and anything it spawned) to finish."""
         session = self.submit(event)
@@ -259,9 +268,10 @@ class AgentRuntime:
         return self.device.prune_stash(set(self.questions.pending), changed)
 
     async def cancel_tasks(self) -> None:
-        for task in list(self._tasks):
+        tasks = [*self._tasks, *self._follow_ups]
+        for task in tasks:
             task.cancel()
-        await asyncio.gather(*list(self._tasks), return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def clear(self) -> None:
         """Clear memory, traces, tools, subscriptions and the device."""
@@ -270,5 +280,6 @@ class AgentRuntime:
         await self.cancel_tasks()
         self.store.clear()
         self.persona = None
+        self.offered_steps.clear()
         self.device.reset()
         self.install_builtin_tools()

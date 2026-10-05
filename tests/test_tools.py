@@ -102,9 +102,10 @@ async def test_grant_from_earlier_disambiguation_carries_forward(script, make_ru
     runtime.answer(Answer(asked[0].id, {"ok": "yes"}))
     await until(lambda: session.status == SessionStatus.COMPLETE)
 
-    assert len(asked) == 1
+    # one permission prompt; the other question offers the section's next step
+    assert [q.purpose for q in asked] == ["permission", "next_step"]
     assert session.permissions[0].granted and session.permissions[0].scope == "session"
-    assert "in_progress: order placed" in session.steps[-1].summary
+    assert "in_progress: order placed" in session.steps[-2].summary
     assert (
         "food_delivery.checkout: in_progress - order placed"
         in runtime.store.documents["doc-dinner"].sections[0].actions_taken

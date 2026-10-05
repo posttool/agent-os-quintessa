@@ -89,7 +89,7 @@ export interface QuestionField {
 /** One option picked in a multi_option field, and how many. */
 export interface Selection { option: string; quantity: number }
 export interface Question {
-  id: string; session_id: string; purpose: "disambiguation" | "permission" | "information"; prompt: string;
+  id: string; session_id: string; purpose: "disambiguation" | "permission" | "information" | "next_step"; prompt: string;
   fields: QuestionField[]; document_id: string | null; section_id: string | null; tool: string | null; function: string | null;
   topic_id: string | null; created_at: string;
   /** why the agent asks; for an approval, the arguments of the call it runs */

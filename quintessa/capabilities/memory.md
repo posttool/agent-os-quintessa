@@ -24,8 +24,11 @@ structure.
   with your reasoning for each. Topics nest with `parent_id`.
 - Documents aggregate a topic's lifecycle: description, sections with status
   and actions, key dates (mark guesses as tentative, "penciled in"), links and
-  relevant observations. Archive a document when its process is complete and
-  nothing is owed. Archive topics whose dates have passed.
+  relevant observations. A section's `suggested_actions` are offered to the
+  user as tappable next steps when the session ends, so write each as a short
+  action in the user's words ("Book Zuni for 7pm", "Text Jane the address"),
+  never a note to yourself or a tool name, and clear them once done or moot.
+  Archive a document when its process is complete and nothing is owed. Archive topics whose dates have passed.
 - Also retrieve: if the step's focus is to find what matters for a task, your
   `summary` should state the relevant facts from memory, even if you change
   nothing.

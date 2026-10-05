@@ -26,6 +26,8 @@ export default function QuestionForm({ request, onAnswer }: {
     const text = Object.fromEntries(multi.map((f) => [f.name, describe(selections[f.name])]));
     onAnswer({ ...values, ...text, ...extra }, selections);
   }
+  // next steps are actions: tapping one starts it, no Send needed
+  const oneTap = request.purpose === "next_step";
   const confirms = request.fields.filter((f) => f.kind === "confirm");
   const buttons = request.fields.filter((f) => f.kind === "button");
 
@@ -53,7 +55,11 @@ export default function QuestionForm({ request, onAnswer }: {
                 <div className={`choices ${pictured(f) ? "pictured" : ""}`}>
                   {f.options.map((o) => (
                     <button key={o} className={!own[f.name] && values[f.name] === o ? "on" : ""}
-                      onClick={() => { setOwn((x) => ({ ...x, [f.name]: false })); set(f.name, o); }}>
+                      onClick={() => {
+                        if (oneTap) return answer({ [f.name]: o });
+                        setOwn((x) => ({ ...x, [f.name]: false }));
+                        set(f.name, o);
+                      }}>
                       <ChoiceLabel field={f} option={o} />
                     </button>
                   ))}
@@ -127,7 +133,7 @@ export default function QuestionForm({ request, onAnswer }: {
               {b.label || "OK"}
             </button>
           ))
-        ) : (
+        ) : oneTap && !Object.values(own).some(Boolean) ? null : (
           <button className="yes" onClick={() => answer()}>Send</button>
         )}
       </div>
